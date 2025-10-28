@@ -1,4 +1,4 @@
-import { Match, Club, Player, GameState, PlayerAttributes } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats } from '../types';
 
 // Simplified overall team rating based on starting lineup for non-player matches
 const getTeamRating = (teamId: number, clubs: Record<number, Club>, players: Record<number, Player>): number => {
@@ -20,26 +20,52 @@ const getTeamRating = (teamId: number, clubs: Record<number, Club>, players: Rec
     return totalRating / lineupPlayers.length;
 };
 
-// This function is now only for quick-simulating non-player matches.
+// This function now simulates non-player matches and generates estimated stats.
 export const runMatch = (match: Match, clubs: Record<number, Club>, players: Record<number, Player>): Match => {
     const homeRating = getTeamRating(match.homeTeamId, clubs, players);
     const awayRating = getTeamRating(match.awayTeamId, clubs, players);
     const homeAdvantage = 1.05;
     const ratingDiff = (homeRating * homeAdvantage) - awayRating;
-    const goalChanceMultiplier = Math.abs(ratingDiff) / 10;
+    
     let homeScore = 0;
     let awayScore = 0;
-    
-    for (let i = 0; i < 10; i++) {
-        const homeChance = (50 + ratingDiff) / 100;
-        if (Math.random() < homeChance) {
-            if (Math.random() < 0.15 * (1 + goalChanceMultiplier)) homeScore++;
+
+    const homeStats: MatchStats = { shots: 0, shotsOnTarget: 0, possession: 0, tackles: 0 };
+    const awayStats: MatchStats = { shots: 0, shotsOnTarget: 0, possession: 0, tackles: 0 };
+
+    const totalChances = 10 + Math.floor(Math.random() * 5); // 10-14 total chances in a match
+
+    for (let i = 0; i < totalChances; i++) {
+        const homeChanceProb = (50 + ratingDiff) / 100;
+        if (Math.random() < homeChanceProb) {
+            // Home chance
+            homeStats.shots++;
+            if (Math.random() < 0.4) { // 40% of shots are on target
+                homeStats.shotsOnTarget++;
+                if (Math.random() < 0.3) { // 30% of shots on target are goals
+                    homeScore++;
+                }
+            }
         } else {
-            if (Math.random() < 0.15 * (1 + goalChanceMultiplier)) awayScore++;
+            // Away chance
+            awayStats.shots++;
+            if (Math.random() < 0.4) {
+                awayStats.shotsOnTarget++;
+                if (Math.random() < 0.3) {
+                    awayScore++;
+                }
+            }
         }
     }
 
-    return { ...match, homeScore, awayScore };
+    homeStats.tackles = 8 + Math.floor(Math.random() * 10);
+    awayStats.tackles = 8 + Math.floor(Math.random() * 10);
+    
+    const basePossession = 50 + (ratingDiff * 1.5);
+    homeStats.possession = Math.max(25, Math.min(75, Math.round(basePossession)));
+    awayStats.possession = 100 - homeStats.possession;
+
+    return { ...match, homeScore, awayScore, homeStats, awayStats };
 };
 
 export const processPlayerDevelopment = (players: Record<number, Player>): Record<number, Player> => {

@@ -1,8 +1,8 @@
-// FIX: Import the `Match` type to resolve type errors.
-import { GameState, LivePlayer, Player, Club, Match, NewsItem } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo } from '../types';
 import { Action } from './reducerTypes';
 import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
+import { generateNarrativeReport } from './newsGenerator';
 
 export const initialState: GameState = {
     currentDate: new Date(2024, 7, 1), // July 1st, 2024
@@ -11,11 +11,12 @@ export const initialState: GameState = {
     players: {},
     schedule: [],
     leagueTable: [],
-    playerMatch: null,
     transferResult: null,
     liveMatch: null,
     news: [],
     nextNewsId: 1,
+    matchDayFixtures: null,
+    matchDayResults: null,
 };
 
 const addNewsItem = (state: GameState, headline: string, content: string, type: NewsItem['type'], relatedEntityId?: number): GameState => {
@@ -55,47 +56,72 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const newDate = new Date(state.currentDate);
             newDate.setDate(newDate.getDate() + 1);
 
-            let newState = { ...state, currentDate: newDate, playerMatch: null, transferResult: null };
+            let newState = { ...state, currentDate: newDate, transferResult: null };
 
             const matchesToday = newState.schedule.filter(m =>
                 m.date.toDateString() === newDate.toDateString() && m.homeScore === undefined
             );
+
+            // Monthly/Yearly processing if no matches
+            if (matchesToday.length === 0) {
+                 if (newDate.getDate() === 1) {
+                    newState.players = processPlayerDevelopment(newState.players);
+                    newState.clubs = processWages(newState.clubs, newState.players);
+                    if (newDate.getMonth() === 0) { // January 1st
+                        const { players } = processPlayerAging(newState.players);
+                        newState.players = players;
+                    }
+                }
+                return newState;
+            }
             
-            const roundResults: Match[] = [];
+            // --- REFACTORED LOGIC ---
+
+            const playerClubId = newState.playerClubId;
+            const aiMatches: Match[] = [];
+            let playerMatchToday: Match | undefined = undefined;
 
             for (const match of matchesToday) {
-                if (match.homeTeamId === newState.playerClubId || match.awayTeamId === newState.playerClubId) {
-                    newState.playerMatch = {
-                        match,
-                        homeTeam: newState.clubs[match.homeTeamId],
-                        awayTeam: newState.clubs[match.awayTeamId],
-                    };
-                     // Generate news for previous day's results before stopping for player match
-                    const yesterdayResults = state.schedule.filter(m => m.date.toDateString() === state.currentDate.toDateString() && m.homeScore !== undefined);
-                    const nonPlayerResults = yesterdayResults.filter(m => m.homeTeamId !== state.playerClubId && m.awayTeamId !== state.playerClubId);
-                    if(nonPlayerResults.length > 0) {
-                        const content = nonPlayerResults.map(r => `${state.clubs[r.homeTeamId].name} ${r.homeScore} - ${r.awayScore} ${state.clubs[r.awayTeamId].name}`).join('\n');
-                        newState = addNewsItem(newState, "League Round-up", `Here are the results from around the league:\n\n${content}`, 'round_summary');
-                    }
-                    return newState; // Stop advancing for player's match
+                if (match.homeTeamId === playerClubId || match.awayTeamId === playerClubId) {
+                    playerMatchToday = match;
                 } else {
-                    // Simulate non-player matches instantly
-                    const result = runMatch(match, newState.clubs, newState.players);
-                    roundResults.push(result);
-                    const matchIndex = newState.schedule.findIndex(m => m.id === result.id);
-                    if (matchIndex !== -1) newState.schedule[matchIndex] = result;
-                    // Update table (logic moved inside a function for tidiness)
-                    newState.leagueTable = updateLeagueTableForMatch(newState.leagueTable, result);
+                    aiMatches.push(match);
                 }
             }
             
-            if(roundResults.length > 0) {
-                 const content = roundResults.map(r => `${newState.clubs[r.homeTeamId].name} ${r.homeScore} - ${r.awayScore} ${newState.clubs[r.awayTeamId].name}`).join('\n');
-                 newState = addNewsItem(newState, "League Round-up", `Here are the results from around the league:\n\n${content}`, 'round_summary');
+            // --- STEP 1: SIMULATE ALL AI MATCHES FIRST ---
+            if (aiMatches.length > 0) {
+                const roundResults: Match[] = [];
+                for (const aiMatch of aiMatches) {
+                    const result = runMatch(aiMatch, newState.clubs, newState.players);
+                    roundResults.push(result);
+            
+                    const matchIndex = newState.schedule.findIndex(m => m.id === result.id);
+                    if (matchIndex !== -1) newState.schedule[matchIndex] = result;
+            
+                    newState.leagueTable = updateLeagueTableForMatch(newState.leagueTable, result);
+                }
+                newState.leagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
+                
+                // --- STEP 2: GENERATE NEWS FOR AI MATCHES ---
+                const content = roundResults.map(r => `${newState.clubs[r.homeTeamId].name} ${r.homeScore} - ${r.awayScore} ${newState.clubs[r.awayTeamId].name}`).join('\n');
+                newState = addNewsItem(newState, "League Round-up", `Here are the results from around the league:\n\n${content}`, 'round_summary');
             }
 
-            newState.leagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
+            // --- STEP 3: HALT FOR PLAYER MATCH ---
+            if (playerMatchToday) {
+                newState.matchDayFixtures = {
+                    playerMatch: {
+                        match: playerMatchToday,
+                        homeTeam: newState.clubs[playerMatchToday.homeTeamId],
+                        awayTeam: newState.clubs[playerMatchToday.awayTeamId],
+                    },
+                    aiMatches: aiMatches,
+                }
+                return newState; // Stop and wait for player
+            }
 
+            // --- STEP 4: (If no player match today) Continue to next checks ---
             if (newDate.getDate() === 1) {
                 newState.players = processPlayerDevelopment(newState.players);
                 newState.clubs = processWages(newState.clubs, newState.players);
@@ -107,8 +133,21 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             return newState;
         }
-        case 'CLEAR_PLAYER_MATCH': {
-            return { ...state, playerMatch: null };
+        case 'CLEAR_MATCH_DAY_FIXTURES': {
+            return { ...state, matchDayFixtures: null };
+        }
+        case 'CLEAR_MATCH_RESULTS': {
+            if (!state.matchDayResults) return state;
+
+            let newState = { ...state };
+            
+            // Generate player match news
+            const { headline, content } = generateNarrativeReport(state.matchDayResults.playerResult, state.playerClubId, state.clubs);
+            newState = addNewsItem(newState, headline, content, 'match_summary_player', state.matchDayResults.playerResult.id);
+
+            // News for AI matches was already generated in ADVANCE_DAY, so no need to do it here.
+
+            return { ...newState, matchDayResults: null };
         }
         case 'UPDATE_TACTICS': {
              if (!state.playerClubId) return state;
@@ -156,10 +195,10 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             );
             return { ...state, news: newNews };
         }
-        // New Match Engine Reducers
+        // Match Engine Reducers
         case 'START_MATCH': {
             const liveMatch = createLiveMatchState(action.payload, state.clubs, state.players);
-            return { ...state, playerMatch: null, liveMatch };
+            return { ...state, matchDayFixtures: null, liveMatch };
         }
         case 'ADVANCE_MINUTE': {
             if (!state.liveMatch) return state;
@@ -231,6 +270,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 date: state.schedule.find(m => m.id === finalMatchState.matchId)!.date,
                 homeScore: finalMatchState.homeScore,
                 awayScore: finalMatchState.awayScore,
+                homeStats: { ...finalMatchState.homeStats, possession: Math.round((finalMatchState.homePossessionMinutes / 90) * 100) },
+                awayStats: { ...finalMatchState.awayStats, possession: Math.round((finalMatchState.awayPossessionMinutes / 90) * 100) },
             };
             const scheduleIndex = state.schedule.findIndex(m => m.id === finalMatchState.matchId);
             const newSchedule = [...state.schedule];
@@ -239,15 +280,19 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             }
             const newLeagueTable = updateLeagueTableForMatch(state.leagueTable, finalResult);
             newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
+            
+            const aiResultsToday = state.schedule.filter(m => m.date.toDateString() === finalResult.date.toDateString() && m.id !== finalResult.id && m.homeScore !== undefined);
 
-            let newState = { ...state, liveMatch: null, schedule: newSchedule, leagueTable: newLeagueTable };
-
-            const playerTeamName = finalMatchState.homeTeamId === state.playerClubId ? finalMatchState.homeTeamName : finalMatchState.awayTeamName;
-            const opponentTeamName = finalMatchState.homeTeamId === state.playerClubId ? finalMatchState.awayTeamName : finalMatchState.homeTeamName;
-            const headline = `Match Report: ${finalMatchState.homeTeamName} ${finalMatchState.homeScore} - ${finalMatchState.awayScore} ${finalMatchState.awayTeamName}`;
-            const content = `A hard-fought match saw ${playerTeamName} face ${opponentTeamName}, with the final scoreline settling at ${finalMatchState.homeScore} - ${finalMatchState.awayScore}.`;
-            newState = addNewsItem(newState, headline, content, 'match_summary_player', finalMatchState.matchId);
-
+            const newState = { 
+                ...state, 
+                liveMatch: null, 
+                schedule: newSchedule, 
+                leagueTable: newLeagueTable,
+                matchDayResults: {
+                    playerResult: finalResult,
+                    aiResults: aiResultsToday,
+                }
+            };
             return newState;
         }
         default:

@@ -34,7 +34,7 @@ const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubI
     return Math.round(value / 1000) * 1000;
 };
 
-export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'playerMatch' | 'transferResult' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId'> => {
+export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'transferResult' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults'> => {
     const clubs: Record<number, Club> = {};
     const players: Record<number, Player> = {};
     const leagueTable: LeagueEntry[] = [];
@@ -122,21 +122,61 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'pla
     }
 
     const schedule: Match[] = [];
-    const clubIds = Object.keys(clubs).map(Number);
+    const clubIds: (number | null)[] = Object.keys(clubs).map(Number);
     let matchIdCounter = 1;
     let startDate = new Date(2024, 7, 10); // Season starts in August
 
-    for (let i = 0; i < clubIds.length; i++) {
-        for (let j = 0; j < clubIds.length; j++) {
-            if (i === j) continue;
-            schedule.push({
+    if (clubIds.length % 2 !== 0) {
+        clubIds.push(null); // Add a 'bye' team if odd number
+    }
+    
+    const numTeams = clubIds.length;
+    const numRounds = numTeams - 1;
+
+    const rounds: { home: number; away: number }[][] = [];
+    for (let round = 0; round < numRounds; round++) {
+        const roundMatches: { home: number; away: number }[] = [];
+        for (let i = 0; i < numTeams / 2; i++) {
+            const home = clubIds[i];
+            const away = clubIds[numTeams - 1 - i];
+
+            if (home && away) {
+                roundMatches.push({ home, away });
+            }
+        }
+        rounds.push(roundMatches);
+
+        // Rotate teams, keeping the first one fixed
+        const lastTeam = clubIds.pop();
+        if (lastTeam !== undefined) {
+             clubIds.splice(1, 0, lastTeam);
+        }
+    }
+
+    // Create first half of the season
+    for (const roundMatches of rounds) {
+        for (const match of roundMatches) {
+             schedule.push({
                 id: matchIdCounter++,
-                homeTeamId: clubIds[i],
-                awayTeamId: clubIds[j],
+                homeTeamId: match.home,
+                awayTeamId: match.away,
                 date: new Date(startDate),
             });
-            startDate.setDate(startDate.getDate() + randInt(3, 7));
         }
+        startDate.setDate(startDate.getDate() + 7);
+    }
+
+    // Create second half of the season (reverse fixtures)
+     for (const roundMatches of rounds) {
+        for (const match of roundMatches) {
+             schedule.push({
+                id: matchIdCounter++,
+                homeTeamId: match.away, // Reversed
+                awayTeamId: match.home, // Reversed
+                date: new Date(startDate),
+            });
+        }
+        startDate.setDate(startDate.getDate() + 7);
     }
     
     schedule.sort((a,b) => a.date.getTime() - b.date.getTime());

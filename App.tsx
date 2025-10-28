@@ -15,6 +15,7 @@ import MatchDayModal from './components/MatchDayModal';
 import TransferResultModal from './components/TransferResultModal';
 import MatchView from './components/MatchView';
 import NewsView from './components/NewsView';
+import MatchResultsModal from './components/MatchResultsModal';
 
 const App: React.FC = () => {
     const [state, dispatch] = useReducer(gameReducer, initialState);
@@ -47,8 +48,12 @@ const App: React.FC = () => {
     };
 
     const closeMatchDayModal = () => {
-        dispatch({ type: 'CLEAR_PLAYER_MATCH' });
+        dispatch({ type: 'CLEAR_MATCH_DAY_FIXTURES' });
     };
+    
+    const closeMatchResultsModal = () => {
+        dispatch({ type: 'CLEAR_MATCH_RESULTS' });
+    }
 
     const closeTransferResultModal = () => {
         dispatch({ type: 'CLEAR_TRANSFER_RESULT' });
@@ -118,7 +123,8 @@ const App: React.FC = () => {
                 </main>
             </div>
             {selectedPlayer && <PlayerProfileModal player={selectedPlayer} gameState={state} dispatch={dispatch} onClose={closePlayerModal} />}
-            {state.playerMatch && <MatchDayModal matchInfo={state.playerMatch} gameState={state} dispatch={dispatch} onClose={closeMatchDayModal} />}
+            {state.matchDayFixtures && <MatchDayModal fixtures={state.matchDayFixtures} gameState={state} dispatch={dispatch} onClose={closeMatchDayModal} />}
+            {state.matchDayResults && <MatchResultsModal results={state.matchDayResults} gameState={state} onClose={closeMatchResultsModal} />}
             {state.transferResult && <TransferResultModal result={state.transferResult} onClose={closeTransferResultModal} />}
         </div>
     );

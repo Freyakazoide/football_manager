@@ -61,6 +61,13 @@ export interface Tactics {
     bench: (number | null)[]; // Player IDs, 7 slots
 }
 
+export interface MatchStats {
+    shots: number;
+    shotsOnTarget: number;
+    possession: number; // Stored as a percentage
+    tackles: number;
+}
+
 export interface Match {
     id: number;
     homeTeamId: number;
@@ -68,6 +75,8 @@ export interface Match {
     date: Date;
     homeScore?: number;
     awayScore?: number;
+    homeStats?: MatchStats;
+    awayStats?: MatchStats;
 }
 
 export interface LeagueEntry {
@@ -131,6 +140,10 @@ export interface LiveMatchState {
     homeMentality: Mentality;
     awayMentality: Mentality;
     refereeStrictness: number; // 0.5 (lenient) to 1.5 (strict)
+    homeStats: MatchStats;
+    awayStats: MatchStats;
+    homePossessionMinutes: number;
+    awayPossessionMinutes: number;
 }
 
 export interface NewsItem {
@@ -150,9 +163,11 @@ export interface GameState {
     players: Record<number, Player>;
     schedule: Match[];
     leagueTable: LeagueEntry[];
-    playerMatch: MatchDayInfo | null;
     transferResult: TransferResult | null;
     liveMatch: LiveMatchState | null;
     news: NewsItem[];
     nextNewsId: number;
+    // New state for handling match day flow
+    matchDayFixtures: { playerMatch: MatchDayInfo; aiMatches: Match[] } | null;
+    matchDayResults: { playerResult: Match; aiResults: Match[] } | null;
 }

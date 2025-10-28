@@ -61,12 +61,32 @@ export interface Tactics {
     bench: (number | null)[]; // Player IDs, 7 slots
 }
 
+export interface PlayerMatchStats {
+    shots: number;
+    goals: number;
+    assists: number;
+    passes: number;
+    keyPasses: number;
+    tackles: number;
+    dribbles: number;
+    rating: number;
+}
+
+
 export interface MatchStats {
     shots: number;
     shotsOnTarget: number;
     possession: number; // Stored as a percentage
     tackles: number;
+    passes: number;
+    passAccuracy: number;
+    fouls: number;
+    corners: number;
+    offsides: number;
+    xG: number;
+    bigChances: number;
 }
+
 
 export interface Match {
     id: number;
@@ -77,6 +97,8 @@ export interface Match {
     awayScore?: number;
     homeStats?: MatchStats;
     awayStats?: MatchStats;
+    log?: MatchEvent[];
+    playerStats?: Record<number, PlayerMatchStats>; // Key is player ID
 }
 
 export interface LeagueEntry {
@@ -103,20 +125,24 @@ export interface TransferResult {
 }
 
 // Live Match Engine Types
+export type PlayerRole = 'GK' | 'CB' | 'LB' | 'RB' | 'DM' | 'CM' | 'LM' | 'RM' | 'AM' | 'LW' | 'RW' | 'ST';
+
 export interface LivePlayer {
     id: number;
     name: string;
     position: 'GK' | 'DEF' | 'MID' | 'FWD';
+    role: PlayerRole;
     attributes: PlayerAttributes;
     stamina: number; // Current stamina 0-100
     yellowCards: number;
     isSentOff: boolean;
+    stats: PlayerMatchStats;
 }
 
 export interface MatchEvent {
     minute: number;
     text: string;
-    type: 'Goal' | 'Chance' | 'Foul' | 'Card' | 'Sub' | 'Info' | 'Highlight' | 'Tackle' | 'NearMiss' | 'YellowCard' | 'RedCard';
+    type: 'Goal' | 'Chance' | 'Foul' | 'Card' | 'Sub' | 'Info' | 'Highlight' | 'Tackle' | 'NearMiss' | 'YellowCard' | 'RedCard' | 'Corner' | 'Offside' | 'LongShot' | 'OwnGoal';
 }
 
 export interface LiveMatchState {
@@ -142,8 +168,10 @@ export interface LiveMatchState {
     refereeStrictness: number; // 0.5 (lenient) to 1.5 (strict)
     homeStats: MatchStats;
     awayStats: MatchStats;
-    homePossessionMinutes: number;
-    awayPossessionMinutes: number;
+    // Zone-based possession engine state
+    attackingTeamId: number;
+    ballCarrierId: number | null;
+    ballZone: number; // 1-3 Def, 4-6 Mid, 7-9 Att (from home perspective)
 }
 
 export interface NewsItem {

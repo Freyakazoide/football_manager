@@ -3,17 +3,22 @@ import { GameState, Match } from '../types';
 
 interface CalendarViewProps {
     gameState: GameState;
+    onMatchClick: (match: Match) => void;
 }
 
-const MatchRow: React.FC<{ match: Match, gameState: GameState }> = ({ match, gameState }) => {
+const MatchRow: React.FC<{ match: Match, gameState: GameState, onMatchClick: (match: Match) => void }> = ({ match, gameState, onMatchClick }) => {
     const playerClubId = gameState.playerClubId;
     const homeTeam = gameState.clubs[match.homeTeamId];
     const awayTeam = gameState.clubs[match.awayTeamId];
     const isPast = match.date < gameState.currentDate;
     const hasResult = match.homeScore !== undefined;
+    
+    const isClickable = hasResult && match.log;
+    const rowClasses = `p-4 rounded-lg flex flex-col ${isPast ? 'bg-gray-700' : 'bg-gray-600'} ${isClickable ? 'cursor-pointer hover:bg-gray-600/80 transition-colors' : ''}`;
+
 
     return (
-        <div className={`p-4 rounded-lg flex flex-col ${isPast ? 'bg-gray-700' : 'bg-gray-600'}`}>
+        <div className={rowClasses} onClick={() => isClickable && onMatchClick(match)}>
             <div className="flex justify-between items-center">
                 <span className="text-gray-400 text-sm w-1/4">{match.date.toLocaleDateString()}</span>
                 <div className="flex-1 text-center">
@@ -26,18 +31,21 @@ const MatchRow: React.FC<{ match: Match, gameState: GameState }> = ({ match, gam
                 </div>
             </div>
             {hasResult && match.homeStats && match.awayStats && (
-                 <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-600 flex justify-around">
-                    <div className="text-center">
-                        <div>Possession</div>
-                        <div>{match.homeStats.possession}% - {match.awayStats.possession}%</div>
+                 <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-600 flex justify-around text-center">
+                    <div>
+                        <div>{match.homeStats.possession}%</div>
+                        <div className="font-bold">Possession</div>
+                        <div>{match.awayStats.possession}%</div>
                     </div>
-                     <div className="text-center">
-                        <div>Shots</div>
-                        <div>{match.homeStats.shots} - {match.awayStats.shots}</div>
+                     <div>
+                        <div>{match.homeStats.shots}</div>
+                        <div className="font-bold">Shots</div>
+                        <div>{match.awayStats.shots}</div>
                     </div>
-                     <div className="text-center">
-                        <div>On Target</div>
-                        <div>{match.homeStats.shotsOnTarget} - {match.awayStats.shotsOnTarget}</div>
+                     <div>
+                        <div>{match.homeStats.xG?.toFixed(2)}</div>
+                        <div className="font-bold">xG</div>
+                        <div>{match.awayStats.xG?.toFixed(2)}</div>
                     </div>
                 </div>
             )}
@@ -45,7 +53,7 @@ const MatchRow: React.FC<{ match: Match, gameState: GameState }> = ({ match, gam
     );
 };
 
-const CalendarView: React.FC<CalendarViewProps> = ({ gameState }) => {
+const CalendarView: React.FC<CalendarViewProps> = ({ gameState, onMatchClick }) => {
     const playerClubId = gameState.playerClubId;
     if (!playerClubId) return null;
 
@@ -56,7 +64,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ gameState }) => {
             <h2 className="text-2xl font-bold text-white mb-4">Calendar</h2>
             <div className="space-y-3">
                 {playerSchedule.map(match => (
-                    <MatchRow key={match.id} match={match} gameState={gameState} />
+                    <MatchRow key={match.id} match={match} gameState={gameState} onMatchClick={onMatchClick} />
                 ))}
             </div>
         </div>

@@ -1,4 +1,4 @@
-import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats } from '../types';
 import { Action } from './reducerTypes';
 import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
@@ -228,6 +228,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             const playerOut = lineup[playerOutIndex];
             const playerIn = bench[playerInIndex];
+            
+            const wasBallCarrier = liveMatch.ballCarrierId === playerOut.id;
 
             const newLineup = [...lineup];
             newLineup[playerOutIndex] = playerIn;
@@ -248,6 +250,17 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 updatedState.awayBench = newBench;
                 updatedState.awaySubsMade++;
             }
+            
+            // If the player with the ball was subbed, a defender gets the ball.
+            if (wasBallCarrier) {
+                const opposition = isHome ? updatedState.awayLineup : updatedState.homeLineup;
+                const newCarrier = opposition.find(p => p.role === 'CB' && !p.isSentOff) || opposition.find(p => !p.isSentOff);
+                if(newCarrier) {
+                    updatedState.ballCarrierId = newCarrier.id;
+                    updatedState.attackingTeamId = isHome ? updatedState.awayTeamId : updatedState.homeTeamId;
+                }
+            }
+
 
             return { ...state, liveMatch: updatedState };
         }
@@ -263,6 +276,22 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
         case 'END_MATCH': {
             if (!state.liveMatch) return state;
             const finalMatchState = state.liveMatch;
+
+            const homePossessionEvents = finalMatchState.log.filter(e => (e.text.includes(finalMatchState.homeTeamName) && (e.type === 'Highlight' || e.type === 'Tackle')) || (e.text.includes('kick for ' + finalMatchState.homeTeamName))).length;
+            const awayPossessionEvents = finalMatchState.log.filter(e => (e.text.includes(finalMatchState.awayTeamName) && (e.type === 'Highlight' || e.type === 'Tackle')) || (e.text.includes('kick for ' + finalMatchState.awayTeamName))).length;
+            const totalPossessionEvents = homePossessionEvents + awayPossessionEvents;
+            const homePossession = totalPossessionEvents > 0 ? Math.round((homePossessionEvents / totalPossessionEvents) * 100) : 50;
+            const awayPossession = totalPossessionEvents > 0 ? 100 - homePossession : 50;
+
+
+            const allPlayersInMatch = [...finalMatchState.homeLineup, ...finalMatchState.awayLineup, ...finalMatchState.homeBench, ...finalMatchState.awayBench];
+            const collectedPlayerStats: Record<number, PlayerMatchStats> = {};
+            allPlayersInMatch.forEach(p => {
+                if (p) { // Bench players can be null if squad is not full
+                    collectedPlayerStats[p.id] = p.stats;
+                }
+            });
+
             const finalResult: Match = {
                 id: finalMatchState.matchId,
                 homeTeamId: finalMatchState.homeTeamId,
@@ -270,9 +299,12 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 date: state.schedule.find(m => m.id === finalMatchState.matchId)!.date,
                 homeScore: finalMatchState.homeScore,
                 awayScore: finalMatchState.awayScore,
-                homeStats: { ...finalMatchState.homeStats, possession: Math.round((finalMatchState.homePossessionMinutes / 90) * 100) },
-                awayStats: { ...finalMatchState.awayStats, possession: Math.round((finalMatchState.awayPossessionMinutes / 90) * 100) },
+                homeStats: { ...finalMatchState.homeStats, possession: homePossession },
+                awayStats: { ...finalMatchState.awayStats, possession: awayPossession },
+                log: finalMatchState.log,
+                playerStats: collectedPlayerStats,
             };
+            
             const scheduleIndex = state.schedule.findIndex(m => m.id === finalMatchState.matchId);
             const newSchedule = [...state.schedule];
             if (scheduleIndex !== -1) {

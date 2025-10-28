@@ -10,9 +10,7 @@ interface SquadViewProps {
 const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
     if (!gameState.playerClubId) return null;
 
-    // FIX: Explicitly type `p` as Player to resolve 'unknown' type error from Object.values.
     const squadPlayers = Object.values(gameState.players).filter((p: Player) => p.clubId === gameState.playerClubId);
-    // FIX: Explicitly type `a` and `b` as Player to resolve 'unknown' type error.
     squadPlayers.sort((a: Player, b: Player) => {
         const posOrder = { 'GK': 0, 'DEF': 1, 'MID': 2, 'FWD': 3 };
         return posOrder[a.position] - posOrder[b.position];
@@ -33,7 +31,8 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {squadPlayers.map(player => (
+                        {/* FIX: Explicitly type 'player' to resolve property access errors on type 'unknown'. */}
+                        {squadPlayers.map((player: Player) => (
                             <tr
                                 key={player.id}
                                 className="border-b border-gray-700 hover:bg-gray-700 cursor-pointer"

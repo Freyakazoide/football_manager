@@ -1,5 +1,33 @@
 import { Match, Club } from '../types';
 
+const templates = {
+    dominantWin: [
+        { headline: `Clinical ${'winner'} Dismantle ${'loser'}`, content: `${'winner'} put on a show today, dominating possession with ${'winPossession'}% of the ball and peppering the goal with ${'winShots'} shots. The final score of ${'score'} doesn't flatter them, as they thoroughly deserved the victory based on an expected goals tally of ${'winXG'} to ${'loser'}'s ${'loseXG'}.` },
+        { headline: `${'winner'} Cruise to ${'score'} Victory`, content: `It was a comfortable day at the office for ${'winner'}. They controlled the tempo from start to finish, and the ${'score'} victory was a fair reflection of their superiority on the pitch.`}
+    ],
+    smashAndGrab: [
+        { headline: `Late Drama Sees ${'winner'} Steal the Points`, content: `In a classic smash-and-grab performance, ${'winner'} weathered a storm of ${'loseShots'} shots from ${'loser'} to snatch a ${'score'} victory. Despite having only ${'winPossession'}% possession, their clinical finishing made all the difference.` },
+    ],
+    hardFoughtWin: [
+        { headline: `${'winner'} Edge Out ${'loser'} in Tense Affair`, content: `A hard-fought battle saw ${'winner'} emerge with a narrow ${'score'} win. It was a game of fine margins, but a moment of quality decided the contest.` }
+    ],
+    disappointingLoss: [
+         { headline: `Frustration for ${'loser'} in ${'score'} Defeat`, content: `It's a tough result to take for ${'loser'}. Despite creating several good chances (totaling ${'loseXG'} xG), they couldn't find the cutting edge and ultimately fell to a ${'score'} defeat against ${'winner'}.` }
+    ],
+    thrillingDraw: [
+        { headline: `All Square in ${'score'} Thriller`, content: `What a match! Both ${'home'} and ${'away'} left it all on the pitch in a pulsating ${'score'} draw. A back-and-forth contest saw both sides have chances to win it.` }
+    ],
+    scoreDraw: [
+        { headline: `Points Shared as ${'home'} and ${'away'} Draw ${'score'}`, content: `It's all square between ${'home'} and ${'away'} as the match ends ${'score'}. Both teams had their moments but neither could find a winning goal.` }
+    ],
+    scorelessDraw: [
+        { headline: `Stalemate as ${'home'} and ${'away'} Play Out Scoreless Draw`, content: `A tactical battle ended in a stalemate today, with neither side able to break the deadlock. The match finished 0-0, a result that was probably fair given the lack of clear-cut chances for either team.`}
+    ]
+};
+
+const pickRandomTemplate = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
+
+
 export const generateNarrativeReport = (match: Match, playerClubId: number | null, clubs: Record<number, Club>): { headline: string, content: string } => {
     const homeTeam = clubs[match.homeTeamId];
     const awayTeam = clubs[match.awayTeamId];
@@ -10,12 +38,6 @@ export const generateNarrativeReport = (match: Match, playerClubId: number | nul
     }
 
     const playerTeam = playerClubId === homeTeam.id ? homeTeam : playerClubId === awayTeam.id ? awayTeam : null;
-    const opponentTeam = playerClubId === homeTeam.id ? awayTeam : playerClubId === awayTeam.id ? homeTeam : null;
-
-    let headline = "";
-    let content = "";
-
-    const scoreline = `${homeTeam.name} ${homeScore} - ${awayScore} ${awayTeam.name}`;
     
     // Determine the result from the player's perspective
     let resultType: 'win' | 'draw' | 'loss' | 'neutral' = 'neutral';
@@ -29,62 +51,69 @@ export const generateNarrativeReport = (match: Match, playerClubId: number | nul
         }
     }
 
-    // Headline generation
+    let templateKey: keyof typeof templates = 'hardFoughtWin'; // default
+    const scoreDiff = Math.abs(homeScore - awayScore);
+
     if (resultType === 'win') {
-        if (Math.abs(homeScore - awayScore) >= 3) {
-            headline = `Dominant Victory for ${playerTeam!.name}`;
+        const playerIsHome = playerClubId === homeTeam.id;
+        const playerStats = playerIsHome ? homeStats : awayStats;
+        const opponentStats = playerIsHome ? awayStats : homeStats;
+        if (scoreDiff >= 2 && playerStats.possession > 60) {
+            templateKey = 'dominantWin';
+        } else if (playerStats.possession < 45 && playerStats.shots < opponentStats.shots) {
+            templateKey = 'smashAndGrab';
         } else {
-            headline = `${playerTeam!.name} Secure Hard-Fought Win`;
+            templateKey = 'hardFoughtWin';
         }
     } else if (resultType === 'loss') {
-        headline = `Disappointment for ${playerTeam!.name} in ${opponentTeam!.name} Clash`;
+        templateKey = 'disappointingLoss';
     } else if (resultType === 'draw') {
-        if (homeScore >= 2) {
-            headline = `Thrilling Draw in ${homeTeam.name} vs ${awayTeam.name} Encounter`;
-        } else {
-            headline = `Stalemate Between ${homeTeam.name} and ${awayTeam.name}`;
+        if (homeScore === 0) {
+            templateKey = 'scorelessDraw';
+        } else if (homeScore >= 2) {
+            templateKey = 'thrillingDraw';
+        } else { // 1-1
+            templateKey = 'scoreDraw';
         }
-    } else {
-        headline = `Match Report: ${scoreline}`;
-    }
-
-    // Content generation based on stats
-    content += `The final whistle blows on a compelling match between ${homeTeam.name} and ${awayTeam.name}, with the final scoreline reading ${homeScore}-${awayScore}.\n\n`;
-
-    // Possession narrative
-    if (homeStats.possession > 65) {
-        content += `${homeTeam.name} controlled the game, dominating possession with ${homeStats.possession}% of the ball. `;
-    } else if (awayStats.possession > 65) {
-        content += `${awayTeam.name} saw the lion's share of the ball, holding ${awayStats.possession}% possession. `;
-    } else {
-        content += `It was an evenly contested match, with possession split nearly down the middle (${homeStats.possession}%-${awayStats.possession}%). `;
-    }
-
-    // Shots narrative
-    const homeClinical = homeScore > 0 && (homeStats.shotsOnTarget / homeScore) < 2.5;
-    const awayClinical = awayScore > 0 && (awayStats.shotsOnTarget / awayScore) < 2.5;
-
-    if (homeClinical && awayClinical) {
-        content += "Both sides were clinical in front of goal. ";
-    } else if (homeClinical) {
-        content += `${homeTeam.name} were particularly sharp, converting their chances effectively. `;
-    } else if (awayClinical) {
-        content += `${awayTeam.name} showed a clinical edge today. `;
+    } else { // Neutral match
+        if (homeScore === awayScore) {
+             if (homeScore === 0) templateKey = 'scorelessDraw';
+             else if (homeScore >= 2) templateKey = 'thrillingDraw';
+             else templateKey = 'scoreDraw';
+        } else {
+            templateKey = 'hardFoughtWin';
+        }
     }
     
-    if (homeStats.shots > awayStats.shots + 8) {
-        content += `${homeTeam.name} relentlessly peppered the opposition goal with ${homeStats.shots} shots throughout the match. `;
-    } else if (awayStats.shots > homeStats.shots + 8) {
-        content += `Despite being on the back foot, ${awayTeam.name} created numerous chances, registering ${awayStats.shots} shots. `;
-    }
+    const template = pickRandomTemplate(templates[templateKey]);
+    
+    const winner = homeScore > awayScore ? homeTeam : awayTeam;
+    const loser = homeScore < awayScore ? homeTeam : awayTeam;
+    
+    const replacements: Record<string, any> = {
+        home: homeTeam.name,
+        away: awayTeam.name,
+        score: `${homeScore}-${awayScore}`,
+        winner: winner.name,
+        loser: loser.name,
+        winPossession: Math.round(winner.id === homeTeam.id ? homeStats.possession : awayStats.possession),
+        winShots: winner.id === homeTeam.id ? homeStats.shots : awayStats.shots,
+        winXG: (winner.id === homeTeam.id ? homeStats.xG : awayStats.xG).toFixed(2),
+        loseShots: loser.id === homeTeam.id ? homeStats.shots : awayStats.shots,
+        loseXG: (loser.id === homeTeam.id ? homeStats.xG : awayStats.xG).toFixed(2),
+    };
 
-    content += `\n\nMatch Statistics:\n`;
-    content += `             ${homeTeam.name.substring(0,3).toUpperCase()} - ${awayTeam.name.substring(0,3).toUpperCase()}\n`;
-    content += `Possession:    ${homeStats.possession}% - ${awayStats.possession}%\n`;
-    content += `Shots:         ${homeStats.shots} - ${awayStats.shots}\n`;
-    content += `Shots on Target: ${homeStats.shotsOnTarget} - ${awayStats.shotsOnTarget}\n`;
-    content += `Tackles:       ${homeStats.tackles} - ${awayStats.tackles}`;
+    const finalHeadline = template.headline.replace(/\${(.*?)}/g, (_, key) => replacements[key]);
+    let finalContent = template.content.replace(/\${(.*?)}/g, (_, key) => replacements[key]);
+
+    // Add stats block
+    finalContent += `\n\nMatch Statistics:\n`;
+    finalContent += `             ${homeTeam.name.substring(0,3).toUpperCase()} - ${awayTeam.name.substring(0,3).toUpperCase()}\n`;
+    finalContent += `Possession:    ${Math.round(homeStats.possession)}% - ${Math.round(awayStats.possession)}%\n`;
+    finalContent += `Shots:         ${homeStats.shots} - ${awayStats.shots}\n`;
+    finalContent += `On Target:     ${homeStats.shotsOnTarget} - ${awayStats.shotsOnTarget}\n`;
+    finalContent += `Expected Goals: ${homeStats.xG.toFixed(2)} - ${awayStats.xG.toFixed(2)}`;
 
 
-    return { headline, content };
+    return { headline: finalHeadline, content: finalContent };
 };

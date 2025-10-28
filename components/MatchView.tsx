@@ -15,6 +15,26 @@ const pitchPositions: Record<string, { top: string; left: string }[]> = {
     '5-3-2': [ { top: '88%', left: '50%' }, { top: '70%', left: '15%' }, { top: '70%', left: '35%' }, { top: '70%', left: '50%' }, { top: '70%', left: '65%' }, { top: '70%', left: '85%' }, { top: '50%', left: '30%' }, { top: '50%', left: '50%' }, { top: '50%', left: '70%' }, { top: '25%', left: '40%' }, { top: '25%', left: '60%' } ],
 };
 
+const StatBar: React.FC<{ home: number, away: number, label: string }> = ({ home, away, label }) => {
+    const total = home + away;
+    const homePercent = total > 0 ? (home / total) * 100 : 50;
+
+    return (
+        <div className="w-full">
+            <div className="flex justify-between items-center text-sm mb-1">
+                <span className="font-bold">{home}</span>
+                <span className="text-gray-400 text-xs">{label}</span>
+                <span className="font-bold">{away}</span>
+            </div>
+            <div className="flex w-full h-2 bg-gray-600 rounded">
+                <div className="bg-blue-500 rounded-l" style={{ width: `${homePercent}%` }}></div>
+                <div className="bg-red-500 rounded-r" style={{ width: `${100 - homePercent}%` }}></div>
+            </div>
+        </div>
+    );
+};
+
+
 const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
     const { liveMatch } = gameState;
     const logEndRef = useRef<HTMLDivElement>(null);
@@ -44,6 +64,7 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
     const playerBench = playerTeamIsHome ? liveMatch.homeBench : liveMatch.awayBench;
     const playerSubsMade = playerTeamIsHome ? liveMatch.homeSubsMade : liveMatch.awaySubsMade;
     const playerClub = gameState.clubs[gameState.playerClubId!];
+    const opponentClub = gameState.clubs[playerTeamIsHome ? liveMatch.awayTeamId : liveMatch.homeTeamId];
 
     const handleSubSelect = (playerInId: number) => {
         if (playerToSub) {
@@ -70,6 +91,7 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
             <div className="flex border-b border-gray-700 mb-2">
                 <button onClick={() => setActiveTab('subs')} className={`py-2 px-4 ${activeTab === 'subs' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>Substitutions ({5-playerSubsMade})</button>
                 <button onClick={() => setActiveTab('tactics')} className={`py-2 px-4 ${activeTab === 'tactics' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>Tactics</button>
+                <button onClick={() => setActiveTab('stats')} className={`py-2 px-4 ${activeTab === 'stats' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>Stats</button>
             </div>
             {activeTab === 'subs' && (
                 <div className="grid grid-cols-2 gap-4">
@@ -77,7 +99,7 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
                         <h4 className="font-bold text-white mb-2">On Pitch</h4>
                         {playerLineup.filter(p => !p.isSentOff).map(p => (
                             <button key={p.id} onClick={() => setPlayerToSub(p.id)} className={`w-full text-left p-2 rounded mb-1 text-sm ${playerToSub === p.id ? 'bg-green-600' : 'bg-gray-700'}`}>
-                                {p.name} <span className="text-xs text-gray-400">{Math.round(p.stamina)}%</span>
+                                {p.name} <span className="text-xs text-gray-400">{Math.round(p.stamina)}% / {p.stats.rating.toFixed(1)}</span>
                             </button>
                         ))}
                     </div>
@@ -101,6 +123,19 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
                     </div>
                      <h4 className="font-bold text-white mb-2">Simulation</h4>
                      <button onClick={handleSimulateToEnd} className="w-full p-2 rounded bg-blue-600 hover:bg-blue-700 text-sm">Simulate to End</button>
+                </div>
+            )}
+            {activeTab === 'stats' && (
+                <div className="text-sm space-y-4">
+                    <div className="text-center font-bold mb-2">
+                        <span className="text-blue-400">{liveMatch.homeTeamName}</span> vs <span className="text-red-400">{liveMatch.awayTeamName}</span>
+                    </div>
+                    <StatBar label="Shots" home={liveMatch.homeStats.shots} away={liveMatch.awayStats.shots} />
+                    <StatBar label="Shots on Target" home={liveMatch.homeStats.shotsOnTarget} away={liveMatch.awayStats.shotsOnTarget} />
+                    <StatBar label="xG" home={parseFloat(liveMatch.homeStats.xG.toFixed(2))} away={parseFloat(liveMatch.awayStats.xG.toFixed(2))} />
+                    <StatBar label="Passes" home={liveMatch.homeStats.passes} away={liveMatch.awayStats.passes} />
+                    <StatBar label="Tackles" home={liveMatch.homeStats.tackles} away={liveMatch.awayStats.tackles} />
+                    <StatBar label="Corners" home={liveMatch.homeStats.corners} away={liveMatch.awayStats.corners} />
                 </div>
             )}
         </div>
@@ -142,7 +177,7 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
                                    ) : (
                                        <>
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs text-white ${player.stamina > 60 ? 'bg-blue-500' : player.stamina > 30 ? 'bg-yellow-500' : 'bg-red-500'} shadow-lg border-2 border-gray-900`}>
-                                                {player.name.split(' ')[1]?.[0] || '?'}
+                                                {player.role}
                                             </div>
                                             <div className="absolute bottom-full mb-1 w-max bg-gray-900 text-white text-xs rounded py-1 px-2 text-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                                 {player.name} ({Math.round(player.stamina)}%) {player.yellowCards > 0 ? '🟨' : ''}
@@ -152,6 +187,19 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
                                </div>
                             );
                         })}
+                         {/* Ball Marker */}
+                        {liveMatch.ballCarrierId && (() => {
+                            const ballCarrier = [...liveMatch.homeLineup, ...liveMatch.awayLineup].find(p => p.id === liveMatch.ballCarrierId);
+                            const lineup = ballCarrier?.id && liveMatch.homeLineup.some(p => p.id === ballCarrier.id) ? liveMatch.homeLineup : liveMatch.awayLineup;
+                            const formation = ballCarrier?.id && liveMatch.homeLineup.some(p => p.id === ballCarrier.id) ? playerClub.tactics.formation : opponentClub.tactics.formation;
+                            const playerIndex = lineup.findIndex(p => p.id === liveMatch.ballCarrierId);
+
+                            if(playerIndex === -1 || !pitchPositions[formation]) return null;
+
+                            const pos = pitchPositions[formation][playerIndex];
+
+                            return <div className="absolute w-4 h-4 bg-yellow-300 rounded-full border-2 border-black" style={{ top: pos.top, left: pos.left, transform: 'translate(-50%, -50%) translate(-12px, 12px)', transition: 'top 0.5s, left 0.5s' }} />;
+                        })()}
                     </div>
                     <div className="bg-gray-800 p-2 rounded-lg flex items-center gap-2">
                          {liveMatch.isPaused && liveMatch.status !== 'full-time' && <button onClick={() => dispatch({ type: 'RESUME_MATCH' })} className="w-1/2 p-3 bg-green-600 rounded font-bold">Resume Match</button>}

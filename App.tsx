@@ -1,5 +1,5 @@
 import React, { useState, useReducer, useEffect, useCallback } from 'react';
-import { GameState, View, Club, Player } from './types';
+import { GameState, View, Club, Player, Match } from './types';
 import { gameReducer, initialState } from './services/gameReducer';
 import { generateInitialDatabase } from './services/database';
 import Navigation from './components/Navigation';
@@ -16,11 +16,13 @@ import TransferResultModal from './components/TransferResultModal';
 import MatchView from './components/MatchView';
 import NewsView from './components/NewsView';
 import MatchResultsModal from './components/MatchResultsModal';
+import MatchReportModal from './components/MatchReportModal';
 
 const App: React.FC = () => {
     const [state, dispatch] = useReducer(gameReducer, initialState);
     const [currentView, setCurrentView] = useState<View>(View.SQUAD);
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+    const [selectedMatchForReport, setSelectedMatchForReport] = useState<Match | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
 
     useEffect(() => {
@@ -59,6 +61,16 @@ const App: React.FC = () => {
         dispatch({ type: 'CLEAR_TRANSFER_RESULT' });
     };
 
+    const handleMatchClick = (match: Match) => {
+        if (match.homeScore !== undefined && match.log) { // Only open for played matches with logs
+            setSelectedMatchForReport(match);
+        }
+    };
+
+    const closeMatchReportModal = () => {
+        setSelectedMatchForReport(null);
+    };
+
     const renderView = () => {
         if (!state.playerClubId) return null;
         switch (currentView) {
@@ -69,7 +81,7 @@ const App: React.FC = () => {
             case View.COMPETITION:
                 return <CompetitionView gameState={state} />;
             case View.CALENDAR:
-                return <CalendarView gameState={state} />;
+                return <CalendarView gameState={state} onMatchClick={handleMatchClick} />;
             case View.FINANCES:
                 return <FinancesView gameState={state} />;
             case View.TRANSFERS:
@@ -126,6 +138,7 @@ const App: React.FC = () => {
             {state.matchDayFixtures && <MatchDayModal fixtures={state.matchDayFixtures} gameState={state} dispatch={dispatch} onClose={closeMatchDayModal} />}
             {state.matchDayResults && <MatchResultsModal results={state.matchDayResults} gameState={state} onClose={closeMatchResultsModal} />}
             {state.transferResult && <TransferResultModal result={state.transferResult} onClose={closeTransferResultModal} />}
+            {selectedMatchForReport && <MatchReportModal match={selectedMatchForReport} gameState={state} onClose={closeMatchReportModal} />}
         </div>
     );
 };

@@ -27,18 +27,18 @@ const MatchResultsModal: React.FC<MatchResultsModalProps> = ({ results, gameStat
                         <span className="text-4xl font-mono mx-4">{playerResult.homeScore} - {playerResult.awayScore}</span>
                         <span className="text-xl font-bold w-1/3 text-left">{awayTeam.name}</span>
                     </div>
-                     <div className="text-sm text-gray-400 mt-2 pt-2 border-t border-gray-700 flex justify-around">
-                        <div className="text-center">
-                            <div>Possession</div>
-                            <div>{playerResult.homeStats?.possession}% - {playerResult.awayStats?.possession}%</div>
+                     <div className="text-sm text-gray-400 mt-4 pt-4 border-t border-gray-700 grid grid-cols-3 gap-2 text-center">
+                        <div>
+                            <div className="font-bold">{playerResult.homeStats?.possession}% - {playerResult.awayStats?.possession}%</div>
+                            <div className="text-xs text-gray-500">Possession</div>
                         </div>
-                         <div className="text-center">
-                            <div>Shots</div>
-                            <div>{playerResult.homeStats?.shots} - {playerResult.awayStats?.shots}</div>
+                         <div>
+                            <div className="font-bold">{playerResult.homeStats?.shots} - {playerResult.awayStats?.shots}</div>
+                            <div className="text-xs text-gray-500">Shots</div>
                         </div>
-                         <div className="text-center">
-                            <div>On Target</div>
-                            <div>{playerResult.homeStats?.shotsOnTarget} - {playerResult.awayStats?.shotsOnTarget}</div>
+                         <div>
+                            <div className="font-bold">{playerResult.homeStats?.xG?.toFixed(2)} - {playerResult.awayStats?.xG?.toFixed(2)}</div>
+                            <div className="text-xs text-gray-500">xG</div>
                         </div>
                     </div>
                 </div>

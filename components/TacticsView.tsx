@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { GameState, Player, Tactics, Formation, Mentality } from '../types';
 import { Action } from '../services/reducerTypes';
@@ -109,7 +110,8 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch }) => {
                         <select key={index} value={playerId || ''} onChange={(e) => handlePlayerSelect(index, e.target.value ? Number(e.target.value) : null, 'lineup')} className="w-full bg-gray-700 text-white p-1 rounded mb-1 text-sm">
                             <option value="">{`Slot ${index + 1}`}</option>
                             {playerId && <option value={playerId}>{gameState.players[playerId].name}</option>}
-                            {availablePlayers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.position})</option>)}
+                            {/* FIX: Explicitly type 'p' to resolve property access errors. */}
+                            {availablePlayers.map((p: Player) => <option key={p.id} value={p.id}>{p.name} ({p.position})</option>)}
                         </select>
                     ))}
                 </div>
@@ -120,7 +122,8 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch }) => {
                          <select key={index} value={playerId || ''} onChange={(e) => handlePlayerSelect(index, e.target.value ? Number(e.target.value) : null, 'bench')} className="w-full bg-gray-700 text-white p-1 rounded mb-1 text-sm">
                             <option value="">{`Sub ${index + 1}`}</option>
                             {playerId && <option value={playerId}>{gameState.players[playerId].name}</option>}
-                            {availablePlayers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.position})</option>)}
+                            {/* FIX: Explicitly type 'p' to resolve property access errors. */}
+                            {availablePlayers.map((p: Player) => <option key={p.id} value={p.id}>{p.name} ({p.position})</option>)}
                         </select>
                     ))}
                 </div>

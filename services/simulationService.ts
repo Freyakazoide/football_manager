@@ -1,69 +1,105 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality } from '../types';
 
 // Simplified overall team rating based on starting lineup for non-player matches
-const getTeamRating = (teamId: number, clubs: Record<number, Club>, players: Record<number, Player>): number => {
+const getUnitRatings = (teamId: number, clubs: Record<number, Club>, players: Record<number, Player>) => {
     const club = clubs[teamId];
-    if (!club) return 50;
+    if (!club) return { def: 50, mid: 50, fwd: 50, gk: 50 };
 
-    const lineupPlayers = club.tactics.lineup
-        .map(playerId => playerId ? players[playerId] : null)
-        .filter(p => p !== null) as Player[];
+    const lineupPlayers = club.tactics.lineup.map(pId => pId ? players[pId] : null).filter(p => p) as Player[];
+    if (lineupPlayers.length < 11) return { def: 50, mid: 50, fwd: 50, gk: 50 };
 
-    if (lineupPlayers.length === 0) return 50;
+    const gkPlayers = lineupPlayers.filter(p => p.position === 'GK');
+    const defPlayers = lineupPlayers.filter(p => p.position === 'DEF');
+    const midPlayers = lineupPlayers.filter(p => p.position === 'MID');
+    const fwdPlayers = lineupPlayers.filter(p => p.position === 'FWD');
 
-    const totalRating = lineupPlayers.reduce((sum, player) => {
-        const attrs = Object.values(player.attributes);
-        const avgAttr = attrs.reduce((a, b) => a + b, 0) / attrs.length;
-        return sum + avgAttr;
-    }, 0);
+    const gkRating = gkPlayers.length > 0 ? gkPlayers.reduce((sum, p) => sum + p.attributes.positioning, 0) / gkPlayers.length : 50;
+    const defRating = defPlayers.length > 0 ? defPlayers.reduce((sum, p) => sum + p.attributes.tackling + p.attributes.positioning, 0) / (defPlayers.length * 2) : 50;
+    const midRating = midPlayers.length > 0 ? midPlayers.reduce((sum, p) => sum + p.attributes.passing + p.attributes.creativity + p.attributes.teamwork, 0) / (midPlayers.length * 3) : 50;
+    const fwdRating = fwdPlayers.length > 0 ? fwdPlayers.reduce((sum, p) => sum + p.attributes.shooting + p.attributes.dribbling + p.attributes.pace, 0) / (fwdPlayers.length * 3) : 50;
 
-    return totalRating / lineupPlayers.length;
-};
+    return { def: defRating, mid: midRating, fwd: fwdRating, gk: gkRating };
+}
 
-// This function now simulates non-player matches and generates estimated stats.
+
+// This function simulates non-player matches using an abstracted possession-based model.
 export const runMatch = (match: Match, clubs: Record<number, Club>, players: Record<number, Player>): Match => {
-    const homeRating = getTeamRating(match.homeTeamId, clubs, players);
-    const awayRating = getTeamRating(match.awayTeamId, clubs, players);
-    const homeAdvantage = 1.05;
-    const ratingDiff = (homeRating * homeAdvantage) - awayRating;
+    const homeRatings = getUnitRatings(match.homeTeamId, clubs, players);
+    const awayRatings = getUnitRatings(match.awayTeamId, clubs, players);
     
+    const homeMentality = clubs[match.homeTeamId].tactics.mentality;
+    const awayMentality = clubs[match.awayTeamId].tactics.mentality;
+    const mentalityMod = (mentality: Mentality, unit: 'def' | 'mid' | 'fwd') => {
+        if (mentality === 'Defensive') return unit === 'def' ? 1.1 : (unit === 'fwd' ? 0.85 : 1.0);
+        if (mentality === 'Offensive') return unit === 'fwd' ? 1.15 : (unit === 'def' ? 0.9 : 1.0);
+        return 1.0;
+    };
+
+    // Possession simulation
+    const homeMidfieldStrength = homeRatings.mid * mentalityMod(homeMentality, 'mid');
+    const awayMidfieldStrength = awayRatings.mid * mentalityMod(awayMentality, 'mid');
+    const totalMidfield = homeMidfieldStrength + awayMidfieldStrength;
+    const homePossession = Math.round((homeMidfieldStrength / totalMidfield) * 100);
+
+    // Game Volume simulation - total number of possessions in a game
+    let totalPossessions = 120; // Average number of possessions
+    if (homeMentality === 'Offensive' && awayMentality === 'Offensive') totalPossessions = 150;
+    if (homeMentality === 'Defensive' && awayMentality === 'Defensive') totalPossessions = 90;
+
     let homeScore = 0;
     let awayScore = 0;
+    const homeStats: MatchStats = { shots: 0, shotsOnTarget: 0, possession: homePossession, tackles: 0, passes: 0, passAccuracy: 0, fouls: 0, corners: 0, offsides: 0, xG: 0, bigChances: 0 };
+    const awayStats: MatchStats = { shots: 0, shotsOnTarget: 0, possession: 100 - homePossession, tackles: 0, passes: 0, passAccuracy: 0, fouls: 0, corners: 0, offsides: 0, xG: 0, bigChances: 0 };
 
-    const homeStats: MatchStats = { shots: 0, shotsOnTarget: 0, possession: 0, tackles: 0 };
-    const awayStats: MatchStats = { shots: 0, shotsOnTarget: 0, possession: 0, tackles: 0 };
+    for (let i = 0; i < totalPossessions; i++) {
+        const hasPossession = Math.random() * 100 < homePossession ? 'home' : 'away';
+        
+        const attackRatings = hasPossession === 'home' ? homeRatings : awayRatings;
+        const defenseRatings = hasPossession === 'home' ? awayRatings : homeRatings;
+        const attackMentality = hasPossession === 'home' ? homeMentality : awayMentality;
+        const defenseMentality = hasPossession === 'home' ? awayMentality : homeMentality;
+        const attackStats = hasPossession === 'home' ? homeStats : awayStats;
+        const defenseStats = hasPossession === 'home' ? awayStats : homeStats;
 
-    const totalChances = 10 + Math.floor(Math.random() * 5); // 10-14 total chances in a match
+        // Progress from Midfield to Attack
+        const midToFwdChance = (attackRatings.mid * mentalityMod(attackMentality, 'mid')) / (defenseRatings.mid * mentalityMod(defenseMentality, 'mid'));
+        if (Math.random() < Math.max(0.1, Math.min(0.7, midToFwdChance * 0.4))) {
+            // Ball is in attacking third, chance to shoot
+            const fwdToShotChance = (attackRatings.fwd * mentalityMod(attackMentality, 'fwd')) / (defenseRatings.def * mentalityMod(defenseMentality, 'def'));
+            if (Math.random() < Math.max(0.1, Math.min(0.8, fwdToShotChance * 0.5))) {
+                // SHOT
+                attackStats.shots++;
+                const isBigChance = Math.random() < 0.2;
+                const xG_value = isBigChance ? 0.4 : 0.12;
+                attackStats.xG += xG_value;
+                if(isBigChance) attackStats.bigChances++;
 
-    for (let i = 0; i < totalChances; i++) {
-        const homeChanceProb = (50 + ratingDiff) / 100;
-        if (Math.random() < homeChanceProb) {
-            // Home chance
-            homeStats.shots++;
-            if (Math.random() < 0.4) { // 40% of shots are on target
-                homeStats.shotsOnTarget++;
-                if (Math.random() < 0.3) { // 30% of shots on target are goals
-                    homeScore++;
+                // On target?
+                if (Math.random() < 0.45) {
+                    attackStats.shotsOnTarget++;
+                    // Goal?
+                    const goalProb = (attackRatings.fwd / (attackRatings.fwd + defenseRatings.gk)) * 0.8;
+                    if (Math.random() < Math.max(0.05, goalProb)) {
+                        if(hasPossession === 'home') homeScore++; else awayScore++;
+                    }
                 }
+            } else {
+                defenseStats.tackles++;
             }
         } else {
-            // Away chance
-            awayStats.shots++;
-            if (Math.random() < 0.4) {
-                awayStats.shotsOnTarget++;
-                if (Math.random() < 0.3) {
-                    awayScore++;
-                }
-            }
+            defenseStats.tackles++;
         }
     }
-
-    homeStats.tackles = 8 + Math.floor(Math.random() * 10);
-    awayStats.tackles = 8 + Math.floor(Math.random() * 10);
     
-    const basePossession = 50 + (ratingDiff * 1.5);
-    homeStats.possession = Math.max(25, Math.min(75, Math.round(basePossession)));
-    awayStats.possession = 100 - homeStats.possession;
+    // Fill in other stats with plausible random numbers for flavour
+    homeStats.passes = 300 + Math.floor(homePossession * 3.5);
+    awayStats.passes = 300 + Math.floor((100 - homePossession) * 3.5);
+    homeStats.passAccuracy = 75 + Math.floor(Math.random() * 15);
+    awayStats.passAccuracy = 75 + Math.floor(Math.random() * 15);
+    homeStats.fouls = Math.floor(Math.random() * 5);
+    awayStats.fouls = Math.floor(Math.random() * 5);
+    homeStats.corners = Math.floor(homeStats.shots / 5);
+    awayStats.corners = Math.floor(awayStats.shots / 5);
 
     return { ...match, homeScore, awayScore, homeStats, awayStats };
 };

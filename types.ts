@@ -51,15 +51,48 @@ export interface Club {
     tactics: Tactics;
 }
 
-export type Formation = '4-4-2' | '4-3-3' | '3-5-2' | '5-3-2';
 export type Mentality = 'Defensive' | 'Balanced' | 'Offensive';
 
+// --- NEW TACTICS & INSTRUCTIONS SYSTEM ---
+export type PlayerRole = 'GK' | 'CB' | 'LB' | 'RB' | 'DM' | 'CM' | 'LM' | 'RM' | 'AM' | 'LW' | 'RW' | 'ST';
+
+export enum ShootingInstruction { Normal = 'Normal', ShootMoreOften = 'Shoot More Often', ShootLessOften = 'Shoot Less Often' }
+export enum PassingInstruction { Normal = 'Normal', Shorter = 'Shorter Passes', Risky = 'More Risky Passes' }
+export enum DribblingInstruction { Normal = 'Normal', DribbleMore = 'Dribble More', DribbleLess = 'Dribble Less' }
+export enum CrossingInstruction { Normal = 'Normal', CrossMore = 'Cross More Often', CutInside = 'Cut Inside' }
+export enum PositioningInstruction { Normal = 'Normal', GetForward = 'Get Further Forward', HoldPosition = 'Hold Position' }
+
+export enum TacklingInstruction { Normal = 'Normal', Cautious = 'Tackle Cautiously', Harder = 'Tackle Harder' }
+export enum PressingInstruction { Normal = 'Normal', Urgent = 'Press More Urgently' }
+export enum MarkingInstruction { Normal = 'Normal', Tighter = 'Mark Tighter' }
+
+export interface PlayerInstructions {
+    // In Possession
+    shooting: ShootingInstruction;
+    passing: PassingInstruction;
+    dribbling: DribblingInstruction;
+    crossing: CrossingInstruction;
+    positioning: PositioningInstruction;
+    // Out of Possession
+    tackling: TacklingInstruction;
+    pressing: PressingInstruction;
+    marking: MarkingInstruction;
+}
+
+export interface LineupPlayer {
+    playerId: number;
+    position: { x: number; y: number }; // 0-100 for both
+    role: PlayerRole;
+    instructions: PlayerInstructions;
+}
+
 export interface Tactics {
-    formation: Formation;
     mentality: Mentality;
-    lineup: (number | null)[]; // Player IDs, 11 slots
+    lineup: (LineupPlayer | null)[]; // Player objects, 11 slots
     bench: (number | null)[]; // Player IDs, 7 slots
 }
+// --- END NEW TACTICS SYSTEM ---
+
 
 export interface PlayerMatchStats {
     shots: number;
@@ -125,8 +158,6 @@ export interface TransferResult {
 }
 
 // Live Match Engine Types
-export type PlayerRole = 'GK' | 'CB' | 'LB' | 'RB' | 'DM' | 'CM' | 'LM' | 'RM' | 'AM' | 'LW' | 'RW' | 'ST';
-
 export interface LivePlayer {
     id: number;
     name: string;
@@ -137,6 +168,8 @@ export interface LivePlayer {
     yellowCards: number;
     isSentOff: boolean;
     stats: PlayerMatchStats;
+    instructions: PlayerInstructions; // <-- NEW
+    currentPosition: { x: number; y: number }; // <-- NEW
 }
 
 export interface MatchEvent {

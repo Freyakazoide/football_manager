@@ -1,4 +1,4 @@
-import { GameState, LiveMatchState, MatchDayInfo, Club, Player, LivePlayer, MatchEvent, Mentality, MatchStats, PlayerMatchStats, PlayerRole, Formation } from '../types';
+import { GameState, LiveMatchState, MatchDayInfo, Club, Player, LivePlayer, MatchEvent, Mentality, MatchStats, PlayerMatchStats, PlayerRole, LineupPlayer, TacklingInstruction, ShootingInstruction, DribblingInstruction, PassingInstruction, PressingInstruction, PositioningInstruction } from '../types';
 import { commentary } from './commentary';
 
 const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -10,13 +10,6 @@ const formatCommentary = (template: string, replacements: Record<string, string>
     }
     return result;
 }
-
-const formationRoleMappings: Record<Formation, PlayerRole[]> = {
-    '4-4-2': ['GK', 'RB', 'CB', 'CB', 'LB', 'RM', 'CM', 'CM', 'LM', 'ST', 'ST'],
-    '4-3-3': ['GK', 'RB', 'CB', 'CB', 'LB', 'DM', 'CM', 'CM', 'RW', 'ST', 'LW'],
-    '3-5-2': ['GK', 'CB', 'CB', 'CB', 'RM', 'CM', 'CM', 'CM', 'LM', 'ST', 'ST'],
-    '5-3-2': ['GK', 'RB', 'CB', 'CB', 'CB', 'LB', 'CM', 'CM', 'CM', 'ST', 'ST'],
-};
 
 const getPlayerByRole = (players: LivePlayer[], roles: PlayerRole[]): LivePlayer | null => {
     const candidates = players.filter(p => !p.isSentOff && roles.includes(p.role));
@@ -37,23 +30,26 @@ const initialPlayerStats: PlayerMatchStats = { shots: 0, goals: 0, assists: 0, p
 
 export const createLiveMatchState = (matchInfo: MatchDayInfo, clubs: Record<number, Club>, players: Record<number, Player>): LiveMatchState => {
     const { match, homeTeam, awayTeam } = matchInfo;
-    const homeRoles = formationRoleMappings[homeTeam.tactics.formation];
-    const awayRoles = formationRoleMappings[awayTeam.tactics.formation];
 
-    const toLivePlayer = (pId: number | null, index: number, roles: PlayerRole[]): LivePlayer | null => {
+    const toLivePlayer = (lineupPlayer: LineupPlayer | null, isBench: boolean, benchPlayerId?: number | null): LivePlayer | null => {
+        const pId = isBench ? benchPlayerId : lineupPlayer?.playerId;
         if (!pId) return null;
         const p = players[pId];
         return { 
-            id: p.id, name: p.name, position: p.position, role: roles[index],
+            id: p.id, name: p.name, position: p.position,
             attributes: p.attributes, stamina: 100, yellowCards: 0, isSentOff: false,
-            stats: { ...initialPlayerStats }
+            stats: { ...initialPlayerStats },
+            // --- NEW ---
+            role: lineupPlayer?.role || 'ST', // Default for bench
+            instructions: lineupPlayer?.instructions || ({} as any),
+            currentPosition: lineupPlayer?.position || {x:0, y:0}
         };
     };
 
-    const homeLineup = homeTeam.tactics.lineup.map((pId, i) => toLivePlayer(pId, i, homeRoles)).filter(p => p) as LivePlayer[];
-    const homeBench = homeTeam.tactics.bench.map((pId, i) => toLivePlayer(pId, i + 11, [])).filter(p => p) as LivePlayer[]; // Bench roles are less strict
-    const awayLineup = awayTeam.tactics.lineup.map((pId, i) => toLivePlayer(pId, i, awayRoles)).filter(p => p) as LivePlayer[];
-    const awayBench = awayTeam.tactics.bench.map((pId, i) => toLivePlayer(pId, i + 11, [])).filter(p => p) as LivePlayer[];
+    const homeLineup = homeTeam.tactics.lineup.map((lp) => toLivePlayer(lp, false)).filter(p => p) as LivePlayer[];
+    const homeBench = homeTeam.tactics.bench.map((pId) => toLivePlayer(null, true, pId)).filter(p => p) as LivePlayer[];
+    const awayLineup = awayTeam.tactics.lineup.map((lp) => toLivePlayer(lp, false)).filter(p => p) as LivePlayer[];
+    const awayBench = awayTeam.tactics.bench.map((pId) => toLivePlayer(null, true, pId)).filter(p => p) as LivePlayer[];
     
     const initialStats: MatchStats = { shots: 0, shotsOnTarget: 0, possession: 0, tackles: 0, passes: 0, passAccuracy: 0, fouls: 0, corners: 0, offsides: 0, xG: 0, bigChances: 0 };
 
@@ -98,9 +94,15 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
         newState.status = 'full-time'; newState.isPaused = true;
         newEvents.push({ minute: 90, text: "Full-time. The referee blows the final whistle.", type: 'Info' });
     }
-
+    // Stamina drain based on work rate and instructions
     [...newState.homeLineup, ...newState.awayLineup].forEach(p => {
-        if(!p.isSentOff) p.stamina = Math.max(0, p.stamina - (0.3 * (p.attributes.workRate / 70) / (1 + p.attributes.stamina / 150)));
+        if(!p.isSentOff) {
+            let drain = 0.3 * (p.attributes.workRate / 70) / (1 + p.attributes.stamina / 150);
+            if (p.instructions.pressing === PressingInstruction.Urgent) drain *= 1.3;
+            if (p.instructions.positioning === PositioningInstruction.GetForward) drain *= 1.2;
+            if (p.instructions.dribbling === DribblingInstruction.DribbleMore) drain *= 1.1;
+            p.stamina = Math.max(0, p.stamina - drain);
+        }
     });
 
     if (newState.status !== 'first-half' && newState.status !== 'second-half') {
@@ -143,13 +145,19 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     const opponent = getNearestOpponent(ballCarrier, newState.ballZone, defendingTeam);
     if (!opponent) { newState.log.push(...newEvents); return {newState, newEvents}; }
 
-    const commentaryContext = { ballCarrier: ballCarrier.name, opponent: opponent.name };
+    // --- PLAYER ACTION DECISION LOGIC WITH INSTRUCTIONS ---
+    const inst = ballCarrier.instructions;
+    const basePassDesire = ballCarrier.attributes.passing + ballCarrier.attributes.teamwork;
+    const baseDribbleDesire = ballCarrier.attributes.dribbling * (attackingMentality === 'Offensive' ? 1.2 : 0.9);
+    
+    const passMod = inst.passing === PassingInstruction.Shorter ? 1.2 : (inst.passing === PassingInstruction.Risky ? 0.8 : 1.0);
+    const dribbleMod = inst.dribbling === DribblingInstruction.DribbleMore ? 1.3 : (inst.dribbling === DribblingInstruction.DribbleLess ? 0.7 : 1.0);
+    const shootMod = inst.shooting === ShootingInstruction.ShootMoreOften ? 1.4 : (inst.shooting === ShootingInstruction.ShootLessOften ? 0.6 : 1.0);
 
-    // Player action decision logic
-    const willPass = (ballCarrier.attributes.passing + ballCarrier.attributes.teamwork) > (ballCarrier.attributes.dribbling * (attackingMentality === 'Offensive' ? 1.2 : 0.9));
+    const willPass = (basePassDesire * passMod) > (baseDribbleDesire * dribbleMod);
     const isInShootingZone = (isHomeAttacking && newState.ballZone >= 7) || (!isHomeAttacking && newState.ballZone <= 3);
 
-    if (isInShootingZone && Math.random() < ballCarrier.attributes.shooting / 150) {
+    if (isInShootingZone && Math.random() < (ballCarrier.attributes.shooting / 150) * shootMod) {
         // --- SHOT ---
         const shotPower = (ballCarrier.attributes.shooting * 1.5) * fatigueMod(ballCarrier.stamina);
         const pressure = opponent.attributes.positioning * 0.5 * fatigueMod(opponent.stamina);
@@ -184,14 +192,13 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
         // --- PASS ---
         const passTarget = getPlayerByRole(attackingTeam, ['ST', 'CM', 'AM', 'LW', 'RW']);
         if (passTarget) {
-            const passQuality = (ballCarrier.attributes.passing + ballCarrier.attributes.creativity) * fatigueMod(ballCarrier.stamina);
+            const passQuality = (ballCarrier.attributes.passing + ballCarrier.attributes.creativity) * fatigueMod(ballCarrier.stamina) * (inst.passing === PassingInstruction.Risky ? 1.1 : 1.0);
             const interceptionQuality = (opponent.attributes.positioning + opponent.attributes.workRate) * fatigueMod(opponent.stamina);
 
             if (passQuality * Math.random() > interceptionQuality * Math.random()) {
                 ballCarrier.stats.passes++;
                 attackingStats.passes++;
                 newState.ballCarrierId = passTarget.id;
-                // Move ball zone logically
                 if (isHomeAttacking) newState.ballZone = Math.min(9, newState.ballZone + 1 + Math.floor(Math.random()*2));
                 else newState.ballZone = Math.max(1, newState.ballZone - 1 - Math.floor(Math.random()*2));
             } else { // Interception
@@ -207,18 +214,36 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
         // --- DRIBBLE ---
         const dribblePower = (ballCarrier.attributes.dribbling + ballCarrier.attributes.pace) * fatigueMod(ballCarrier.stamina);
         const tacklePower = (opponent.attributes.tackling + opponent.attributes.pace) * fatigueMod(opponent.stamina);
+        const tackleMod = opponent.instructions.tackling === TacklingInstruction.Harder ? 1.2 : (opponent.instructions.tackling === TacklingInstruction.Cautious ? 0.8 : 1.0);
         
-        if (dribblePower * Math.random() > tacklePower * Math.random()) {
+        if (dribblePower * Math.random() > (tacklePower * tackleMod) * Math.random()) {
              ballCarrier.stats.dribbles++;
              if (isHomeAttacking) newState.ballZone = Math.min(9, newState.ballZone + 1);
              else newState.ballZone = Math.max(1, newState.ballZone - 1);
         } else { // Tackled
-             newEvents.push({minute: newState.minute, text: formatCommentary(pickRandom(commentary.tackle), {defenderName: opponent.name, creatorName: ballCarrier.name}), type: 'Tackle'});
-             defendingStats.tackles++;
-             opponent.stats.tackles++;
-             opponent.stats.rating = Math.min(10, opponent.stats.rating + 0.2);
-             newState.attackingTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
-             newState.ballCarrierId = opponent.id;
+             const foulChance = (opponent.attributes.aggression / 200) * (opponent.instructions.tackling === TacklingInstruction.Harder ? 1.8 : 1.0) / newState.refereeStrictness;
+             if (Math.random() < foulChance) {
+                 // FOUL
+                 newEvents.push({minute: newState.minute, text: formatCommentary(pickRandom(commentary.foul), {defenderName: opponent.name, creatorName: ballCarrier.name}), type: 'Foul'});
+                 defendingStats.fouls++;
+                 const cardChance = (opponent.attributes.aggression / 150) * newState.refereeStrictness;
+                 if (Math.random() < cardChance) {
+                    if (opponent.yellowCards === 1) {
+                         opponent.isSentOff = true;
+                         newEvents.push({minute: newState.minute, text: `Second yellow! ${opponent.name} is sent off!`, type: 'RedCard'});
+                    } else {
+                         opponent.yellowCards = 1;
+                         newEvents.push({minute: newState.minute, text: `${opponent.name} receives a yellow card.`, type: 'YellowCard'});
+                    }
+                 }
+             } else {
+                 newEvents.push({minute: newState.minute, text: formatCommentary(pickRandom(commentary.tackle), {defenderName: opponent.name, creatorName: ballCarrier.name}), type: 'Tackle'});
+                 defendingStats.tackles++;
+                 opponent.stats.tackles++;
+                 opponent.stats.rating = Math.min(10, opponent.stats.rating + 0.2);
+                 newState.attackingTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
+                 newState.ballCarrierId = opponent.id;
+             }
         }
     }
 

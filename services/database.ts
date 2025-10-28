@@ -1,4 +1,4 @@
-import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry } from '../types';
+import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics } from '../types';
 
 const FIRST_NAMES = ['John', 'Paul', 'Mike', 'Leo', 'Chris', 'David', 'Alex', 'Ben', 'Sam', 'Tom', 'Dan', 'Matt'];
 const LAST_NAMES = ['Smith', 'Jones', 'Williams', 'Brown', 'Davis', 'Miller', 'Wilson', 'Moore', 'Taylor', 'Martin'];
@@ -34,6 +34,31 @@ const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubI
     return Math.round(value / 1000) * 1000;
 };
 
+const defaultInstructions: PlayerInstructions = {
+    shooting: ShootingInstruction.Normal,
+    passing: PassingInstruction.Normal,
+    dribbling: DribblingInstruction.Normal,
+    crossing: CrossingInstruction.Normal,
+    positioning: PositioningInstruction.Normal,
+    tackling: TacklingInstruction.Normal,
+    pressing: PressingInstruction.Normal,
+    marking: MarkingInstruction.Normal,
+};
+
+const defaultPositions442: { position: { x: number, y: number }, role: PlayerRole }[] = [
+    { position: { x: 50, y: 95 }, role: 'GK' },
+    { position: { x: 20, y: 75 }, role: 'LB' },
+    { position: { x: 40, y: 78 }, role: 'CB' },
+    { position: { x: 60, y: 78 }, role: 'CB' },
+    { position: { x: 80, y: 75 }, role: 'RB' },
+    { position: { x: 20, y: 50 }, role: 'LM' },
+    { position: { x: 40, y: 55 }, role: 'CM' },
+    { position: { x: 60, y: 55 }, role: 'CM' },
+    { position: { x: 80, y: 50 }, role: 'RM' },
+    { position: { x: 40, y: 25 }, role: 'ST' },
+    { position: { x: 60, y: 25 }, role: 'ST' },
+];
+
 export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'transferResult' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults'> => {
     const clubs: Record<number, Club> = {};
     const players: Record<number, Player> = {};
@@ -43,18 +68,18 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
     const PLAYERS_PER_CLUB = 22;
 
     for (let i = 1; i <= NUM_CLUBS; i++) {
+        const initialTactics: Tactics = {
+            mentality: 'Balanced',
+            lineup: Array(11).fill(null),
+            bench: Array(7).fill(null),
+        };
         clubs[i] = {
             id: i,
             name: `${pickRandom(CITIES)} ${pickRandom(CLUB_NAMES)}`,
             country: pickRandom(COUNTRIES),
             reputation: randInt(50, 90),
             balance: randInt(5_000_000, 20_000_000),
-            tactics: {
-                formation: '4-4-2',
-                mentality: 'Balanced',
-                lineup: Array(11).fill(null),
-                bench: Array(7).fill(null),
-            },
+            tactics: initialTactics,
         };
         leagueTable.push({
             clubId: i, played: 0, wins: 0, draws: 0, losses: 0, 
@@ -93,20 +118,26 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
             playerIdCounter++;
         }
         
-        // Basic lineup and bench setting
-        const formation = clubs[clubId].tactics.formation;
-        const positionsNeeded = {'4-4-2': {GK:1, DEF:4, MID:4, FWD:2}, '4-3-3': {GK:1, DEF:4, MID:3, FWD:3}, '3-5-2': {GK:1, DEF:3, MID:5, FWD:2}, '5-3-2': {GK:1, DEF:5, MID:3, FWD:2}}[formation];
-        const lineup: (number | null)[] = Array(11).fill(null);
-        let lineupIndex = 0;
+        // Basic lineup and bench setting using new tactics system
+        const lineup: (LineupPlayer | null)[] = Array(11).fill(null);
         const assignedToLineup = new Set<number>();
 
+        const positionsNeeded: {[key in Player['position']]: number} = {'GK':1, 'DEF':4, 'MID':4, 'FWD':2};
+        let lineupIndex = 0;
+
+        // Assign players to lineup based on position
         for (const [pos, count] of Object.entries(positionsNeeded)) {
             const playersForPos = clubPlayers.filter(p => p.position === pos);
             for(let k=0; k<count && k < playersForPos.length; k++) {
                 if(lineupIndex < 11) {
-                    const playerId = playersForPos[k].id;
-                    lineup[lineupIndex] = playerId;
-                    assignedToLineup.add(playerId);
+                    const player = playersForPos[k];
+                    lineup[lineupIndex] = {
+                        playerId: player.id,
+                        position: defaultPositions442[lineupIndex].position,
+                        role: defaultPositions442[lineupIndex].role,
+                        instructions: { ...defaultInstructions }
+                    };
+                    assignedToLineup.add(player.id);
                     lineupIndex++;
                 }
             }

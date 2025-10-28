@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { GameState, Player } from '../types';
 
@@ -10,8 +11,9 @@ const FinancesView: React.FC<FinancesViewProps> = ({ gameState }) => {
     if (!gameState.playerClubId) return null;
 
     const club = gameState.clubs[gameState.playerClubId];
-    const clubPlayers = Object.values(gameState.players).filter((p: Player) => p.clubId === club.id);
-    // FIX: Explicitly type the 'sum' accumulator in `reduce` to 'number'. This resolves an issue where 'sum' was being inferred as 'unknown', causing type errors in the calculation and subsequent uses of 'totalWeeklyWage'.
+    // FIX: Cast Object.values to Player[] to ensure clubPlayers is correctly typed, preventing downstream errors where totalWeeklyWage was inferred as 'unknown'.
+    const clubPlayers = (Object.values(gameState.players) as Player[]).filter((p: Player) => p.clubId === club.id);
+    // FIX: Explicitly type the accumulator `sum` to `number` to ensure correct type inference for `totalWeeklyWage`.
     const totalWeeklyWage = clubPlayers.reduce((sum: number, p: Player) => sum + p.wage, 0);
 
     const formatCurrency = (value: number) => {

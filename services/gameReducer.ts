@@ -3,6 +3,7 @@ import { Action } from './reducerTypes';
 import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
 import { generateNarrativeReport } from './newsGenerator';
+import { generateAITactics } from './aiTacticsService';
 
 export const initialState: GameState = {
     currentDate: new Date(2024, 7, 1), // July 1st, 2024
@@ -197,8 +198,19 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
         }
         // Match Engine Reducers
         case 'START_MATCH': {
-            const liveMatch = createLiveMatchState(action.payload, state.clubs, state.players);
-            return { ...state, matchDayFixtures: null, liveMatch };
+            const { homeTeam, awayTeam } = action.payload;
+            const playerClubId = state.playerClubId;
+            let tempClubs = { ...state.clubs };
+
+            // If AI is playing, generate dynamic tactics for them
+            const opponent = homeTeam.id === playerClubId ? awayTeam : homeTeam;
+            const opponentPlayers = Object.values(state.players).filter(p => p.clubId === opponent.id);
+            const newAITactics = generateAITactics(opponentPlayers);
+            
+            tempClubs[opponent.id] = { ...tempClubs[opponent.id], tactics: newAITactics };
+
+            const liveMatch = createLiveMatchState(action.payload, tempClubs, state.players);
+            return { ...state, clubs: tempClubs, matchDayFixtures: null, liveMatch };
         }
         case 'ADVANCE_MINUTE': {
             if (!state.liveMatch) return state;
@@ -222,23 +234,32 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const bench = isHome ? liveMatch.homeBench : liveMatch.awayBench;
 
             const playerOutIndex = lineup.findIndex(p => p.id === action.payload.playerOutId);
-            const playerInIndex = bench.findIndex(p => p.id === action.payload.playerInId);
+            const playerInFromBenchIndex = bench.findIndex(p => p.id === action.payload.playerInId);
 
-            if (playerOutIndex === -1 || playerInIndex === -1) return state;
+            if (playerOutIndex === -1 || playerInFromBenchIndex === -1) return state;
 
             const playerOut = lineup[playerOutIndex];
-            const playerIn = bench[playerInIndex];
+            const playerInFromBench = bench[playerInFromBenchIndex];
             
             const wasBallCarrier = liveMatch.ballCarrierId === playerOut.id;
 
+            // Create the new player for the lineup, inheriting tactical info from the player coming off
+            const newPlayerIn: LivePlayer = {
+                ...playerInFromBench,
+                role: playerOut.role,
+                instructions: { ...playerOut.instructions },
+                currentPosition: { ...playerOut.currentPosition },
+                stats: { ...playerInFromBench.stats } // Ensure stats are fresh
+            };
+
             const newLineup = [...lineup];
-            newLineup[playerOutIndex] = playerIn;
+            newLineup[playerOutIndex] = newPlayerIn;
             
             const newBench = [...bench];
-            newBench.splice(playerInIndex, 1);
+            newBench.splice(playerInFromBenchIndex, 1);
 
             const teamName = isHome ? liveMatch.homeTeamName : liveMatch.awayTeamName;
-            const newLog = [...liveMatch.log, { minute: liveMatch.minute, type: 'Sub' as const, text: `Substitution for ${teamName}: ${playerIn.name} comes on for ${playerOut.name}.`}];
+            const newLog = [...liveMatch.log, { minute: liveMatch.minute, type: 'Sub' as const, text: `Substitution for ${teamName}: ${newPlayerIn.name} comes on for ${playerOut.name}.`}];
             
             const updatedState = { ...liveMatch, log: newLog };
             if (isHome) {
@@ -272,6 +293,25 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
              const { mentality } = action.payload;
              const newLog = [...state.liveMatch.log, { minute: state.liveMatch.minute, type: 'Info' as const, text: `${state.liveMatch.homeTeamName} switch to an ${mentality} mentality.`}];
              return { ...state, liveMatch: { ...state.liveMatch, homeMentality: mentality, log: newLog }};
+        }
+        case 'UPDATE_LIVE_PLAYER_POSITION': {
+            if (!state.liveMatch) return state;
+            const isHome = state.liveMatch.homeTeamId === state.playerClubId;
+            const lineup = isHome ? [...state.liveMatch.homeLineup] : [...state.liveMatch.awayLineup];
+
+            const playerIndex = lineup.findIndex(p => p.id === action.payload.playerId);
+            if (playerIndex === -1) return state;
+
+            lineup[playerIndex].currentPosition = action.payload.position;
+            lineup[playerIndex].role = action.payload.role;
+
+            const updatedLiveMatch = { ...state.liveMatch };
+            if (isHome) {
+                updatedLiveMatch.homeLineup = lineup;
+            } else {
+                updatedLiveMatch.awayLineup = lineup;
+            }
+            return { ...state, liveMatch: updatedLiveMatch };
         }
         case 'END_MATCH': {
             if (!state.liveMatch) return state;

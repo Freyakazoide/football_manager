@@ -1,4 +1,4 @@
-import { GameState, Player, Tactics, Match, TransferResult, MatchDayInfo, LiveMatchState, Mentality } from '../types';
+import { GameState, Player, Tactics, Match, TransferResult, MatchDayInfo, LiveMatchState, Mentality, PlayerRole } from '../types';
 
 export type Action =
     | { type: 'INITIALIZE_GAME'; payload: Omit<GameState, 'playerClubId' | 'transferResult'| 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults'> }
@@ -18,4 +18,5 @@ export type Action =
     | { type: 'RESUME_MATCH' }
     | { type: 'MAKE_SUBSTITUTION'; payload: { playerOutId: number, playerInId: number } }
     | { type: 'CHANGE_LIVE_TACTICS'; payload: { mentality: Mentality } }
+    | { type: 'UPDATE_LIVE_PLAYER_POSITION'; payload: { playerId: number; position: { x: number; y: number }; role: PlayerRole } }
     | { type: 'END_MATCH' };

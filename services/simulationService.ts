@@ -1,11 +1,12 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer } from '../types';
 
 // Simplified overall team rating based on starting lineup for non-player matches
-const getUnitRatings = (teamId: number, clubs: Record<number, Club>, players: Record<number, Player>) => {
+export const getUnitRatings = (teamId: number, clubs: Record<number, Club>, players: Record<number, Player>) => {
     const club = clubs[teamId];
     if (!club) return { def: 50, mid: 50, fwd: 50, gk: 50 };
 
-    const lineupPlayers = club.tactics.lineup.map(pId => pId ? players[pId] : null).filter(p => p) as Player[];
+    // FIX: The `lineup` array contains `LineupPlayer` objects. We need to use the `playerId` property to look up the player.
+    const lineupPlayers = club.tactics.lineup.map(pId => pId ? players[pId.playerId] : null).filter(p => p) as Player[];
     if (lineupPlayers.length < 11) return { def: 50, mid: 50, fwd: 50, gk: 50 };
 
     const gkPlayers = lineupPlayers.filter(p => p.position === 'GK');

@@ -21,6 +21,16 @@ export const initialState: GameState = {
     matchDayResults: null,
 };
 
+const rehydratePlayers = (players: Record<number, Player>): Record<number, Player> => {
+    for (const pId in players) {
+        const player = players[pId];
+        if (player.contractExpires) player.contractExpires = new Date(player.contractExpires);
+        if (player.injury?.returnDate) player.injury.returnDate = new Date(player.injury.returnDate);
+        if (player.suspension?.returnDate) player.suspension.returnDate = new Date(player.suspension.returnDate);
+    }
+    return players;
+}
+
 const addNewsItem = (state: GameState, headline: string, content: string, type: NewsItem['type'], relatedEntityId?: number): GameState => {
     const newNewsItem: NewsItem = {
         id: state.nextNewsId,
@@ -61,16 +71,17 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             let newState = { ...state, currentDate: newDate, transferResult: null };
 
             // Process player status updates (injuries, suspensions, fitness decay)
-            const updatedPlayers: Record<number, Player> = JSON.parse(JSON.stringify(newState.players));
+            const clonedPlayersForStatus: Record<number, Player> = JSON.parse(JSON.stringify(newState.players));
+            const updatedPlayers = rehydratePlayers(clonedPlayersForStatus);
             let playerDidChange = false;
             for (const pId in updatedPlayers) {
                 const player = updatedPlayers[pId];
                 let hasChanged = false;
 
-                if (player.injury && newDate >= new Date(player.injury.returnDate)) {
+                if (player.injury && newDate >= player.injury.returnDate) {
                     player.injury = null; hasChanged = true;
                 }
-                if (player.suspension && newDate >= new Date(player.suspension.returnDate)) {
+                if (player.suspension && newDate >= player.suspension.returnDate) {
                     player.suspension = null; hasChanged = true;
                 }
                 
@@ -91,7 +102,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     club.tactics.bench.forEach(pId => pId && playersPlayingToday.add(pId));
                 });
             });
-            const playersToUpdateFitness: Record<number, Player> = JSON.parse(JSON.stringify(newState.players));
+            const clonedPlayersForFitness: Record<number, Player> = JSON.parse(JSON.stringify(newState.players));
+            const playersToUpdateFitness = rehydratePlayers(clonedPlayersForFitness);
+
             let fitnessDidChange = false;
             for (const pId in playersToUpdateFitness) {
                 if (!playersPlayingToday.has(Number(pId))) {
@@ -208,7 +221,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             let newState = { ...state };
             
-            const { headline, content } = generateNarrativeReport(state.matchDayResults.playerResult, state.playerClubId, state.clubs);
+            const { headline, content } = generateNarrativeReport(state.matchDayResults.playerResult, state.playerClubId, state.clubs, state.players);
             newState = addNewsItem(newState, headline, content, 'match_summary_player', state.matchDayResults.playerResult.id);
 
             return { ...newState, matchDayResults: null };
@@ -406,20 +419,25 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 if (p) collectedPlayerStats[p.id] = p.stats;
             });
 
+            const matchDate = state.schedule.find(m => m.id === finalMatchState.matchId)!.date;
+
             const finalResult: Match = {
                 id: finalMatchState.matchId,
                 homeTeamId: finalMatchState.homeTeamId,
                 awayTeamId: finalMatchState.awayTeamId,
-                date: state.schedule.find(m => m.id === finalMatchState.matchId)!.date,
+                date: matchDate,
                 homeScore: finalMatchState.homeScore,
                 awayScore: finalMatchState.awayScore,
                 homeStats: { ...finalMatchState.homeStats, possession: homePossession },
                 awayStats: { ...finalMatchState.awayStats, possession: awayPossession },
                 log: finalMatchState.log,
                 playerStats: collectedPlayerStats,
+                disciplinaryEvents: [],
+                injuryEvents: [],
             };
             
-            let updatedPlayers: Record<number, Player> = JSON.parse(JSON.stringify(state.players));
+            let clonedPlayers: Record<number, Player> = JSON.parse(JSON.stringify(state.players));
+            let updatedPlayers = rehydratePlayers(clonedPlayers);
             const allPlayersInMatchLive = [...finalMatchState.homeLineup, ...finalMatchState.awayLineup, ...finalMatchState.homeBench, ...finalMatchState.awayBench].filter(Boolean) as LivePlayer[];
 
             for (const livePlayer of allPlayersInMatchLive) {
@@ -436,14 +454,19 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 if (livePlayer.isSentOff) {
                     const returnDate = new Date(finalResult.date); returnDate.setDate(returnDate.getDate() + 8);
                     playerToUpdate.suspension = { returnDate };
+                    finalResult.disciplinaryEvents?.push({ playerId: livePlayer.id, type: 'red' });
                 }
                 if (livePlayer.isInjured) {
                     const returnDate = new Date(finalResult.date); returnDate.setDate(returnDate.getDate() + (Math.floor(Math.random() * 21) + 7));
                     playerToUpdate.injury = { type: 'Match Injury', returnDate };
+                    finalResult.injuryEvents?.push({ playerId: livePlayer.id, returnDate });
                 }
 
-                if (livePlayer.yellowCards > 0) {
-                    playerToUpdate.seasonYellowCards = (playerToUpdate.seasonYellowCards || 0) + livePlayer.yellowCards;
+                if (livePlayer.yellowCardCount > 0) {
+                     for (let i = 0; i < livePlayer.yellowCardCount; i++) {
+                        finalResult.disciplinaryEvents?.push({ playerId: livePlayer.id, type: 'yellow' });
+                    }
+                    playerToUpdate.seasonYellowCards = (playerToUpdate.seasonYellowCards || 0) + livePlayer.yellowCardCount;
                     if (playerToUpdate.seasonYellowCards >= 3) { // Suspension threshold
                         const returnDate = new Date(finalResult.date);
                         returnDate.setDate(returnDate.getDate() + 8);

@@ -1,4 +1,4 @@
-import { Match, Club } from '../types';
+import { Match, Club, Player } from '../types';
 
 const templates = {
     dominantWin: [
@@ -28,7 +28,7 @@ const templates = {
 const pickRandomTemplate = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
 
 
-export const generateNarrativeReport = (match: Match, playerClubId: number | null, clubs: Record<number, Club>): { headline: string, content: string } => {
+export const generateNarrativeReport = (match: Match, playerClubId: number | null, clubs: Record<number, Club>, players: Record<number, Player>): { headline: string, content: string } => {
     const homeTeam = clubs[match.homeTeamId];
     const awayTeam = clubs[match.awayTeamId];
     const { homeScore, awayScore, homeStats, awayStats } = match;
@@ -106,8 +106,44 @@ export const generateNarrativeReport = (match: Match, playerClubId: number | nul
     const finalHeadline = template.headline.replace(/\${(.*?)}/g, (_, key) => replacements[key]);
     let finalContent = template.content.replace(/\${(.*?)}/g, (_, key) => replacements[key]);
 
+    // Add disciplinary and injury events
+    let eventsContent = '';
+    const yellowCards: Record<number, number> = {};
+    const redCards: number[] = [];
+    
+    if (match.disciplinaryEvents) {
+        match.disciplinaryEvents.forEach(event => {
+            if (event.type === 'yellow') {
+                yellowCards[event.playerId] = (yellowCards[event.playerId] || 0) + 1;
+            } else if (event.type === 'red') {
+                redCards.push(event.playerId);
+            }
+        });
+    }
+
+    if (Object.keys(yellowCards).length > 0) {
+        eventsContent += `Yellow Cards: ${Object.keys(yellowCards).map(id => `${players[Number(id)].name}`).join(', ')}\n`;
+    }
+    if (redCards.length > 0) {
+        eventsContent += `Red Cards: ${redCards.map(id => `${players[id].name}`).join(', ')}\n`;
+    }
+    if (match.injuryEvents && match.injuryEvents.length > 0) {
+         match.injuryEvents.forEach(event => {
+            const matchDate = new Date(match.date);
+            const returnDate = new Date(event.returnDate);
+            const diffTime = Math.abs(returnDate.getTime() - matchDate.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
+            eventsContent += `Injury: ${players[event.playerId].name} is expected to be out for ${durationText}.\n`;
+        });
+    }
+
+    if (eventsContent) {
+        finalContent += `\n\n---\nDisciplinary & Injuries:\n${eventsContent}`;
+    }
+
     // Add stats block
-    finalContent += `\n\nMatch Statistics:\n`;
+    finalContent += `\n\n---\nMatch Statistics:\n`;
     finalContent += `             ${homeTeam.name.substring(0,3).toUpperCase()} - ${awayTeam.name.substring(0,3).toUpperCase()}\n`;
     finalContent += `Possession:    ${Math.round(homeStats.possession)}% - ${Math.round(awayStats.possession)}%\n`;
     finalContent += `Shots:         ${homeStats.shots} - ${awayStats.shots}\n`;

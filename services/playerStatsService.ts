@@ -30,9 +30,15 @@ export const updatePlayerStatsFromMatchResult = (
         if (!originalPlayer) continue;
 
         // Deep copy only the player being modified to prevent state mutation issues.
-        // JSON.stringify turns Date objects into strings, so we must re-hydrate it.
         const player = JSON.parse(JSON.stringify(originalPlayer));
+        // Re-hydrate all date objects that get stringified
         player.contractExpires = new Date(originalPlayer.contractExpires);
+        if (player.injury?.returnDate) {
+            player.injury.returnDate = new Date(player.injury.returnDate);
+        }
+        if (player.suspension?.returnDate) {
+            player.suspension.returnDate = new Date(player.suspension.returnDate);
+        }
 
         let seasonStats: PlayerSeasonStats | undefined = player.history.find((h: PlayerSeasonStats) => h.season === season && h.clubId === player.clubId);
 
@@ -46,6 +52,8 @@ export const updatePlayerStatsFromMatchResult = (
                 assists: 0,
                 shots: 0,
                 tackles: 0,
+                dribbles: 0,
+                redCards: 0,
                 ratingPoints: 0,
             };
             player.history.push(seasonStats);
@@ -56,7 +64,11 @@ export const updatePlayerStatsFromMatchResult = (
         seasonStats.assists += matchStats.assists;
         seasonStats.shots += matchStats.shots;
         seasonStats.tackles += matchStats.tackles;
+        seasonStats.dribbles += matchStats.dribbles;
         seasonStats.ratingPoints += matchStats.rating;
+
+        const redCardEvents = matchResult.disciplinaryEvents?.filter(e => e.playerId === playerId && e.type === 'red').length || 0;
+        seasonStats.redCards += redCardEvents;
 
         // Determine if player was a sub
         if (liveMatchState) {

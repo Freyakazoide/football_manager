@@ -39,7 +39,7 @@ export const createLiveMatchState = (matchInfo: MatchDayInfo, clubs: Record<numb
         const p = players[pId];
         return { 
             id: p.id, name: p.name,
-            attributes: p.attributes, stamina: 100, yellowCards: 0, isSentOff: false, isInjured: false,
+            attributes: p.attributes, stamina: 100, yellowCardCount: 0, isSentOff: false, isInjured: false,
             stats: { ...initialPlayerStats },
             role: lineupPlayer?.role || p.naturalPosition,
             instructions: lineupPlayer?.instructions || ({} as any),
@@ -188,7 +188,11 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     const currentFitnessMod = fitnessMod(ballCarrier.matchFitness);
     const currentMoraleMod = moraleMod(ballCarrier.morale);
 
-    const willPass = (basePassDesire * passMod) > (baseDribbleDesire * dribbleMod);
+    const passScore = basePassDesire * passMod;
+    const dribbleScore = baseDribbleDesire * dribbleMod;
+    const totalDesire = passScore + dribbleScore;
+    const willPass = totalDesire > 0 ? (Math.random() * totalDesire) < passScore : true;
+
     const isInShootingZone = (isHomeAttacking && newState.ballZone >= 7) || (!isHomeAttacking && newState.ballZone <= 3);
 
     if (isInShootingZone && Math.random() < (ballCarrier.attributes.shooting / 150) * shootMod * carrierMod) {
@@ -284,15 +288,16 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
              if (isHomeAttacking) newState.ballZone = Math.min(9, newState.ballZone + 1);
              else newState.ballZone = Math.max(1, newState.ballZone - 1);
         } else { // Tackled
-             const foulChance = (opponent.attributes.aggression / 120) * (opponent.instructions.tackling === TacklingInstruction.Harder ? 1.8 : 1.0) / newState.refereeStrictness;
+             const foulChance = (opponent.attributes.aggression / 150) * (opponent.instructions.tackling === TacklingInstruction.Harder ? 1.8 : 1.0) / newState.refereeStrictness;
              if (Math.random() < foulChance) {
                  // FOUL
                  newEvents.push({minute: newState.minute, text: formatCommentary(pickRandom(commentary.foul), {defenderName: opponent.name, creatorName: ballCarrier.name}), type: 'Foul'});
                  defendingStats.fouls++;
                  updateRating(opponent, -0.1);
-                 const cardChance = (opponent.attributes.aggression / 110) * newState.refereeStrictness;
+                 const cardChance = (opponent.attributes.aggression / 130) * newState.refereeStrictness;
                  if (Math.random() < cardChance) {
-                    if (opponent.yellowCards === 1) {
+                    opponent.yellowCardCount++;
+                    if (opponent.yellowCardCount === 2) {
                          opponent.isSentOff = true;
                          updateRating(opponent, -2.0);
                          newEvents.push({minute: newState.minute, text: `Second yellow! ${opponent.name} is sent off!`, type: 'RedCard'});
@@ -303,7 +308,6 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
                             newState.isPaused = true;
                          }
                     } else {
-                         opponent.yellowCards = 1;
                          updateRating(opponent, -0.5);
                          newEvents.push({minute: newState.minute, text: `${opponent.name} receives a yellow card.`, type: 'YellowCard'});
                     }
@@ -317,7 +321,7 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
                  newState.attackingTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
                  newState.ballCarrierId = opponent.id;
                  
-                 const injuryChance = (opponent.attributes.aggression / 300) * (opponent.instructions.tackling === TacklingInstruction.Harder ? 1.5 : 1.0);
+                 const injuryChance = (opponent.attributes.aggression / 400) * (opponent.instructions.tackling === TacklingInstruction.Harder ? 1.5 : 1.0);
                  if (Math.random() < injuryChance) {
                      ballCarrier.isInjured = true;
                      const eventText = `${ballCarrier.name} has picked up an injury from that challenge and has to come off!`;

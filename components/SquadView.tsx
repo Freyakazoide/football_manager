@@ -37,6 +37,7 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                             <th className="p-3">Name</th>
                             <th className="p-3">Position</th>
                             <th className="p-3 text-center" title="Status">St</th>
+                            <th className="p-3 text-center" title="Yellow Cards">YC</th>
                             <th className="p-3 text-center" title="Morale">Mor</th>
                             <th className="p-3 text-center" title="Match Fitness">Fit</th>
                             <th className="p-3">Age</th>
@@ -56,6 +57,13 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                                 <td className="p-3 text-center">
                                     {player.injury && <span className="text-red-500 font-bold" title={`Injured: ${player.injury.type}`}>✚</span>}
                                     {player.suspension && <span className="text-red-500 font-bold" title={`Suspended until ${player.suspension.returnDate.toLocaleDateString()}`}>■</span>}
+                                </td>
+                                <td className="p-3 text-center">
+                                    {player.seasonYellowCards > 0 && 
+                                        <span className="inline-flex items-center justify-center w-5 h-5 bg-yellow-400 text-black font-bold text-xs rounded-sm">
+                                            {player.seasonYellowCards}
+                                        </span>
+                                    }
                                 </td>
                                 <td className="p-3 text-center" title={`${player.morale}`}>{getMoraleIcon(player.morale)}</td>
                                 <td className="p-3 text-center">{player.matchFitness}</td>

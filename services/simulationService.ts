@@ -98,6 +98,7 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
         const defenseMentality = hasPossession === 'home' ? awayMentality : homeMentality;
         const attackStats = hasPossession === 'home' ? homeStats : awayStats;
         const defenseStats = hasPossession === 'home' ? awayStats : homeStats;
+        const attackingLineup = hasPossession === 'home' ? homeLineup : awayLineup;
 
         // Progress from Midfield to Attack
         const midToFwdChance = (attackRatings.mid * mentalityMod(attackMentality, 'mid')) / (defenseRatings.mid * mentalityMod(defenseMentality, 'mid'));
@@ -140,6 +141,10 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
             }
         } else {
             defenseStats.tackles++;
+            if (Math.random() < 0.2) { // Chance for a dribble on failed progression
+                const dribbler = pickRandom(attackingLineup.filter(p => ['CM', 'AM', 'LM', 'RM', 'LW', 'RW'].includes(p.role)));
+                if (dribbler) playerStats[dribbler.playerId].dribbles++;
+            }
         }
     }
     
@@ -160,7 +165,7 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
 
     const totalFouls = homeStats.fouls + awayStats.fouls;
     for(let i=0; i<totalFouls; i++) {
-        const cardChance = 0.20; // Increased from 0.15
+        const cardChance = 0.25; 
         if (Math.random() < cardChance) {
             const isHomeFoul = Math.random() < 0.5;
             const lineup = isHomeFoul ? homeLineup : awayLineup;
@@ -177,7 +182,7 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
         }
     }
 
-    const injuryChancePerMatch = 0.50; // Increased from 0.35
+    const injuryChancePerMatch = 0.40; 
     if (Math.random() < injuryChancePerMatch) {
         const isHomeInjury = Math.random() < 0.5;
         const lineup = isHomeInjury ? homeLineup : awayLineup;

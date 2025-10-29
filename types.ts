@@ -43,6 +43,8 @@ export interface PlayerSeasonStats {
     assists: number;
     shots: number;
     tackles: number;
+    dribbles: number;
+    redCards: number;
     ratingPoints: number; // Sum of all match ratings
 }
 
@@ -153,7 +155,7 @@ export interface LivePlayer {
     id: number; name: string;
     attributes: PlayerAttributes;
     stamina: number;
-    yellowCards: number;
+    yellowCardCount: number;
     isSentOff: boolean;
     isInjured: boolean;
     stats: PlayerMatchStats;

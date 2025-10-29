@@ -150,7 +150,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
     const logEndRef = useRef<HTMLDivElement>(null);
     const pitchRef = useRef<HTMLDivElement>(null);
 
-    const [activeTab, setActiveTab] = useState<'events' | 'tactics' | 'stats'>('events');
+    const [activeTab, setActiveTab] = useState<'events' | 'tactics' | 'stats' | 'player stats'>('events');
     const [playerToSub, setPlayerToSub] = useState<number | null>(null);
     const [simSpeed, setSimSpeed] = useState(1000);
     const [draggedPlayer, setDraggedPlayer] = useState<{ id: number, element: HTMLDivElement } | null>(null);
@@ -234,6 +234,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
     const playerTeam = playerTeamIsHome ? liveMatch.homeLineup : liveMatch.awayLineup;
     const opponentTeam = playerTeamIsHome ? liveMatch.awayLineup : liveMatch.homeLineup;
     const playerBench = playerTeamIsHome ? liveMatch.homeBench : liveMatch.awayBench;
+    const opponentBench = playerTeamIsHome ? liveMatch.awayBench : liveMatch.homeBench;
     const playerSubsMade = playerTeamIsHome ? liveMatch.homeSubsMade : liveMatch.awaySubsMade;
     const playersToRender = activeTab === 'tactics' && liveMatch.isPaused ? playerTeam : [...playerTeam, ...opponentTeam];
 
@@ -248,6 +249,41 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
             tempState = newState;
         }
         dispatch({ type: 'ADVANCE_MINUTE', payload: { newState: tempState, newEvents: [] } });
+    };
+    
+    const renderTeamStatsTable = (players: LivePlayer[], bench: LivePlayer[], teamName: string) => {
+        const allPlayers = [...players, ...bench];
+        return (
+            <div className="mb-4">
+                <h4 className="font-bold text-white mb-2">{teamName}</h4>
+                <table className="w-full text-left text-xs">
+                    <thead>
+                        <tr className="text-gray-400">
+                            <th className="p-1">Name</th>
+                            <th className="p-1 text-center" title="Goals">G</th>
+                            <th className="p-1 text-center" title="Assists">A</th>
+                            <th className="p-1 text-center" title="Shots">S</th>
+                            <th className="p-1 text-center" title="Tackles">T</th>
+                            <th className="p-1 text-center font-bold" title="Rating">Rat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {allPlayers.map(player => (
+                            <tr key={player.id} className="border-t border-gray-700">
+                                <td className="p-1">{player.name}</td>
+                                <td className="p-1 text-center">{player.stats.goals}</td>
+                                <td className="p-1 text-center">{player.stats.assists}</td>
+                                <td className="p-1 text-center">{player.stats.shots}</td>
+                                <td className="p-1 text-center">{player.stats.tackles}</td>
+                                <td className={`p-1 text-center font-bold ${player.stats.rating >= 8 ? 'text-green-400' : player.stats.rating < 6 ? 'text-red-400' : ''}`}>
+                                    {player.stats.rating.toFixed(1)}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
     };
 
     const renderSidePanel = () => {
@@ -278,9 +314,9 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                 </div>
 
                 <div className="flex border-b border-t border-gray-700">
-                    {(['events', 'tactics', 'stats'] as const).map(tab => (
+                    {(['events', 'tactics', 'stats', 'player stats'] as const).map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-2 px-4 text-sm capitalize ${activeTab === tab ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>
-                            {tab}
+                            {tab.replace(' stats', ' Stats')}
                         </button>
                     ))}
                 </div>
@@ -340,6 +376,12 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                             <StatBar label="Tackles" home={liveMatch.homeStats.tackles} away={liveMatch.awayStats.tackles} />
                         </div>
                     )}
+                     {activeTab === 'player stats' && (
+                        <div>
+                            {renderTeamStatsTable(liveMatch.homeLineup, liveMatch.homeBench, liveMatch.homeTeamName)}
+                            {renderTeamStatsTable(liveMatch.awayLineup, liveMatch.awayBench, liveMatch.awayTeamName)}
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -386,9 +428,8 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                                    {player.isSentOff && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full border-2 border-white" />}
                                    {player.isInjured && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full border-2 border-white flex items-center justify-center font-bold text-white text-xs">✚</div>}
                                </div>
-                               <div className="absolute top-full mt-1 text-center text-xs font-semibold whitespace-nowrap bg-black/50 px-1 rounded">
+                               <div className="absolute top-full mt-1 text-center text-xs font-semibold whitespace-nowrap bg-black/50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                                    {player.name.split(' ')[1]}
-                                   <span className="block text-yellow-300 font-mono">{player.stats.rating.toFixed(1)}</span>
                                </div>
                             </div>
                         );

@@ -8,23 +8,38 @@ interface TacticsViewProps {
 }
 
 const getRoleFromPosition = (x: number, y: number): PlayerRole => {
+    // Y-axis: 0 is attacking goal, 100 is defending goal
     if (y > 90) return 'GK';
-    if (y > 65) { // Defence
-        if (x < 30) return 'LB';
-        if (x > 70) return 'RB';
+    
+    // Defensive Line
+    if (y > 70) { 
+        if (x < 25) return 'LB';
+        if (x > 75) return 'RB';
         return 'CB';
     }
-    if (y > 35) { // Midfield
+
+    // Wing-Back Line
+    if (y > 55) {
+        if (x < 25) return 'LWB';
+        if (x > 75) return 'RWB';
+    }
+
+    // Midfield Line
+    if (y > 30) {
         if (x < 30) return 'LM';
         if (x > 70) return 'RM';
-        if (y > 55) return 'DM';
+        if (y > 60) return 'DM';
+        if (y < 45) return 'AM';
         return 'CM';
     }
-    // Attack
+
+    // Attacking Line
     if (x < 35) return 'LW';
     if (x > 65) return 'RW';
-    return 'ST';
+    if (x > 40 && x < 60) return 'ST';
+    return 'CF';
 };
+
 
 const InstructionEditor: React.FC<{
     instructions: PlayerInstructions;
@@ -260,7 +275,7 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch }) => {
                                     return (
                                         <div key={index} onMouseDown={(e) => onPlayerMouseDown(e, index, 'bench')} className="bg-gray-700 p-2 rounded cursor-grab flex justify-between">
                                             <span>{player.name}</span>
-                                            <span className="text-gray-400">{player.position}</span>
+                                            <span className="text-gray-400">{player.naturalPosition}</span>
                                         </div>
                                     )
                                 })}

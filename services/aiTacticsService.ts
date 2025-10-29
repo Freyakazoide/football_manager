@@ -1,5 +1,12 @@
 import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction } from '../types';
 
+const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
+    if (role === 'GK') return 'GK';
+    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(role)) return 'DEF';
+    if (['DM', 'CM', 'LM', 'RM', 'AM'].includes(role)) return 'MID';
+    return 'FWD';
+};
+
 const defaultPositions442: { position: { x: number, y: number }, role: PlayerRole }[] = [
     // GK
     { position: { x: 50, y: 95 }, role: 'GK' },
@@ -38,10 +45,10 @@ const createDefaultInstructions = (): PlayerInstructions => ({
 
 export const generateAITactics = (clubPlayers: Player[]): Tactics => {
     // 1. Select Best XI based on positions for a 4-4-2
-    const gks = clubPlayers.filter(p => p.position === 'GK').sort((a, b) => getOverallRating(b) - getOverallRating(a));
-    const defs = clubPlayers.filter(p => p.position === 'DEF').sort((a, b) => getOverallRating(b) - getOverallRating(a));
-    const mids = clubPlayers.filter(p => p.position === 'MID').sort((a, b) => getOverallRating(b) - getOverallRating(a));
-    const fwds = clubPlayers.filter(p => p.position === 'FWD').sort((a, b) => getOverallRating(b) - getOverallRating(a));
+    const gks = clubPlayers.filter(p => getRoleCategory(p.naturalPosition) === 'GK').sort((a, b) => getOverallRating(b) - getOverallRating(a));
+    const defs = clubPlayers.filter(p => getRoleCategory(p.naturalPosition) === 'DEF').sort((a, b) => getOverallRating(b) - getOverallRating(a));
+    const mids = clubPlayers.filter(p => getRoleCategory(p.naturalPosition) === 'MID').sort((a, b) => getOverallRating(b) - getOverallRating(a));
+    const fwds = clubPlayers.filter(p => getRoleCategory(p.naturalPosition) === 'FWD').sort((a, b) => getOverallRating(b) - getOverallRating(a));
 
     const lineupPlayers: Player[] = [
         ...gks.slice(0, 1),
@@ -70,7 +77,7 @@ export const generateAITactics = (clubPlayers: Player[]): Tactics => {
     const bestShooter = lineupPlayers.reduce((best, p) => p.attributes.shooting > best.attributes.shooting ? p : best, lineupPlayers[0]);
     const bestPasser = lineupPlayers.reduce((best, p) => p.attributes.creativity > best.attributes.creativity ? p : best, lineupPlayers[0]);
     const bestDribbler = lineupPlayers.reduce((best, p) => p.attributes.dribbling > best.attributes.dribbling ? p : best, lineupPlayers[0]);
-    const bestTackler = lineupPlayers.filter(p => p.position === 'DEF' || p.position === 'MID').reduce((best, p) => p.attributes.tackling > best.attributes.tackling ? p : best, lineupPlayers[0]);
+    const bestTackler = lineupPlayers.filter(p => getRoleCategory(p.naturalPosition) !== 'FWD').reduce((best, p) => p.attributes.tackling > best.attributes.tackling ? p : best, lineupPlayers[0]);
 
     const setInstruction = (playerId: number, instruction: Partial<PlayerInstructions>) => {
         const lineupEntry = lineup.find(lp => lp?.playerId === playerId);

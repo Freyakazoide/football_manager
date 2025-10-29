@@ -12,9 +12,10 @@ const MatchRow: React.FC<{ match: Match, gameState: GameState, onMatchClick: (ma
     const awayTeam = gameState.clubs[match.awayTeamId];
     const isPast = match.date < gameState.currentDate;
     const hasResult = match.homeScore !== undefined;
+    const isPlayerMatch = match.homeTeamId === playerClubId || match.awayTeamId === playerClubId;
     
     const isClickable = hasResult && match.log;
-    const rowClasses = `p-4 rounded-lg flex flex-col ${isPast ? 'bg-gray-700' : 'bg-gray-600'} ${isClickable ? 'cursor-pointer hover:bg-gray-600/80 transition-colors' : ''}`;
+    const rowClasses = `p-4 rounded-lg flex flex-col ${isPast ? 'bg-gray-700' : 'bg-gray-600'} ${isClickable ? 'cursor-pointer hover:bg-gray-600/80 transition-colors' : ''} ${isPlayerMatch && isPast ? 'border-2 border-green-600' : ''}`;
 
 
     return (
@@ -22,9 +23,9 @@ const MatchRow: React.FC<{ match: Match, gameState: GameState, onMatchClick: (ma
             <div className="flex justify-between items-center">
                 <span className="text-gray-400 text-sm w-1/4">{match.date.toLocaleDateString()}</span>
                 <div className="flex-1 text-center">
-                    <span className={match.homeTeamId === playerClubId ? 'font-bold' : ''}>{homeTeam.name}</span>
+                    <span className={match.homeTeamId === playerClubId ? 'font-bold text-green-300' : ''}>{homeTeam.name}</span>
                     <span className="mx-4">vs</span>
-                    <span className={match.awayTeamId === playerClubId ? 'font-bold' : ''}>{awayTeam.name}</span>
+                    <span className={match.awayTeamId === playerClubId ? 'font-bold text-green-300' : ''}>{awayTeam.name}</span>
                 </div>
                 <div className="w-1/4 text-right font-mono text-lg">
                     {hasResult ? `${match.homeScore} - ${match.awayScore}` : '-'}
@@ -54,16 +55,13 @@ const MatchRow: React.FC<{ match: Match, gameState: GameState, onMatchClick: (ma
 };
 
 const CalendarView: React.FC<CalendarViewProps> = ({ gameState, onMatchClick }) => {
-    const playerClubId = gameState.playerClubId;
-    if (!playerClubId) return null;
-
-    const playerSchedule = gameState.schedule.filter(m => m.homeTeamId === playerClubId || m.awayTeamId === playerClubId);
+    const allMatches = gameState.schedule;
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-4">Calendar</h2>
+            <h2 className="text-2xl font-bold text-white mb-4">Full Season Calendar</h2>
             <div className="space-y-3">
-                {playerSchedule.map(match => (
+                {allMatches.map(match => (
                     <MatchRow key={match.id} match={match} gameState={gameState} onMatchClick={onMatchClick} />
                 ))}
             </div>

@@ -11,10 +11,10 @@ const FinancesView: React.FC<FinancesViewProps> = ({ gameState }) => {
     if (!gameState.playerClubId) return null;
 
     const club = gameState.clubs[gameState.playerClubId];
-    // FIX: Cast Object.values to Player[] to ensure clubPlayers is correctly typed, preventing downstream errors where totalWeeklyWage was inferred as 'unknown'.
-    const clubPlayers = (Object.values(gameState.players) as Player[]).filter((p: Player) => p.clubId === club.id);
-    // FIX: Explicitly type the accumulator `sum` to `number` to ensure correct type inference for `totalWeeklyWage`.
-    const totalWeeklyWage = clubPlayers.reduce((sum: number, p: Player) => sum + p.wage, 0);
+    // FIX: Cast the result of Object.values to Player[] to ensure correct type inference.
+    // TypeScript was incorrectly inferring it as `unknown[]`, causing downstream errors.
+    const clubPlayers = (Object.values(gameState.players) as Player[]).filter(p => p.clubId === club.id);
+    const totalWeeklyWage = clubPlayers.reduce((sum, p) => sum + p.wage, 0);
 
     const formatCurrency = (value: number) => {
         return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });

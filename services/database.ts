@@ -9,6 +9,45 @@ const CITIES = ['Northwood', 'Southglen', 'Easton', 'Westfield', 'Oakhaven', 'Ri
 const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
+// --- NEW POSITIONAL FAMILIARITY LOGIC ---
+
+const ALL_ROLES: PlayerRole[] = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'DM', 'CM', 'LM', 'RM', 'AM', 'LW', 'RW', 'ST', 'CF'];
+
+const FAMILIARITY_MAP: Record<PlayerRole, Partial<Record<PlayerRole, number>>> = {
+    GK: { GK: 100 },
+    CB: { CB: 100, DM: 60, RB: 50, LB: 50 },
+    LB: { LB: 100, LWB: 85, LM: 70, CB: 50, RB: 40 },
+    RB: { RB: 100, RWB: 85, RM: 70, CB: 50, LB: 40 },
+    LWB: { LWB: 100, LB: 85, LM: 80, LW: 65 },
+    RWB: { RWB: 100, RB: 85, RM: 80, RW: 65 },
+    DM: { DM: 100, CM: 80, CB: 70 },
+    CM: { CM: 100, DM: 80, AM: 80, LM: 60, RM: 60 },
+    LM: { LM: 100, LWB: 75, LW: 85, CM: 65, AM: 60 },
+    RM: { RM: 100, RWB: 75, RW: 85, CM: 65, AM: 60 },
+    AM: { AM: 100, CM: 80, ST: 70, CF: 75, LW: 60, RW: 60 },
+    LW: { LW: 100, LM: 85, AM: 70, ST: 65 },
+    RW: { RW: 100, RM: 85, AM: 70, ST: 65 },
+    ST: { ST: 100, CF: 85, AM: 60 },
+    CF: { CF: 100, ST: 85, AM: 70 },
+};
+
+const generateFamiliarity = (naturalRole: PlayerRole): Record<PlayerRole, number> => {
+    const familiarity: Partial<Record<PlayerRole, number>> = {};
+    for (const role of ALL_ROLES) {
+        familiarity[role] = FAMILIARITY_MAP[naturalRole]?.[role] || 20; // Base familiarity is 20
+    }
+    return familiarity as Record<PlayerRole, number>;
+};
+
+const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
+    if (role === 'GK') return 'GK';
+    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(role)) return 'DEF';
+    if (['DM', 'CM', 'LM', 'RM', 'AM'].includes(role)) return 'MID';
+    return 'FWD';
+};
+
+// --- END NEW LOGIC ---
+
 const generatePlayerAttributes = (): PlayerAttributes => ({
     passing: randInt(40, 90),
     dribbling: randInt(40, 90),
@@ -26,7 +65,7 @@ const generatePlayerAttributes = (): PlayerAttributes => ({
     naturalFitness: randInt(30, 95),
 });
 
-const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubId' | 'contractExpires'>): number => {
+const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubId' | 'contractExpires' | 'history'>): number => {
     const avgAttr = Object.values(player.attributes).reduce((a, b) => a + b, 0) / Object.values(player.attributes).length;
     let value = (avgAttr * 20000) + (player.potential * 15000);
     if (player.age < 22) value *= 1.5;
@@ -87,10 +126,20 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
         });
     }
 
+    const GK_ROLES: PlayerRole[] = ['GK'];
+    const DEF_ROLES: PlayerRole[] = ['CB', 'LB', 'RB', 'CB'];
+    const MID_ROLES: PlayerRole[] = ['DM', 'CM', 'LM', 'RM', 'AM', 'CM'];
+    const FWD_ROLES: PlayerRole[] = ['ST', 'CF', 'LW', 'RW'];
+
     for (let clubId = 1; clubId <= NUM_CLUBS; clubId++) {
         const clubPlayers: Player[] = [];
         for (let j = 0; j < PLAYERS_PER_CLUB; j++) {
-            const pos: Player['position'] = j < 2 ? 'GK' : j < 8 ? 'DEF' : j < 16 ? 'MID' : 'FWD';
+            let naturalPos: PlayerRole;
+            if (j < 2) naturalPos = pickRandom(GK_ROLES);
+            else if (j < 8) naturalPos = pickRandom(DEF_ROLES);
+            else if (j < 16) naturalPos = pickRandom(MID_ROLES);
+            else naturalPos = pickRandom(FWD_ROLES);
+            
             const age = randInt(18, 35);
             const contractDuration = randInt(1, 5);
             const contractExpires = new Date();
@@ -100,7 +149,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
                 age,
                 name: `${pickRandom(FIRST_NAMES)} ${pickRandom(LAST_NAMES)}`,
                 nationality: pickRandom(COUNTRIES),
-                position: pos,
+                naturalPosition: naturalPos,
                 wage: randInt(500, 10000),
                 attributes: generatePlayerAttributes(),
                 potential: randInt(60, 100),
@@ -111,26 +160,27 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
                 id: playerIdCounter,
                 clubId: clubId,
                 contractExpires,
-                marketValue: calculateMarketValue(partialPlayer),
+                marketValue: calculateMarketValue(partialPlayer as any),
+                positionalFamiliarity: generateFamiliarity(naturalPos),
+                history: [],
             };
             players[playerIdCounter] = player;
             clubPlayers.push(player);
             playerIdCounter++;
         }
         
-        // Basic lineup and bench setting using new tactics system
         const lineup: (LineupPlayer | null)[] = Array(11).fill(null);
         const assignedToLineup = new Set<number>();
 
-        const positionsNeeded: {[key in Player['position']]: number} = {'GK':1, 'DEF':4, 'MID':4, 'FWD':2};
+        const positionsNeeded: {[key in 'GK' | 'DEF' | 'MID' | 'FWD']: number} = {'GK':1, 'DEF':4, 'MID':4, 'FWD':2};
         let lineupIndex = 0;
 
-        // Assign players to lineup based on position
         for (const [pos, count] of Object.entries(positionsNeeded)) {
-            const playersForPos = clubPlayers.filter(p => p.position === pos);
+            const playersForPos = clubPlayers.filter(p => getRoleCategory(p.naturalPosition) === pos);
             for(let k=0; k<count && k < playersForPos.length; k++) {
                 if(lineupIndex < 11) {
                     const player = playersForPos[k];
+                    if (assignedToLineup.has(player.id)) continue;
                     lineup[lineupIndex] = {
                         playerId: player.id,
                         position: defaultPositions442[lineupIndex].position,

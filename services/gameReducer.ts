@@ -4,6 +4,7 @@ import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, r
 import { createLiveMatchState } from './matchEngine';
 import { generateNarrativeReport } from './newsGenerator';
 import { generateAITactics } from './aiTacticsService';
+import { updatePlayerStatsFromMatchResult, getSeason } from './playerStatsService';
 
 export const initialState: GameState = {
     currentDate: new Date(2024, 7, 1), // July 1st, 2024
@@ -93,6 +94,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             // --- STEP 1: SIMULATE ALL AI MATCHES FIRST ---
             if (aiMatches.length > 0) {
                 const roundResults: Match[] = [];
+                const season = getSeason(newState.currentDate);
                 for (const aiMatch of aiMatches) {
                     const result = runMatch(aiMatch, newState.clubs, newState.players);
                     roundResults.push(result);
@@ -101,6 +103,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     if (matchIndex !== -1) newState.schedule[matchIndex] = result;
             
                     newState.leagueTable = updateLeagueTableForMatch(newState.leagueTable, result);
+                    newState.players = updatePlayerStatsFromMatchResult(newState.players, result, season);
                 }
                 newState.leagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
                 
@@ -317,12 +320,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             if (!state.liveMatch) return state;
             const finalMatchState = state.liveMatch;
 
-            const homePossessionEvents = finalMatchState.log.filter(e => (e.text.includes(finalMatchState.homeTeamName) && (e.type === 'Highlight' || e.type === 'Tackle')) || (e.text.includes('kick for ' + finalMatchState.homeTeamName))).length;
-            const awayPossessionEvents = finalMatchState.log.filter(e => (e.text.includes(finalMatchState.awayTeamName) && (e.type === 'Highlight' || e.type === 'Tackle')) || (e.text.includes('kick for ' + finalMatchState.awayTeamName))).length;
-            const totalPossessionEvents = homePossessionEvents + awayPossessionEvents;
-            const homePossession = totalPossessionEvents > 0 ? Math.round((homePossessionEvents / totalPossessionEvents) * 100) : 50;
-            const awayPossession = totalPossessionEvents > 0 ? 100 - homePossession : 50;
-
+            const totalPossessionMinutes = finalMatchState.homePossessionMinutes + finalMatchState.awayPossessionMinutes;
+            const homePossession = totalPossessionMinutes > 0 ? Math.round((finalMatchState.homePossessionMinutes / totalPossessionMinutes) * 100) : 50;
+            const awayPossession = totalPossessionMinutes > 0 ? 100 - homePossession : 50;
 
             const allPlayersInMatch = [...finalMatchState.homeLineup, ...finalMatchState.awayLineup, ...finalMatchState.homeBench, ...finalMatchState.awayBench];
             const collectedPlayerStats: Record<number, PlayerMatchStats> = {};
@@ -365,6 +365,10 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     aiResults: aiResultsToday,
                 }
             };
+
+            const season = getSeason(finalResult.date);
+            newState.players = updatePlayerStatsFromMatchResult(newState.players, finalResult, season, finalMatchState);
+            
             return newState;
         }
         default:

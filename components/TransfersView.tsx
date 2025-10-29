@@ -1,11 +1,17 @@
-
 import React, { useState, useMemo } from 'react';
-import { GameState, Player } from '../types';
+import { GameState, Player, PlayerRole } from '../types';
 
 interface TransfersViewProps {
     gameState: GameState;
     onPlayerClick: (player: Player) => void;
 }
+
+const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
+    if (role === 'GK') return 'GK';
+    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(role)) return 'DEF';
+    if (['DM', 'CM', 'LM', 'RM', 'AM'].includes(role)) return 'MID';
+    return 'FWD';
+};
 
 const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -16,7 +22,7 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick 
     const filteredPlayers = useMemo(() => {
         return allPlayers.filter(player => {
             const nameMatch = player.name.toLowerCase().includes(searchTerm.toLowerCase());
-            const positionMatch = positionFilter === 'All' || player.position === positionFilter;
+            const positionMatch = positionFilter === 'All' || getRoleCategory(player.naturalPosition) === positionFilter;
             const notOwnPlayer = player.clubId !== gameState.playerClubId;
             return nameMatch && positionMatch && notOwnPlayer;
         });
@@ -66,7 +72,7 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick 
                                 onClick={() => onPlayerClick(player)}
                             >
                                 <td className="p-3 font-semibold">{player.name}</td>
-                                <td className="p-3">{player.position}</td>
+                                <td className="p-3">{player.naturalPosition}</td>
                                 <td className="p-3">{player.age}</td>
                                 <td className="p-3">{gameState.clubs[player.clubId]?.name}</td>
                                 <td className="p-3 text-right">

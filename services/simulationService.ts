@@ -1,23 +1,49 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats } from '../types';
+
+const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
+    if (role === 'GK') return 'GK';
+    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(role)) return 'DEF';
+    if (['DM', 'CM', 'LM', 'RM', 'AM'].includes(role)) return 'MID';
+    return 'FWD';
+};
+
+const getPositionalModifier = (familiarity: number): number => 0.5 + (familiarity / 200);
 
 // Simplified overall team rating based on starting lineup for non-player matches
 export const getUnitRatings = (teamId: number, clubs: Record<number, Club>, players: Record<number, Player>) => {
     const club = clubs[teamId];
     if (!club) return { def: 50, mid: 50, fwd: 50, gk: 50 };
 
-    // FIX: The `lineup` array contains `LineupPlayer` objects. We need to use the `playerId` property to look up the player.
-    const lineupPlayers = club.tactics.lineup.map(pId => pId ? players[pId.playerId] : null).filter(p => p) as Player[];
-    if (lineupPlayers.length < 11) return { def: 50, mid: 50, fwd: 50, gk: 50 };
+    const lineupWithRoles = club.tactics.lineup.filter(lp => lp).map(lp => ({
+        player: players[lp!.playerId],
+        role: lp!.role
+    })).filter(item => item.player) as { player: Player, role: PlayerRole }[];
+    
+    if (lineupWithRoles.length < 11) return { def: 50, mid: 50, fwd: 50, gk: 50 };
 
-    const gkPlayers = lineupPlayers.filter(p => p.position === 'GK');
-    const defPlayers = lineupPlayers.filter(p => p.position === 'DEF');
-    const midPlayers = lineupPlayers.filter(p => p.position === 'MID');
-    const fwdPlayers = lineupPlayers.filter(p => p.position === 'FWD');
+    const calculateAverage = (playersWithRoles: {player: Player, role: PlayerRole}[], attributes: (keyof PlayerAttributes)[]) => {
+        if (playersWithRoles.length === 0) return 50;
+        let totalAttributeSum = 0;
+        for (const {player, role} of playersWithRoles) {
+            const familiarity = player.positionalFamiliarity[role] || 20;
+            const modifier = getPositionalModifier(familiarity);
+            const playerAttributeSum = attributes.reduce((sum, attr) => sum + (player.attributes[attr] * modifier), 0);
+            totalAttributeSum += playerAttributeSum / attributes.length;
+        }
+        return totalAttributeSum / playersWithRoles.length;
+    }
 
-    const gkRating = gkPlayers.length > 0 ? gkPlayers.reduce((sum, p) => sum + p.attributes.positioning, 0) / gkPlayers.length : 50;
-    const defRating = defPlayers.length > 0 ? defPlayers.reduce((sum, p) => sum + p.attributes.tackling + p.attributes.positioning, 0) / (defPlayers.length * 2) : 50;
-    const midRating = midPlayers.length > 0 ? midPlayers.reduce((sum, p) => sum + p.attributes.passing + p.attributes.creativity + p.attributes.teamwork, 0) / (midPlayers.length * 3) : 50;
-    const fwdRating = fwdPlayers.length > 0 ? fwdPlayers.reduce((sum, p) => sum + p.attributes.shooting + p.attributes.dribbling + p.attributes.pace, 0) / (fwdPlayers.length * 3) : 50;
+    const gkPlayers = lineupWithRoles.filter(p => getRoleCategory(p.role) === 'GK');
+    const defPlayers = lineupWithRoles.filter(p => getRoleCategory(p.role) === 'DEF');
+    const midPlayers = lineupWithRoles.filter(p => getRoleCategory(p.role) === 'MID');
+    const fwdPlayers = lineupWithRoles.filter(p => getRoleCategory(p.role) === 'FWD');
+
+    const gkRating = calculateAverage(gkPlayers, ['positioning', 'strength']);
+    const defRating = calculateAverage(defPlayers, ['tackling', 'positioning', 'strength', 'heading']);
+    const midRating = calculateAverage(midPlayers, ['passing', 'creativity', 'teamwork', 'dribbling', 'workRate']);
+    const fwdRating = calculateAverage(fwdPlayers, ['shooting', 'dribbling', 'pace', 'creativity', 'positioning']);
 
     return { def: defRating, mid: midRating, fwd: fwdRating, gk: gkRating };
 }
@@ -35,6 +61,17 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
         if (mentality === 'Offensive') return unit === 'fwd' ? 1.15 : (unit === 'def' ? 0.9 : 1.0);
         return 1.0;
     };
+
+    const homeLineup = clubs[match.homeTeamId].tactics.lineup.filter(lp => lp) as LineupPlayer[];
+    const awayLineup = clubs[match.awayTeamId].tactics.lineup.filter(lp => lp) as LineupPlayer[];
+    const log: MatchEvent[] = [];
+    const playerStats: Record<number, PlayerMatchStats> = {};
+
+    [...homeLineup, ...awayLineup].forEach(p => {
+        if (p) {
+            playerStats[p.playerId] = { shots: 0, goals: 0, assists: 0, passes: 0, keyPasses: 0, tackles: 0, dribbles: 0, rating: 6.0 };
+        }
+    });
 
     // Possession simulation
     const homeMidfieldStrength = homeRatings.mid * mentalityMod(homeMentality, 'mid');
@@ -75,6 +112,14 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
                 attackStats.xG += xG_value;
                 if(isBigChance) attackStats.bigChances++;
 
+                const shootingTeamLineup = hasPossession === 'home' ? homeLineup : awayLineup;
+                const potentialShooters = shootingTeamLineup.filter(p => p && ['ST', 'CF', 'LW', 'RW', 'AM'].includes(p.role));
+                const shooter = pickRandom(potentialShooters.length > 0 ? potentialShooters : shootingTeamLineup);
+                if (shooter) {
+                    playerStats[shooter.playerId].shots++;
+                    playerStats[shooter.playerId].rating = Math.min(10, playerStats[shooter.playerId].rating + 0.1);
+                }
+
                 // On target?
                 if (Math.random() < 0.45) {
                     attackStats.shotsOnTarget++;
@@ -82,6 +127,12 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
                     const goalProb = (attackRatings.fwd / (attackRatings.fwd + defenseRatings.gk)) * 0.8;
                     if (Math.random() < Math.max(0.05, goalProb)) {
                         if(hasPossession === 'home') homeScore++; else awayScore++;
+                        if (shooter) {
+                            playerStats[shooter.playerId].goals++;
+                            playerStats[shooter.playerId].rating = Math.min(10, playerStats[shooter.playerId].rating + 1.2);
+                            const minute = Math.floor(i / totalPossessions * 90) + 1;
+                            log.push({ minute, type: 'Goal', text: `Goal for ${(hasPossession === 'home' ? clubs[match.homeTeamId].name : clubs[match.awayTeamId].name)}! Scored by ${players[shooter.playerId].name}.` });
+                        }
                     }
                 }
             } else {
@@ -102,7 +153,9 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
     homeStats.corners = Math.floor(homeStats.shots / 5);
     awayStats.corners = Math.floor(awayStats.shots / 5);
 
-    return { ...match, homeScore, awayScore, homeStats, awayStats };
+    log.sort((a, b) => a.minute - b.minute);
+
+    return { ...match, homeScore, awayScore, homeStats, awayStats, log, playerStats, homeLineup, awayLineup };
 };
 
 export const processPlayerDevelopment = (players: Record<number, Player>): Record<number, Player> => {

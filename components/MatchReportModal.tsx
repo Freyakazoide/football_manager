@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { GameState, Match, MatchEvent, PlayerMatchStats, Player } from '../types';
+import { GameState, Match, MatchEvent, PlayerMatchStats, Player, LineupPlayer } from '../types';
 
 interface MatchReportModalProps {
     match: Match;
     gameState: GameState;
     onClose: () => void;
+    onPlayerClick: (player: Player) => void;
 }
 
-type Tab = 'summary' | 'stats' | 'ratings' | 'events';
+type Tab = 'summary' | 'lineups' | 'stats' | 'ratings' | 'events';
 
 const StatRow: React.FC<{ label: string; homeValue: string | number; awayValue: string | number }> = ({ label, homeValue, awayValue }) => (
     <div className="flex justify-between items-center py-2 border-b border-gray-700">
@@ -17,7 +18,39 @@ const StatRow: React.FC<{ label: string; homeValue: string | number; awayValue: 
     </div>
 );
 
-const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, onClose }) => {
+const MiniPitch: React.FC<{
+    lineup: (LineupPlayer | null)[];
+    players: Record<number, Player>;
+    onPlayerClick: (player: Player) => void;
+    teamColor: string;
+}> = ({ lineup, players, onPlayerClick, teamColor }) => {
+    return (
+        <div className="relative aspect-[7/10] bg-green-800 bg-center bg-no-repeat select-none rounded-md" style={{ backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' stroke='%2338A169' stroke-width='2' stroke-dasharray='4%2c 8' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e")`}}>
+            {lineup.filter(Boolean).map(lp => {
+                const player = players[lp!.playerId];
+                if (!player) return null;
+                return (
+                    <div 
+                        key={player.id} 
+                        className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
+                        style={{ top: `${lp!.position.y}%`, left: `${lp!.position.x}%` }}
+                        onClick={() => onPlayerClick(player)}
+                    >
+                        <div className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-xs text-white ${teamColor} border-2 border-black/30`}>
+                            {lp!.role}
+                        </div>
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-center text-xs font-semibold whitespace-nowrap bg-black/50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                            {player.name.split(' ')[1]}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
+
+const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, onClose, onPlayerClick }) => {
     const [activeTab, setActiveTab] = useState<Tab>('summary');
     const homeTeam = gameState.clubs[match.homeTeamId];
     const awayTeam = gameState.clubs[match.awayTeamId];
@@ -37,6 +70,24 @@ const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, o
         </div>
     );
     
+    const renderLineups = () => {
+        if (!match.homeLineup || !match.awayLineup) {
+            return <p className="text-gray-400">Starting lineup information is not available for this match.</p>;
+        }
+        return (
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <h4 className="text-lg font-bold text-white mb-2 text-center">{homeTeam.name}</h4>
+                    <MiniPitch lineup={match.homeLineup} players={gameState.players} onPlayerClick={onPlayerClick} teamColor="bg-blue-600" />
+                </div>
+                 <div>
+                    <h4 className="text-lg font-bold text-white mb-2 text-center">{awayTeam.name}</h4>
+                    <MiniPitch lineup={match.awayLineup} players={gameState.players} onPlayerClick={onPlayerClick} teamColor="bg-red-600" />
+                </div>
+            </div>
+        );
+    };
+
     const renderStats = () => (
         <div className="text-sm">
             <div className="flex justify-between items-center mb-2 font-bold">
@@ -56,7 +107,7 @@ const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, o
     );
 
     const renderPlayerRatings = () => {
-        if (!match.playerStats) return <p>Player ratings are only available for matches you managed.</p>;
+        if (!match.playerStats) return <p>Player ratings are unavailable for this match.</p>;
 
         const renderTeamTable = (teamId: number) => {
             const players = allPlayersInvolved.filter(p => p.clubId === teamId);
@@ -114,6 +165,7 @@ const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, o
     const renderContent = () => {
         switch(activeTab) {
             case 'summary': return renderSummary();
+            case 'lineups': return renderLineups();
             case 'stats': return renderStats();
             case 'ratings': return renderPlayerRatings();
             case 'events': return renderEvents();
@@ -142,7 +194,7 @@ const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, o
 
                 {/* Tabs */}
                 <div className="flex border-b border-gray-700">
-                    {(['summary', 'stats', 'ratings', 'events'] as Tab[]).map(tab => (
+                    {(['summary', 'lineups', 'stats', 'ratings', 'events'] as Tab[]).map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab)} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === tab ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
                             {tab}
                         </button>

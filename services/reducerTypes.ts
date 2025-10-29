@@ -1,4 +1,4 @@
-import { GameState, Player, Tactics, Match, TransferResult, MatchDayInfo, LiveMatchState, Mentality, PlayerRole } from '../types';
+import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole } from '../types';
 
 export type Action =
     | { type: 'INITIALIZE_GAME'; payload: Omit<GameState, 'playerClubId' | 'transferResult'| 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults'> }

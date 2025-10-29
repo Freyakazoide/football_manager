@@ -1,19 +1,24 @@
-
 import React from 'react';
-import { GameState, Player } from '../types';
+import { GameState, Player, PlayerRole } from '../types';
 
 interface SquadViewProps {
     gameState: GameState;
     onPlayerClick: (player: Player) => void;
 }
 
+const roleOrder: Record<PlayerRole, number> = {
+    'GK': 1,
+    'LB': 10, 'LWB': 11, 'CB': 12, 'RB': 13, 'RWB': 14,
+    'DM': 20, 'LM': 21, 'CM': 22, 'RM': 23, 'AM': 24,
+    'LW': 30, 'ST': 31, 'CF': 32, 'RW': 33,
+};
+
 const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
     if (!gameState.playerClubId) return null;
 
     const squadPlayers = Object.values(gameState.players).filter((p: Player) => p.clubId === gameState.playerClubId);
     squadPlayers.sort((a: Player, b: Player) => {
-        const posOrder = { 'GK': 0, 'DEF': 1, 'MID': 2, 'FWD': 3 };
-        return posOrder[a.position] - posOrder[b.position];
+        return (roleOrder[a.naturalPosition] || 99) - (roleOrder[b.naturalPosition] || 99);
     });
 
     return (
@@ -31,7 +36,6 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {/* FIX: Explicitly type 'player' to resolve property access errors on type 'unknown'. */}
                         {squadPlayers.map((player: Player) => (
                             <tr
                                 key={player.id}
@@ -39,7 +43,7 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                                 onClick={() => onPlayerClick(player)}
                             >
                                 <td className="p-3 font-semibold">{player.name}</td>
-                                <td className="p-3">{player.position}</td>
+                                <td className="p-3">{player.naturalPosition}</td>
                                 <td className="p-3">{player.age}</td>
                                 <td className="p-3 text-right">
                                     {player.wage.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}

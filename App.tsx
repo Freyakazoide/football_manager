@@ -138,7 +138,7 @@ const App: React.FC = () => {
             {state.matchDayFixtures && <MatchDayModal fixtures={state.matchDayFixtures} gameState={state} dispatch={dispatch} onClose={closeMatchDayModal} />}
             {state.matchDayResults && <MatchResultsModal results={state.matchDayResults} gameState={state} onClose={closeMatchResultsModal} />}
             {state.transferResult && <TransferResultModal result={state.transferResult} onClose={closeTransferResultModal} />}
-            {selectedMatchForReport && <MatchReportModal match={selectedMatchForReport} gameState={state} onClose={closeMatchReportModal} />}
+            {selectedMatchForReport && <MatchReportModal match={selectedMatchForReport} gameState={state} onClose={closeMatchReportModal} onPlayerClick={handlePlayerClick} />}
         </div>
     );
 };

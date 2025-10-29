@@ -32,9 +32,9 @@ const StatBar: React.FC<{ home: number, away: number, label: string, isXG?: bool
     return (
         <div className="w-full">
             <div className="flex justify-between items-center text-sm mb-1">
-                <span className="font-bold font-mono">{isXG ? home.toFixed(2) : home}</span>
+                <span className="font-bold font-mono">{isXG ? home.toFixed(2) : Math.round(home)}</span>
                 <span className="text-gray-400 text-xs">{label}</span>
-                <span className="font-bold font-mono">{isXG ? away.toFixed(2) : away}</span>
+                <span className="font-bold font-mono">{isXG ? away.toFixed(2) : Math.round(away)}</span>
             </div>
             <div className="flex w-full h-2 bg-gray-700/50 rounded">
                 <div className="bg-blue-500 rounded-l" style={{ width: `${homePercent}%` }}></div>
@@ -199,7 +199,12 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
     const opponentTeam = playerTeamIsHome ? liveMatch.awayLineup : liveMatch.homeLineup;
     const playerBench = playerTeamIsHome ? liveMatch.homeBench : liveMatch.awayBench;
     const playerSubsMade = playerTeamIsHome ? liveMatch.homeSubsMade : liveMatch.awaySubsMade;
-    
+    const playersToRender = activeTab === 'tactics' && liveMatch.isPaused ? playerTeam : [...playerTeam, ...opponentTeam];
+
+    const totalPossession = liveMatch.homePossessionMinutes + liveMatch.awayPossessionMinutes;
+    const homePossession = totalPossession > 0 ? (liveMatch.homePossessionMinutes / totalPossession) * 100 : 50;
+    const awayPossession = totalPossession > 0 ? 100 - homePossession : 50;
+
     const handleSimulateToEnd = () => {
         let tempState: LiveMatchState = JSON.parse(JSON.stringify(liveMatch));
         while(tempState.status !== 'full-time') {
@@ -213,6 +218,16 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
         return (
             <div className="bg-gray-800 rounded-lg flex flex-col h-full overflow-hidden min-h-0">
                 <div className="p-2">
+                    {liveMatch.status !== 'full-time' && (
+                         <div className="mb-2">
+                            <h4 className="font-bold text-white mb-1 text-center text-xs">Sim Speed</h4>
+                            <div className="grid grid-cols-3 gap-1">
+                                <button onClick={() => setSimSpeed(2000)} className={`p-1 rounded text-xs ${simSpeed === 2000 ? 'bg-green-600' : 'bg-gray-700'}`}>Slow</button>
+                                <button onClick={() => setSimSpeed(1000)} className={`p-1 rounded text-xs ${simSpeed === 1000 ? 'bg-green-600' : 'bg-gray-700'}`}>Normal</button>
+                                <button onClick={() => setSimSpeed(500)} className={`p-1 rounded text-xs ${simSpeed === 500 ? 'bg-green-600' : 'bg-gray-700'}`}>Fast</button>
+                            </div>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                         {liveMatch.status !== 'full-time' && (
                             liveMatch.isPaused
@@ -276,7 +291,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                     )}
                     {activeTab === 'stats' && (
                         <div className="text-sm space-y-4">
-                            <StatBar label="Possession" home={50} away={50} />
+                            <StatBar label="Possession" home={homePossession} away={awayPossession} />
                             <StatBar label="Shots" home={liveMatch.homeStats.shots} away={liveMatch.awayStats.shots} />
                             <StatBar label="On Target" home={liveMatch.homeStats.shotsOnTarget} away={liveMatch.awayStats.shotsOnTarget} />
                             <StatBar label="xG" home={liveMatch.homeStats.xG} away={liveMatch.awayStats.xG} isXG />
@@ -302,7 +317,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
 
             <main className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 overflow-hidden min-h-0">
                 <div className="lg:col-span-2 relative bg-green-800 bg-center bg-no-repeat rounded-lg shadow-inner min-h-0" ref={pitchRef} style={{ backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' stroke='%2338A169' stroke-width='4' stroke-dasharray='6%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e")`}}>
-                    {[...playerTeam, ...opponentTeam].map((player) => {
+                    {playersToRender.map((player) => {
                         const isPlayerTeam = playerTeam.some(p => p.id === player.id);
                         const displayPos = {
                             x: isPlayerTeam ? (playerTeamIsHome ? player.currentPosition.x : 100 - player.currentPosition.x) : (playerTeamIsHome ? 100 - player.currentPosition.x : player.currentPosition.x),

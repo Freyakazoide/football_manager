@@ -31,7 +31,7 @@ const rehydratePlayers = (players: Record<number, Player>): Record<number, Playe
     return players;
 }
 
-const addNewsItem = (state: GameState, headline: string, content: string, type: NewsItem['type'], relatedEntityId?: number): GameState => {
+const addNewsItem = (state: GameState, headline: string, content: string, type: NewsItem['type'], relatedEntityId?: number, matchStatsSummary?: Match): GameState => {
     const newNewsItem: NewsItem = {
         id: state.nextNewsId,
         date: new Date(state.currentDate),
@@ -40,6 +40,7 @@ const addNewsItem = (state: GameState, headline: string, content: string, type: 
         type,
         relatedEntityId,
         isRead: false,
+        matchStatsSummary,
     };
     return {
         ...state,
@@ -158,7 +159,15 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     if (result.injuryEvents) {
                         result.injuryEvents.forEach(injury => {
                             const player = newState.players[injury.playerId];
-                            if (player) player.injury = { type: 'Match Injury', returnDate: new Date(injury.returnDate) };
+                            if (player) {
+                                player.injury = { type: 'Match Injury', returnDate: new Date(injury.returnDate) };
+                                if (player.clubId === playerClubId) {
+                                    const diffTime = Math.abs(injury.returnDate.getTime() - result.date.getTime());
+                                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                    const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
+                                    newState = addNewsItem(newState, `Player Injured: ${player.name}`, `${player.name} picked up an injury in the match against ${player.clubId === result.homeTeamId ? newState.clubs[result.awayTeamId].name : newState.clubs[result.homeTeamId].name}.\n\nHe is expected to be out for ${durationText}.`, 'injury_report_player', player.id);
+                                }
+                            }
                         });
                     }
                     if (result.disciplinaryEvents) {
@@ -170,6 +179,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                                 const returnDate = new Date(result.date);
                                 returnDate.setDate(returnDate.getDate() + 8);
                                 player.suspension = { returnDate };
+                                if (player.clubId === playerClubId) {
+                                     newState = addNewsItem(newState, `Player Suspended: ${player.name}`, `${player.name} received a red card and will be suspended for the next match.`, 'suspension_report_player', player.id);
+                                }
                             } else if (card.type === 'yellow') {
                                 player.seasonYellowCards = (player.seasonYellowCards || 0) + 1;
                                 if (player.seasonYellowCards >= 3) {
@@ -177,6 +189,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                                     returnDate.setDate(returnDate.getDate() + 8);
                                     player.suspension = { returnDate };
                                     player.seasonYellowCards = 0;
+                                    if (player.clubId === playerClubId) {
+                                         newState = addNewsItem(newState, `Player Suspended: ${player.name}`, `${player.name} has accumulated 3 yellow cards and will be suspended for the next match.`, 'suspension_report_player', player.id);
+                                    }
                                 }
                             }
                         });
@@ -221,8 +236,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             let newState = { ...state };
             
-            const { headline, content } = generateNarrativeReport(state.matchDayResults.playerResult, state.playerClubId, state.clubs, state.players);
-            newState = addNewsItem(newState, headline, content, 'match_summary_player', state.matchDayResults.playerResult.id);
+            const { headline, content, matchStatsSummary } = generateNarrativeReport(state.matchDayResults.playerResult, state.playerClubId, state.clubs, state.players);
+            newState = addNewsItem(newState, headline, content, 'match_summary_player', state.matchDayResults.playerResult.id, matchStatsSummary);
 
             return { ...newState, matchDayResults: null };
         }
@@ -432,6 +447,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 awayStats: { ...finalMatchState.awayStats, possession: awayPossession },
                 log: finalMatchState.log,
                 playerStats: collectedPlayerStats,
+                homeLineup: finalMatchState.initialHomeLineup,
+                awayLineup: finalMatchState.initialAwayLineup,
                 disciplinaryEvents: [],
                 injuryEvents: [],
             };
@@ -440,6 +457,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             let updatedPlayers = rehydratePlayers(clonedPlayers);
             const allPlayersInMatchLive = [...finalMatchState.homeLineup, ...finalMatchState.awayLineup, ...finalMatchState.homeBench, ...finalMatchState.awayBench].filter(Boolean) as LivePlayer[];
 
+            let tempState = { ...state };
+            
             for (const livePlayer of allPlayersInMatchLive) {
                 const playerToUpdate = updatedPlayers[livePlayer.id];
                 if (!playerToUpdate) continue;
@@ -455,11 +474,20 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     const returnDate = new Date(finalResult.date); returnDate.setDate(returnDate.getDate() + 8);
                     playerToUpdate.suspension = { returnDate };
                     finalResult.disciplinaryEvents?.push({ playerId: livePlayer.id, type: 'red' });
+                    if (playerToUpdate.clubId === state.playerClubId) {
+                        tempState = addNewsItem(tempState, `Player Suspended: ${playerToUpdate.name}`, `${playerToUpdate.name} received a red card and will be suspended for the next match.`, 'suspension_report_player', playerToUpdate.id);
+                    }
                 }
                 if (livePlayer.isInjured) {
                     const returnDate = new Date(finalResult.date); returnDate.setDate(returnDate.getDate() + (Math.floor(Math.random() * 21) + 7));
                     playerToUpdate.injury = { type: 'Match Injury', returnDate };
                     finalResult.injuryEvents?.push({ playerId: livePlayer.id, returnDate });
+                    if (playerToUpdate.clubId === state.playerClubId) {
+                        const diffTime = Math.abs(returnDate.getTime() - finalResult.date.getTime());
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
+                        tempState = addNewsItem(tempState, `Player Injured: ${playerToUpdate.name}`, `${playerToUpdate.name} picked up an injury in the match against ${playerToUpdate.clubId === finalResult.homeTeamId ? state.clubs[finalResult.awayTeamId].name : state.clubs[finalResult.homeTeamId].name}.\n\nHe is expected to be out for ${durationText}.`, 'injury_report_player', playerToUpdate.id);
+                    }
                 }
 
                 if (livePlayer.yellowCardCount > 0) {
@@ -472,6 +500,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         returnDate.setDate(returnDate.getDate() + 8);
                         playerToUpdate.suspension = { returnDate };
                         playerToUpdate.seasonYellowCards = 0; // Reset after suspension
+                        if (playerToUpdate.clubId === state.playerClubId) {
+                            tempState = addNewsItem(tempState, `Player Suspended: ${playerToUpdate.name}`, `${playerToUpdate.name} has accumulated 3 yellow cards and will be suspended for the next match.`, 'suspension_report_player', playerToUpdate.id);
+                        }
                     }
                 }
             }
@@ -489,7 +520,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const statsUpdatedPlayers = updatePlayerStatsFromMatchResult(updatedPlayers, finalResult, season, finalMatchState);
 
             return { 
-                ...state, 
+                ...tempState, 
                 liveMatch: null, 
                 schedule: newSchedule, 
                 leagueTable: newLeagueTable,

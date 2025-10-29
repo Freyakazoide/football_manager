@@ -28,13 +28,13 @@ const templates = {
 const pickRandomTemplate = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
 
 
-export const generateNarrativeReport = (match: Match, playerClubId: number | null, clubs: Record<number, Club>, players: Record<number, Player>): { headline: string, content: string } => {
+export const generateNarrativeReport = (match: Match, playerClubId: number | null, clubs: Record<number, Club>, players: Record<number, Player>): { headline: string, content: string, matchStatsSummary: Match } => {
     const homeTeam = clubs[match.homeTeamId];
     const awayTeam = clubs[match.awayTeamId];
     const { homeScore, awayScore, homeStats, awayStats } = match;
 
     if (homeScore === undefined || awayScore === undefined || !homeStats || !awayStats) {
-        return { headline: "Match Report", content: "Match details are unavailable." };
+        return { headline: "Match Report", content: "Match details are unavailable.", matchStatsSummary: match };
     }
 
     const playerTeam = playerClubId === homeTeam.id ? homeTeam : playerClubId === awayTeam.id ? awayTeam : null;
@@ -122,10 +122,10 @@ export const generateNarrativeReport = (match: Match, playerClubId: number | nul
     }
 
     if (Object.keys(yellowCards).length > 0) {
-        eventsContent += `Yellow Cards: ${Object.keys(yellowCards).map(id => `${players[Number(id)].name}`).join(', ')}\n`;
+        eventsContent += `Yellow Cards: ${Object.keys(yellowCards).map(id => `${players[Number(id)].name} (${clubs[players[Number(id)].clubId].name})`).join(', ')}\n`;
     }
     if (redCards.length > 0) {
-        eventsContent += `Red Cards: ${redCards.map(id => `${players[id].name}`).join(', ')}\n`;
+        eventsContent += `Red Cards: ${redCards.map(id => `${players[id].name} (${clubs[players[id].clubId].name})`).join(', ')}\n`;
     }
     if (match.injuryEvents && match.injuryEvents.length > 0) {
          match.injuryEvents.forEach(event => {
@@ -134,22 +134,13 @@ export const generateNarrativeReport = (match: Match, playerClubId: number | nul
             const diffTime = Math.abs(returnDate.getTime() - matchDate.getTime());
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
-            eventsContent += `Injury: ${players[event.playerId].name} is expected to be out for ${durationText}.\n`;
+            eventsContent += `Injury: ${players[event.playerId].name} (${clubs[players[event.playerId].clubId].name}) is expected to be out for ${durationText}.\n`;
         });
     }
 
     if (eventsContent) {
         finalContent += `\n\n---\nDisciplinary & Injuries:\n${eventsContent}`;
     }
-
-    // Add stats block
-    finalContent += `\n\n---\nMatch Statistics:\n`;
-    finalContent += `             ${homeTeam.name.substring(0,3).toUpperCase()} - ${awayTeam.name.substring(0,3).toUpperCase()}\n`;
-    finalContent += `Possession:    ${Math.round(homeStats.possession)}% - ${Math.round(awayStats.possession)}%\n`;
-    finalContent += `Shots:         ${homeStats.shots} - ${awayStats.shots}\n`;
-    finalContent += `On Target:     ${homeStats.shotsOnTarget} - ${awayStats.shotsOnTarget}\n`;
-    finalContent += `Expected Goals: ${homeStats.xG.toFixed(2)} - ${awayStats.xG.toFixed(2)}`;
-
-
-    return { headline: finalHeadline, content: finalContent };
+    
+    return { headline: finalHeadline, content: finalContent, matchStatsSummary: match };
 };

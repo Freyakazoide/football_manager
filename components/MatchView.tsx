@@ -4,6 +4,14 @@ import { Action } from '../services/reducerTypes';
 import { runMinute } from '../services/matchEngine';
 import { getUnitRatings } from '../services/simulationService';
 
+const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
+    if (role === 'GK') return 'GK';
+    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(role)) return 'DEF';
+    if (['DM', 'CM', 'LM', 'RM', 'AM'].includes(role)) return 'MID';
+    return 'FWD';
+};
+
+
 const getRoleFromPosition = (x: number, y: number): PlayerRole => {
     if (y > 90) return 'GK';
     if (y > 65) {
@@ -244,7 +252,58 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
 
     const handleSimulateToEnd = () => {
         let tempState: LiveMatchState = JSON.parse(JSON.stringify(liveMatch));
-        while(tempState.status !== 'full-time') {
+        
+        while (tempState.status !== 'full-time') {
+            if (tempState.isPaused && tempState.forcedSubstitution) {
+                const { teamId, playerOutId } = tempState.forcedSubstitution;
+                const playerClubIsHome = tempState.homeTeamId === gameState.playerClubId;
+                const isPlayerTeamSub = (playerClubIsHome && tempState.homeTeamId === teamId) || (!playerClubIsHome && tempState.awayTeamId === teamId);
+
+                if (isPlayerTeamSub) {
+                    const isHome = teamId === tempState.homeTeamId;
+                    const lineup = isHome ? tempState.homeLineup : tempState.awayLineup;
+                    const bench = isHome ? tempState.homeBench : tempState.awayBench;
+                    const subsMade = isHome ? tempState.homeSubsMade : tempState.awaySubsMade;
+                    const playerOut = lineup.find(p => p.id === playerOutId);
+
+                    if (playerOut && subsMade < 5) {
+                        const playerOutRoleCat = getRoleCategory(playerOut.role);
+                        const samePosReplacement = bench.find(p => getRoleCategory(p.role) === playerOutRoleCat && !p.isSentOff && !p.isInjured);
+                        const anyReplacement = bench.find(p => !p.isSentOff && !p.isInjured);
+                        const replacement = samePosReplacement || anyReplacement;
+
+                        if (replacement) {
+                            const playerOutIndex = lineup.findIndex(p => p.id === playerOutId);
+                            const playerInIndex = bench.findIndex(p => p.id === replacement.id);
+                            
+                            if (playerOutIndex !== -1 && playerInIndex !== -1) {
+                                const playerOutData = lineup[playerOutIndex];
+                                const playerInData = bench[playerInIndex];
+
+                                const newPlayerIn: LivePlayer = {
+                                    ...playerInData,
+                                    role: playerOutData.role,
+                                    instructions: { ...playerOutData.instructions },
+                                    currentPosition: { ...playerOutData.currentPosition },
+                                    stats: { ...playerInData.stats }
+                                };
+
+                                lineup[playerOutIndex] = newPlayerIn;
+                                bench.splice(playerInIndex, 1);
+                                
+                                if (isHome) tempState.homeSubsMade++;
+                                else tempState.awaySubsMade++;
+
+                                const teamName = isHome ? tempState.homeTeamName : tempState.awayTeamName;
+                                tempState.log.push({ minute: tempState.minute, type: 'Sub', text: `(Assistant) ${newPlayerIn.name} comes on for the injured ${playerOutData.name}.` });
+                            }
+                        }
+                    }
+                }
+                tempState.forcedSubstitution = null;
+                tempState.isPaused = false;
+            }
+
             const { newState } = runMinute(tempState);
             tempState = newState;
         }

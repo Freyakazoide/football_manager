@@ -98,7 +98,7 @@ export interface LeagueEntry {
 }
 
 export interface PlayerMatchStats {
-    shots: number; goals: number; assists: number; passes: number; keyPasses: number;
+    shots: number; goals: number; assists: number; keyPasses: number; passes: number;
     tackles: number; dribbles: number; rating: number;
 }
 
@@ -140,9 +140,10 @@ export interface NewsItem {
     date: Date;
     headline: string;
     content: string;
-    type: 'round_summary' | 'match_summary_player' | 'transfer_completed';
+    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player';
     relatedEntityId?: number;
     isRead: boolean;
+    matchStatsSummary?: Match;
 }
 
 export interface MatchDayInfo {
@@ -189,6 +190,8 @@ export interface LiveMatchState {
     awayPossessionMinutes: number;
     initialHomeLineupIds: number[];
     initialAwayLineupIds: number[];
+    initialHomeLineup?: (LineupPlayer | null)[];
+    initialAwayLineup?: (LineupPlayer | null)[];
     lastPasser: { teamId: number, playerId: number } | null;
     forcedSubstitution: {
         teamId: number;

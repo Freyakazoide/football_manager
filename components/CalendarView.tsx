@@ -6,6 +6,28 @@ interface CalendarViewProps {
     onMatchClick: (match: Match) => void;
 }
 
+const GraphicalStatBar: React.FC<{ label: string; homeValue: number; awayValue: number; isPercentage?: boolean; isXG?: boolean }> = ({ label, homeValue, awayValue, isPercentage, isXG }) => {
+    const total = homeValue + awayValue;
+    const homePercent = total > 0 ? (homeValue / total) * 100 : 50;
+    const homeDisplay = isPercentage ? `${Math.round(homeValue)}%` : isXG ? homeValue.toFixed(2) : Math.round(homeValue);
+    const awayDisplay = isPercentage ? `${Math.round(awayValue)}%` : isXG ? awayValue.toFixed(2) : Math.round(awayValue);
+
+    return (
+        <div>
+            <div className="flex justify-between items-center text-sm mb-1 px-1">
+                <span className="font-bold font-mono text-xs">{homeDisplay}</span>
+                <span className="text-gray-400 text-xs">{label}</span>
+                <span className="font-bold font-mono text-xs">{awayDisplay}</span>
+            </div>
+            <div className="flex w-full h-1.5 bg-gray-900 rounded">
+                <div className="bg-blue-500 rounded-l" style={{ width: `${homePercent}%` }}></div>
+                <div className="bg-red-500 rounded-r" style={{ width: `${100 - homePercent}%` }}></div>
+            </div>
+        </div>
+    );
+};
+
+
 const MatchRow: React.FC<{ match: Match, gameState: GameState, onMatchClick: (match: Match) => void }> = ({ match, gameState, onMatchClick }) => {
     const playerClubId = gameState.playerClubId;
     const homeTeam = gameState.clubs[match.homeTeamId];
@@ -32,22 +54,10 @@ const MatchRow: React.FC<{ match: Match, gameState: GameState, onMatchClick: (ma
                 </div>
             </div>
             {hasResult && match.homeStats && match.awayStats && (
-                 <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-600 flex justify-around text-center">
-                    <div>
-                        <div>{match.homeStats.possession}%</div>
-                        <div className="font-bold">Possession</div>
-                        <div>{match.awayStats.possession}%</div>
-                    </div>
-                     <div>
-                        <div>{match.homeStats.shots}</div>
-                        <div className="font-bold">Shots</div>
-                        <div>{match.awayStats.shots}</div>
-                    </div>
-                     <div>
-                        <div>{match.homeStats.xG?.toFixed(2)}</div>
-                        <div className="font-bold">xG</div>
-                        <div>{match.awayStats.xG?.toFixed(2)}</div>
-                    </div>
+                 <div className="mt-2 pt-2 border-t border-gray-600 space-y-2">
+                    <GraphicalStatBar label="Possession" homeValue={match.homeStats.possession} awayValue={match.awayStats.possession} isPercentage />
+                    <GraphicalStatBar label="Shots" homeValue={match.homeStats.shots} awayValue={match.awayStats.shots} />
+                    <GraphicalStatBar label="xG" homeValue={match.homeStats.xG} awayValue={match.awayStats.xG} isXG />
                 </div>
             )}
         </div>

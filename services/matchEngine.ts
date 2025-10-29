@@ -79,6 +79,8 @@ export const createLiveMatchState = (matchInfo: MatchDayInfo, clubs: Record<numb
         awayPossessionMinutes: 0,
         initialHomeLineupIds: homeLineup.map(p => p.id),
         initialAwayLineupIds: awayLineup.map(p => p.id),
+        initialHomeLineup: homeTeam.tactics.lineup,
+        initialAwayLineup: awayTeam.tactics.lineup,
         lastPasser: null,
         forcedSubstitution: null,
     };

@@ -10,7 +10,19 @@ export enum View {
     NEWS = 'News',
 }
 
-export type PlayerRole = 'GK' | 'CB' | 'LB' | 'RB' | 'LWB' | 'RWB' | 'DM' | 'CM' | 'LM' | 'RM' | 'AM' | 'LW' | 'RW' | 'ST' | 'CF';
+export type PlayerRole =
+    // Goalkeeper
+    | 'Goalkeeper' | 'Sweeper Keeper'
+    // Defenders
+    | 'Central Defender' | 'Ball-Playing Defender' | 'Full-Back' | 'Wing-Back' | 'Inverted Wing-Back' | 'Libero'
+    // Midfielders
+    | 'Defensive Midfielder' | 'Central Midfielder' | 'Ball Winning Midfielder' | 'Box-To-Box Midfielder'
+    | 'Deep Lying Playmaker' | 'Roaming Playmaker' | 'Mezzala' | 'Carrilero' | 'Wide Midfielder' | 'Wide Playmaker'
+    // Attacking Midfielders
+    | 'Attacking Midfielder' | 'Advanced Playmaker' | 'Shadow Striker' | 'Trequartista' | 'False Nine'
+    // Strikers
+    | 'Striker' | 'Advanced Forward' | 'Complete Forward' | 'Poacher' | 'Deep-Lying Forward';
+
 export type Mentality = 'Defensive' | 'Balanced' | 'Offensive';
 
 export enum ShootingInstruction { Normal = 'Normal', ShootMoreOften = 'Shoot More Often', ShootLessOften = 'Shoot Less Often' }

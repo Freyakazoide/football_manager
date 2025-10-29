@@ -9,35 +9,45 @@ interface TacticsViewProps {
 
 const getRoleFromPosition = (x: number, y: number): PlayerRole => {
     // Y-axis: 0 is attacking goal, 100 is defending goal
-    if (y > 90) return 'GK';
+    // GK
+    if (y > 90) return 'Goalkeeper';
     
-    // Defensive Line
-    if (y > 70) { 
-        if (x < 25) return 'LB';
-        if (x > 75) return 'RB';
-        return 'CB';
-    }
+    // Sweeper / Libero
+    if (y > 85 && x > 35 && x < 65) return 'Libero';
 
-    // Wing-Back Line
+    // Central Defense
+    if (y > 68 && x > 30 && x < 70) return 'Central Defender';
+
+    // Full-Backs / Wing-Backs
     if (y > 55) {
-        if (x < 25) return 'LWB';
-        if (x > 75) return 'RWB';
+        if (x < 20) return 'Wing-Back'; // More advanced
+        if (x > 80) return 'Wing-Back'; // More advanced
+        if (x < 30) return 'Full-Back';
+        if (x > 70) return 'Full-Back';
+    }
+    
+    // Defensive Midfield
+    if (y > 60 && x > 30 && x < 70) return 'Defensive Midfielder';
+
+    // Central Midfield
+    if (y > 40 && x > 35 && x < 65) return 'Central Midfielder';
+
+    // Wide Midfield
+    if (y > 35) {
+        if (x < 25) return 'Wide Midfielder';
+        if (x > 75) return 'Wide Midfielder';
     }
 
-    // Midfield Line
-    if (y > 30) {
-        if (x < 30) return 'LM';
-        if (x > 70) return 'RM';
-        if (y > 60) return 'DM';
-        if (y < 45) return 'AM';
-        return 'CM';
-    }
+    // Attacking Midfield
+    if (y > 25 && y < 45 && x > 30 && x < 70) return 'Attacking Midfielder';
 
-    // Attacking Line
-    if (x < 35) return 'LW';
-    if (x > 65) return 'RW';
-    if (x > 40 && x < 60) return 'ST';
-    return 'CF';
+    // Forwards
+    if (y < 30 && x > 35 && x < 65) return 'Striker';
+    
+    // Fallbacks
+    if (y > 65) return 'Central Defender';
+    if (y > 35) return 'Central Midfielder';
+    return 'Striker';
 };
 
 
@@ -242,7 +252,7 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch }) => {
                                  onMouseDown={(e) => onPlayerMouseDown(e, index, 'lineup')}
                                  onClick={() => setSelectedPlayerId(lineupPlayer.playerId)}>
                                <div className={`relative w-12 h-12 flex items-center justify-center rounded-full font-bold text-sm text-white ${selectedPlayerId === player.id ? 'bg-yellow-500 ring-2 ring-white' : 'bg-blue-500'}`}>
-                                   {lineupPlayer.role}
+                                   {lineupPlayer.role.split(' ').map(w => w[0]).join('')}
                                </div>
                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-6 text-center text-xs font-semibold whitespace-nowrap">{player.name.split(' ')[1]}</div>
                             </div>
@@ -276,7 +286,7 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch }) => {
                                     return (
                                         <div key={index} onMouseDown={(e) => onPlayerMouseDown(e, index, 'bench')} className="bg-gray-700 p-2 rounded cursor-grab flex justify-between">
                                             <span>{player.name}</span>
-                                            <span className="text-gray-400">{player.naturalPosition}</span>
+                                            <span className="text-gray-400">{player.naturalPosition.split(' ').map(w=>w[0]).join('')}</span>
                                         </div>
                                     )
                                 })}

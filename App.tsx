@@ -20,8 +20,20 @@ import MatchReportModal from './components/MatchReportModal';
 import TeamView from './components/TeamView';
 
 const roleOrder: Record<PlayerRole, number> = {
-    'GK': 1, 'LB': 10, 'LWB': 11, 'CB': 12, 'RB': 13, 'RWB': 14, 'DM': 20, 'LM': 21, 
-    'CM': 22, 'RM': 23, 'AM': 24, 'LW': 30, 'ST': 31, 'CF': 32, 'RW': 33,
+    // GK
+    'Goalkeeper': 1, 'Sweeper Keeper': 2,
+    // DEF
+    'Libero': 10, 'Central Defender': 11, 'Ball-Playing Defender': 12,
+    'Full-Back': 13, 'Wing-Back': 14, 'Inverted Wing-Back': 15,
+    // MID
+    'Defensive Midfielder': 20, 'Deep Lying Playmaker': 21, 'Ball Winning Midfielder': 22,
+    'Carrilero': 23, 'Central Midfielder': 24, 'Box-To-Box Midfielder': 25, 'Roaming Playmaker': 26,
+    'Mezzala': 27, 'Wide Midfielder': 28, 'Wide Playmaker': 29,
+    // AM
+    'Attacking Midfielder': 30, 'Advanced Playmaker': 31, 'Trequartista': 32,
+    'Shadow Striker': 33,
+    // FWD
+    'False Nine': 40, 'Deep-Lying Forward': 41, 'Poacher': 42, 'Advanced Forward': 43, 'Striker': 44, 'Complete Forward': 45,
 };
 
 const getMoraleIcon = (morale: number): string => {

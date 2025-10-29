@@ -11,24 +11,56 @@ const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.lengt
 
 // --- NEW POSITIONAL FAMILIARITY LOGIC ---
 
-const ALL_ROLES: PlayerRole[] = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'DM', 'CM', 'LM', 'RM', 'AM', 'LW', 'RW', 'ST', 'CF'];
+export const ALL_ROLES: PlayerRole[] = [
+    'Goalkeeper', 'Sweeper Keeper', 'Central Defender', 'Ball-Playing Defender', 'Full-Back', 'Wing-Back', 'Inverted Wing-Back', 'Libero',
+    'Defensive Midfielder', 'Central Midfielder', 'Ball Winning Midfielder', 'Box-To-Box Midfielder', 'Deep Lying Playmaker', 'Roaming Playmaker',
+    'Mezzala', 'Carrilero', 'Wide Midfielder', 'Wide Playmaker', 'Attacking Midfielder', 'Advanced Playmaker', 'Shadow Striker',
+    'Trequartista', 'False Nine', 'Striker', 'Advanced Forward', 'Complete Forward', 'Poacher', 'Deep-Lying Forward'
+];
+
+export const ROLE_DEFINITIONS: Record<PlayerRole, { category: 'GK' | 'DEF' | 'MID' | 'FWD' }> = {
+    'Goalkeeper': { category: 'GK' }, 'Sweeper Keeper': { category: 'GK' },
+    'Central Defender': { category: 'DEF' }, 'Ball-Playing Defender': { category: 'DEF' }, 'Libero': { category: 'DEF' },
+    'Full-Back': { category: 'DEF' }, 'Wing-Back': { category: 'DEF' }, 'Inverted Wing-Back': { category: 'DEF' },
+    'Defensive Midfielder': { category: 'MID' }, 'Central Midfielder': { category: 'MID' }, 'Ball Winning Midfielder': { category: 'MID' },
+    'Box-To-Box Midfielder': { category: 'MID' }, 'Deep Lying Playmaker': { category: 'MID' }, 'Roaming Playmaker': { category: 'MID' },
+    'Mezzala': { category: 'MID' }, 'Carrilero': { category: 'MID' }, 'Wide Midfielder': { category: 'MID' }, 'Wide Playmaker': { category: 'MID' },
+    'Attacking Midfielder': { category: 'FWD' }, 'Advanced Playmaker': { category: 'FWD' }, 'Shadow Striker': { category: 'FWD' },
+    'Trequartista': { category: 'FWD' }, 'False Nine': { category: 'FWD' },
+    'Striker': { category: 'FWD' }, 'Advanced Forward': { category: 'FWD' }, 'Complete Forward': { category: 'FWD' },
+    'Poacher': { category: 'FWD' }, 'Deep-Lying Forward': { category: 'FWD' },
+};
+
 
 const FAMILIARITY_MAP: Record<PlayerRole, Partial<Record<PlayerRole, number>>> = {
-    GK: { GK: 100 },
-    CB: { CB: 100, DM: 60, RB: 50, LB: 50 },
-    LB: { LB: 100, LWB: 85, LM: 70, CB: 50, RB: 40 },
-    RB: { RB: 100, RWB: 85, RM: 70, CB: 50, LB: 40 },
-    LWB: { LWB: 100, LB: 85, LM: 80, LW: 65 },
-    RWB: { RWB: 100, RB: 85, RM: 80, RW: 65 },
-    DM: { DM: 100, CM: 80, CB: 70 },
-    CM: { CM: 100, DM: 80, AM: 80, LM: 60, RM: 60 },
-    LM: { LM: 100, LWB: 75, LW: 85, CM: 65, AM: 60 },
-    RM: { RM: 100, RWB: 75, RW: 85, CM: 65, AM: 60 },
-    AM: { AM: 100, CM: 80, ST: 70, CF: 75, LW: 60, RW: 60 },
-    LW: { LW: 100, LM: 85, AM: 70, ST: 65 },
-    RW: { RW: 100, RM: 85, AM: 70, ST: 65 },
-    ST: { ST: 100, CF: 85, AM: 60 },
-    CF: { CF: 100, ST: 85, AM: 70 },
+    'Goalkeeper': { 'Goalkeeper': 100, 'Sweeper Keeper': 85 },
+    'Sweeper Keeper': { 'Sweeper Keeper': 100, 'Goalkeeper': 85, 'Libero': 50 },
+    'Central Defender': { 'Central Defender': 100, 'Ball-Playing Defender': 90, 'Libero': 70, 'Defensive Midfielder': 60, 'Full-Back': 50 },
+    'Ball-Playing Defender': { 'Ball-Playing Defender': 100, 'Central Defender': 90, 'Libero': 75, 'Defensive Midfielder': 65 },
+    'Libero': { 'Libero': 100, 'Sweeper Keeper': 60, 'Central Defender': 80, 'Defensive Midfielder': 70 },
+    'Full-Back': { 'Full-Back': 100, 'Wing-Back': 90, 'Inverted Wing-Back': 80, 'Wide Midfielder': 65, 'Central Defender': 50 },
+    'Wing-Back': { 'Wing-Back': 100, 'Full-Back': 90, 'Wide Midfielder': 80 },
+    'Inverted Wing-Back': { 'Inverted Wing-Back': 100, 'Full-Back': 85, 'Defensive Midfielder': 60 },
+    'Defensive Midfielder': { 'Defensive Midfielder': 100, 'Central Midfielder': 80, 'Deep Lying Playmaker': 85, 'Ball Winning Midfielder': 85, 'Central Defender': 70 },
+    'Central Midfielder': { 'Central Midfielder': 100, 'Box-To-Box Midfielder': 90, 'Mezzala': 85, 'Carrilero': 85, 'Defensive Midfielder': 80, 'Attacking Midfielder': 80 },
+    'Ball Winning Midfielder': { 'Ball Winning Midfielder': 100, 'Defensive Midfielder': 90, 'Central Midfielder': 85, 'Carrilero': 70 },
+    'Box-To-Box Midfielder': { 'Box-To-Box Midfielder': 100, 'Central Midfielder': 90, 'Roaming Playmaker': 80, 'Mezzala': 75 },
+    'Deep Lying Playmaker': { 'Deep Lying Playmaker': 100, 'Defensive Midfielder': 90, 'Central Midfielder': 80, 'Roaming Playmaker': 70 },
+    'Roaming Playmaker': { 'Roaming Playmaker': 100, 'Central Midfielder': 85, 'Advanced Playmaker': 80, 'Mezzala': 75 },
+    'Mezzala': { 'Mezzala': 100, 'Central Midfielder': 85, 'Attacking Midfielder': 80, 'Roaming Playmaker': 75 },
+    'Carrilero': { 'Carrilero': 100, 'Central Midfielder': 85, 'Ball Winning Midfielder': 75 },
+    'Wide Midfielder': { 'Wide Midfielder': 100, 'Wing-Back': 75, 'Wide Playmaker': 85, 'Attacking Midfielder': 60 },
+    'Wide Playmaker': { 'Wide Playmaker': 100, 'Wide Midfielder': 85, 'Advanced Playmaker': 75 },
+    'Attacking Midfielder': { 'Attacking Midfielder': 100, 'Advanced Playmaker': 90, 'Shadow Striker': 85, 'Trequartista': 80, 'Central Midfielder': 80 },
+    'Advanced Playmaker': { 'Advanced Playmaker': 100, 'Attacking Midfielder': 90, 'Trequartista': 80, 'Wide Playmaker': 70 },
+    'Shadow Striker': { 'Shadow Striker': 100, 'Attacking Midfielder': 85, 'Advanced Forward': 80, 'Poacher': 70 },
+    'Trequartista': { 'Trequartista': 100, 'Advanced Playmaker': 85, 'False Nine': 80, 'Deep-Lying Forward': 70 },
+    'False Nine': { 'False Nine': 100, 'Trequartista': 80, 'Deep-Lying Forward': 85, 'Striker': 70 },
+    'Striker': { 'Striker': 100, 'Advanced Forward': 90, 'Complete Forward': 90, 'Poacher': 85, 'Deep-Lying Forward': 85 },
+    'Advanced Forward': { 'Advanced Forward': 100, 'Striker': 90, 'Poacher': 80 },
+    'Complete Forward': { 'Complete Forward': 100, 'Striker': 90, 'Deep-Lying Forward': 80 },
+    'Poacher': { 'Poacher': 100, 'Striker': 85, 'Advanced Forward': 80 },
+    'Deep-Lying Forward': { 'Deep-Lying Forward': 100, 'Striker': 85, 'False Nine': 80 },
 };
 
 const generateFamiliarity = (naturalRole: PlayerRole): Record<PlayerRole, number> => {
@@ -39,11 +71,8 @@ const generateFamiliarity = (naturalRole: PlayerRole): Record<PlayerRole, number
     return familiarity as Record<PlayerRole, number>;
 };
 
-const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
-    if (role === 'GK') return 'GK';
-    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(role)) return 'DEF';
-    if (['DM', 'CM', 'LM', 'RM', 'AM'].includes(role)) return 'MID';
-    return 'FWD';
+export const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
+    return ROLE_DEFINITIONS[role]?.category || 'MID';
 };
 
 // --- END NEW LOGIC ---
@@ -85,17 +114,17 @@ const defaultInstructions: PlayerInstructions = {
 };
 
 const defaultPositions442: { position: { x: number, y: number }, role: PlayerRole }[] = [
-    { position: { x: 50, y: 95 }, role: 'GK' },
-    { position: { x: 20, y: 75 }, role: 'LB' },
-    { position: { x: 40, y: 78 }, role: 'CB' },
-    { position: { x: 60, y: 78 }, role: 'CB' },
-    { position: { x: 80, y: 75 }, role: 'RB' },
-    { position: { x: 20, y: 50 }, role: 'LM' },
-    { position: { x: 40, y: 55 }, role: 'CM' },
-    { position: { x: 60, y: 55 }, role: 'CM' },
-    { position: { x: 80, y: 50 }, role: 'RM' },
-    { position: { x: 40, y: 25 }, role: 'ST' },
-    { position: { x: 60, y: 25 }, role: 'ST' },
+    { position: { x: 50, y: 95 }, role: 'Goalkeeper' },
+    { position: { x: 20, y: 75 }, role: 'Full-Back' },
+    { position: { x: 40, y: 78 }, role: 'Central Defender' },
+    { position: { x: 60, y: 78 }, role: 'Central Defender' },
+    { position: { x: 80, y: 75 }, role: 'Full-Back' },
+    { position: { x: 20, y: 50 }, role: 'Wide Midfielder' },
+    { position: { x: 40, y: 55 }, role: 'Central Midfielder' },
+    { position: { x: 60, y: 55 }, role: 'Central Midfielder' },
+    { position: { x: 80, y: 50 }, role: 'Wide Midfielder' },
+    { position: { x: 40, y: 25 }, role: 'Striker' },
+    { position: { x: 60, y: 25 }, role: 'Striker' },
 ];
 
 export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'transferResult' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults'> => {
@@ -126,10 +155,10 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
         });
     }
 
-    const GK_ROLES: PlayerRole[] = ['GK'];
-    const DEF_ROLES: PlayerRole[] = ['CB', 'LB', 'RB', 'CB'];
-    const MID_ROLES: PlayerRole[] = ['DM', 'CM', 'LM', 'RM', 'AM', 'CM'];
-    const FWD_ROLES: PlayerRole[] = ['ST', 'CF', 'LW', 'RW'];
+    const GK_ROLES: PlayerRole[] = ['Goalkeeper', 'Sweeper Keeper'];
+    const DEF_ROLES: PlayerRole[] = ['Central Defender', 'Ball-Playing Defender', 'Full-Back', 'Wing-Back'];
+    const MID_ROLES: PlayerRole[] = ['Defensive Midfielder', 'Central Midfielder', 'Ball Winning Midfielder', 'Box-To-Box Midfielder', 'Wide Midfielder'];
+    const FWD_ROLES: PlayerRole[] = ['Attacking Midfielder', 'Striker', 'Advanced Forward', 'Poacher'];
 
     for (let clubId = 1; clubId <= NUM_CLUBS; clubId++) {
         const clubPlayers: Player[] = [];

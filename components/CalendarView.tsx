@@ -85,7 +85,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({ gameState, onMatchClick }) 
 
     const allRoundDates = useMemo(() => {
         const uniqueDates = [...new Set(gameState.schedule.map(m => new Date(m.date).toDateString()))];
-        uniqueDates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+        // FIX: Explicitly type sort callback parameters to resolve type inference issue.
+        uniqueDates.sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime());
         return uniqueDates;
     }, [gameState.schedule]);
 

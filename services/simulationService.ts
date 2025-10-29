@@ -1,13 +1,7 @@
 import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats } from '../types';
+import { getRoleCategory } from './database';
 
 const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
-
-const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
-    if (role === 'GK') return 'GK';
-    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(role)) return 'DEF';
-    if (['DM', 'CM', 'LM', 'RM', 'AM'].includes(role)) return 'MID';
-    return 'FWD';
-};
 
 const getPositionalModifier = (familiarity: number): number => 0.5 + (familiarity / 200);
 
@@ -114,7 +108,8 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
                 if(isBigChance) attackStats.bigChances++;
 
                 const shootingTeamLineup = hasPossession === 'home' ? homeLineup : awayLineup;
-                const potentialShooters = shootingTeamLineup.filter(p => p && ['ST', 'CF', 'LW', 'RW', 'AM'].includes(p.role));
+                // FIX: Use getRoleCategory to correctly identify forwards.
+                const potentialShooters = shootingTeamLineup.filter(p => p && getRoleCategory(p.role) === 'FWD');
                 const shooter = pickRandom(potentialShooters.length > 0 ? potentialShooters : shootingTeamLineup);
                 if (shooter) {
                     playerStats[shooter.playerId].shots++;
@@ -142,7 +137,8 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
         } else {
             defenseStats.tackles++;
             if (Math.random() < 0.2) { // Chance for a dribble on failed progression
-                const dribbler = pickRandom(attackingLineup.filter(p => ['CM', 'AM', 'LM', 'RM', 'LW', 'RW'].includes(p.role)));
+                // FIX: Use getRoleCategory to correctly identify midfielders.
+                const dribbler = pickRandom(attackingLineup.filter(p => p && getRoleCategory(p.role) === 'MID'));
                 if (dribbler) playerStats[dribbler.playerId].dribbles++;
             }
         }

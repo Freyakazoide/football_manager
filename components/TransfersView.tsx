@@ -1,17 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { GameState, Player, PlayerRole } from '../types';
+import { getRoleCategory } from '../services/database';
 
 interface TransfersViewProps {
     gameState: GameState;
     onPlayerClick: (player: Player) => void;
 }
-
-const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
-    if (role === 'GK') return 'GK';
-    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(role)) return 'DEF';
-    if (['DM', 'CM', 'LM', 'RM', 'AM'].includes(role)) return 'MID';
-    return 'FWD';
-};
 
 const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick }) => {
     const [searchTerm, setSearchTerm] = useState('');

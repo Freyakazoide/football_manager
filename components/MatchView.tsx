@@ -3,25 +3,53 @@ import { GameState, LivePlayer, Mentality, LiveMatchState, PlayerRole } from '..
 import { Action } from '../services/reducerTypes';
 import { runMinute } from '../services/matchEngine';
 import { getUnitRatings } from '../services/simulationService';
+import { ROLE_DEFINITIONS } from '../services/database';
 
 const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
-    if (role === 'GK') return 'GK';
-    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(role)) return 'DEF';
-    if (['DM', 'CM', 'LM', 'RM', 'AM'].includes(role)) return 'MID';
-    return 'FWD';
+    return ROLE_DEFINITIONS[role]?.category || 'MID';
 };
 
-
 const getRoleFromPosition = (x: number, y: number): PlayerRole => {
-    if (y > 90) return 'GK';
-    if (y > 65) {
-        if (x < 30) return 'LB'; if (x > 70) return 'RB'; return 'CB';
+    // Y-axis: 0 is attacking goal, 100 is defending goal
+    // GK
+    if (y > 90) return 'Goalkeeper';
+    
+    // Sweeper / Libero
+    if (y > 85 && x > 35 && x < 65) return 'Libero';
+
+    // Central Defense
+    if (y > 68 && x > 30 && x < 70) return 'Central Defender';
+
+    // Full-Backs / Wing-Backs
+    if (y > 55) {
+        if (x < 20) return 'Wing-Back'; // More advanced
+        if (x > 80) return 'Wing-Back'; // More advanced
+        if (x < 30) return 'Full-Back';
+        if (x > 70) return 'Full-Back';
     }
+    
+    // Defensive Midfield
+    if (y > 60 && x > 30 && x < 70) return 'Defensive Midfielder';
+
+    // Central Midfield
+    if (y > 40 && x > 35 && x < 65) return 'Central Midfielder';
+
+    // Wide Midfield
     if (y > 35) {
-        if (x < 30) return 'LM'; if (x > 70) return 'RM';
-        if (y > 55) return 'DM'; return 'CM';
+        if (x < 25) return 'Wide Midfielder';
+        if (x > 75) return 'Wide Midfielder';
     }
-    if (x < 35) return 'LW'; if (x > 65) return 'RW'; return 'ST';
+
+    // Attacking Midfield
+    if (y > 25 && y < 45 && x > 30 && x < 70) return 'Attacking Midfielder';
+
+    // Forwards
+    if (y < 30 && x > 35 && x < 65) return 'Striker';
+    
+    // Fallbacks
+    if (y > 65) return 'Central Defender';
+    if (y > 35) return 'Central Midfielder';
+    return 'Striker';
 };
 
 const ForcedSubstitutionModal: React.FC<{
@@ -113,7 +141,7 @@ const PreMatchPreview: React.FC<{ liveMatch: LiveMatchState, gameState: GameStat
                 {lineup.map(player => (
                     <li key={player.id} className="flex justify-between">
                         <span>{player.name}</span>
-                        <span className="font-mono text-gray-400">{player.role}</span>
+                        <span className="font-mono text-gray-400">{player.role.split(' ').map(w=>w[0]).join('')}</span>
                     </li>
                 ))}
             </ul>
@@ -405,7 +433,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                                     <h4 className="font-bold text-white mb-2">On Pitch <span className="text-gray-400 font-normal text-xs">(click to sub)</span></h4>
                                     {playerTeam.filter(p => !p.isSentOff && !p.isInjured).map(p => (
                                         <button key={p.id} onClick={() => setPlayerToSub(p.id)} className={`w-full text-left p-1.5 rounded mb-1 text-xs ${playerToSub === p.id ? 'bg-green-600' : 'bg-gray-700'}`}>
-                                            {p.name.split(' ')[1]} ({p.role}) <span className="text-gray-400">{Math.round(p.stamina)}%</span>
+                                            {p.name.split(' ')[1]} ({p.role.split(' ').map(w=>w[0]).join('')}) <span className="text-gray-400">{Math.round(p.stamina)}%</span>
                                         </button>
                                     ))}
                                 </div>
@@ -482,7 +510,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                                  style={{ top: `${displayPos.y}%`, left: `${displayPos.x}%` }}
                                  onMouseDown={(e) => isPlayerTeam && handlePlayerMouseDown(e, player)}>
                                <div className={`relative w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-lg border-2 ${isPlayerTeam ? `border-yellow-400 ${player.stamina > 60 ? 'bg-blue-600' : player.stamina > 30 ? 'bg-yellow-600' : 'bg-red-600'}` : 'border-gray-900 bg-gray-600'}`}>
-                                   {player.role}
+                                   {player.role.split(' ').map(w => w[0]).join('')}
                                    {liveMatch.ballCarrierId === player.id && <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-yellow-300 rounded-full border border-black animate-pulse" />}
                                    {/* FIX: Corrected property name from `yellowCards` to `yellowCardCount` to match the LivePlayer type definition. */}
                                    {player.yellowCardCount === 1 && <div className="absolute -top-1 -left-1 w-3 h-4 bg-yellow-400 rounded-sm border border-black" title="Yellow Card" />}

@@ -364,7 +364,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             
             if (wasBallCarrier) {
                 const opposition = isHome ? updatedState.awayLineup : updatedState.homeLineup;
-                const newCarrier = opposition.find(p => p.role === 'CB' && !p.isSentOff) || opposition.find(p => !p.isSentOff);
+                // FIX: 'CB' is not a valid PlayerRole. Changed to 'Central Defender'.
+                const newCarrier = opposition.find(p => p.role === 'Central Defender' && !p.isSentOff) || opposition.find(p => !p.isSentOff);
                 if(newCarrier) {
                     updatedState.ballCarrierId = newCarrier.id;
                     updatedState.attackingTeamId = isHome ? updatedState.awayTeamId : updatedState.homeTeamId;

@@ -19,13 +19,19 @@ const getPlayerByRole = (players: LivePlayer[], roles: PlayerRole[]): LivePlayer
 const getNearestOpponent = (player: LivePlayer, zone: number, opponents: LivePlayer[]): LivePlayer | null => {
     const activeOpponents = opponents.filter(p => !p.isSentOff && !p.isInjured);
     // This is a simplified logic, a real engine would be more complex
-    const opponentRoles: Record<PlayerRole, PlayerRole[]> = {
-        'ST': ['CB', 'GK'], 'CF': ['CB', 'GK'], 'RW': ['LB', 'CB'], 'LW': ['RB', 'CB'],
-        'AM': ['DM', 'CB'], 'CM': ['CM', 'DM'], 'RM': ['LM', 'LB'], 'LM': ['RM', 'RB'],
-        'DM': ['AM', 'ST'], 'RB': ['LW', 'LM'], 'LB': ['RW', 'RM'], 'CB': ['ST', 'CF'], 'GK': ['ST', 'CF'],
-        'RWB': ['LW', 'LM'], 'LWB': ['RW', 'RM']
+    const opponentRoles: Partial<Record<PlayerRole, PlayerRole[]>> = {
+        'Striker': ['Central Defender', 'Goalkeeper'], 'Poacher': ['Central Defender'],
+        'Advanced Forward': ['Central Defender', 'Libero'], 'Complete Forward': ['Central Defender', 'Defensive Midfielder'],
+        'Deep-Lying Forward': ['Central Defender', 'Defensive Midfielder'], 'False Nine': ['Defensive Midfielder', 'Central Midfielder'],
+        'Attacking Midfielder': ['Defensive Midfielder', 'Central Defender'], 'Shadow Striker': ['Defensive Midfielder', 'Central Defender'],
+        'Advanced Playmaker': ['Defensive Midfielder', 'Central Midfielder'], 'Trequartista': ['Defensive Midfielder', 'Central Midfielder'],
+        'Wide Midfielder': ['Full-Back', 'Wing-Back'], 'Wide Playmaker': ['Full-Back', 'Wing-Back'],
+        'Central Midfielder': ['Central Midfielder', 'Ball Winning Midfielder'], 'Box-To-Box Midfielder': ['Central Midfielder', 'Box-To-Box Midfielder'],
+        'Defensive Midfielder': ['Attacking Midfielder', 'Striker'], 'Ball Winning Midfielder': ['Attacking Midfielder', 'Mezzala'],
+        'Full-Back': ['Wide Midfielder', 'Wide Playmaker'], 'Wing-Back': ['Wide Midfielder', 'Wide Playmaker'],
+        'Central Defender': ['Striker', 'Advanced Forward'], 'Goalkeeper': ['Striker', 'Poacher'],
     };
-    return getPlayerByRole(activeOpponents, opponentRoles[player.role]) || getPlayerByRole(activeOpponents, ['CB', 'DM', 'CM']);
+    return getPlayerByRole(activeOpponents, opponentRoles[player.role] || []) || getPlayerByRole(activeOpponents, ['Central Defender', 'Defensive Midfielder', 'Central Midfielder']);
 }
 
 const initialPlayerStats: PlayerMatchStats = { shots: 0, goals: 0, assists: 0, passes: 0, keyPasses: 0, tackles: 0, dribbles: 0, rating: 6.0 };
@@ -140,7 +146,7 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     }
 
     if (!newState.ballCarrierId) {
-        const startingPlayer = getPlayerByRole(newState.homeLineup, ['CM', 'ST']);
+        const startingPlayer = getPlayerByRole(newState.homeLineup, ['Central Midfielder', 'Striker']);
         if(startingPlayer) {
             newState.ballCarrierId = startingPlayer.id;
             newState.attackingTeamId = newState.homeTeamId;
@@ -160,7 +166,7 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
 
     const ballCarrier = attackingTeam.find(p => p.id === newState.ballCarrierId && !p.isSentOff && !p.isInjured);
     if (!ballCarrier) {
-        const newCarrier = getPlayerByRole(defendingTeam, ['CB', 'DM']);
+        const newCarrier = getPlayerByRole(defendingTeam, ['Central Defender', 'Defensive Midfielder']);
         if(newCarrier) {
              newState.ballCarrierId = newCarrier.id;
              newState.attackingTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
@@ -201,7 +207,7 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
         // --- SHOT ---
         const shotPower = (ballCarrier.attributes.shooting * 1.5) * fatigueMod(ballCarrier.stamina) * carrierMod * currentFitnessMod * currentMoraleMod;
         const pressure = opponent.attributes.positioning * 0.5 * fatigueMod(opponent.stamina) * opponentMod;
-        const keeper = getPlayerByRole(defendingTeam, ['GK'])!;
+        const keeper = getPlayerByRole(defendingTeam, ['Goalkeeper', 'Sweeper Keeper'])!;
         const keeperMod = getPositionalModifier(keeper.positionalFamiliarity[keeper.role] || 20);
         const keeperPower = (keeper.attributes.positioning * 1.2) * fatigueMod(keeper.stamina) * keeperMod * fitnessMod(keeper.matchFitness) * moraleMod(keeper.morale);
         
@@ -236,7 +242,7 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
                  newEvents.push({ minute: newState.minute, text: formatCommentary(pickRandom(commentary.goal), { attackerName: ballCarrier.name, assistMaker: assisterName }), type: 'Goal' });
 
                  defendingTeam.forEach(p => {
-                     const isDefenderOrGk = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'DM'].includes(p.role);
+                     const isDefenderOrGk = ['Goalkeeper', 'Sweeper Keeper', 'Central Defender', 'Ball-Playing Defender', 'Full-Back', 'Wing-Back', 'Libero', 'Defensive Midfielder'].includes(p.role);
                      updateRating(p, isDefenderOrGk ? -0.3 : -0.15);
                  });
                  newState.ballCarrierId = null; // Reset for kickoff
@@ -258,7 +264,7 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
 
     } else if (willPass) {
         // --- PASS ---
-        const passTarget = getPlayerByRole(attackingTeam, ['ST', 'CF', 'CM', 'AM', 'LW', 'RW']);
+        const passTarget = getPlayerByRole(attackingTeam, ['Striker', 'Advanced Forward', 'Central Midfielder', 'Attacking Midfielder', 'Wide Midfielder']);
         if (passTarget) {
             const passQuality = (ballCarrier.attributes.passing + ballCarrier.attributes.creativity) * fatigueMod(ballCarrier.stamina) * carrierMod * (inst.passing === PassingInstruction.Risky ? 1.1 : 1.0) * currentFitnessMod * currentMoraleMod;
             const interceptionQuality = (opponent.attributes.positioning + opponent.attributes.workRate) * fatigueMod(opponent.stamina) * opponentMod;

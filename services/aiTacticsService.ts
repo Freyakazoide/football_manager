@@ -1,28 +1,26 @@
 import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction } from '../types';
+import { ROLE_DEFINITIONS } from './database';
 
 const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
-    if (role === 'GK') return 'GK';
-    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(role)) return 'DEF';
-    if (['DM', 'CM', 'LM', 'RM', 'AM'].includes(role)) return 'MID';
-    return 'FWD';
+    return ROLE_DEFINITIONS[role]?.category || 'MID';
 };
 
 const defaultPositions442: { position: { x: number, y: number }, role: PlayerRole }[] = [
     // GK
-    { position: { x: 50, y: 95 }, role: 'GK' },
+    { position: { x: 50, y: 95 }, role: 'Goalkeeper' },
     // DEF
-    { position: { x: 20, y: 75 }, role: 'LB' },
-    { position: { x: 40, y: 78 }, role: 'CB' },
-    { position: { x: 60, y: 78 }, role: 'CB' },
-    { position: { x: 80, y: 75 }, role: 'RB' },
+    { position: { x: 20, y: 75 }, role: 'Full-Back' },
+    { position: { x: 40, y: 78 }, role: 'Central Defender' },
+    { position: { x: 60, y: 78 }, role: 'Central Defender' },
+    { position: { x: 80, y: 75 }, role: 'Full-Back' },
     // MID
-    { position: { x: 20, y: 50 }, role: 'LM' },
-    { position: { x: 40, y: 55 }, role: 'CM' },
-    { position: { x: 60, y: 55 }, role: 'CM' },
-    { position: { x: 80, y: 50 }, role: 'RM' },
+    { position: { x: 20, y: 50 }, role: 'Wide Midfielder' },
+    { position: { x: 40, y: 55 }, role: 'Central Midfielder' },
+    { position: { x: 60, y: 55 }, role: 'Central Midfielder' },
+    { position: { x: 80, y: 50 }, role: 'Wide Midfielder' },
     // FWD
-    { position: { x: 40, y: 25 }, role: 'ST' },
-    { position: { x: 60, y: 25 }, role: 'ST' },
+    { position: { x: 40, y: 25 }, role: 'Striker' },
+    { position: { x: 60, y: 25 }, role: 'Striker' },
 ];
 
 const getOverallRating = (p: Player) => {
@@ -69,7 +67,7 @@ export const generateAITactics = (clubPlayers: Player[]): Tactics => {
     const lineup: (LineupPlayer | null)[] = lineupPlayers.map((player, index) => ({
         playerId: player.id,
         position: defaultPositions442[index]?.position || { x: 50, y: 50 },
-        role: defaultPositions442[index]?.role || 'CM',
+        role: defaultPositions442[index]?.role || 'Central Midfielder',
         instructions: createDefaultInstructions(),
     }));
 

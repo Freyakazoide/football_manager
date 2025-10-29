@@ -199,7 +199,6 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
 
     if (isInShootingZone && Math.random() < (ballCarrier.attributes.shooting / 150) * shootMod * carrierMod) {
         // --- SHOT ---
-        newState.lastPasser = null;
         const shotPower = (ballCarrier.attributes.shooting * 1.5) * fatigueMod(ballCarrier.stamina) * carrierMod * currentFitnessMod * currentMoraleMod;
         const pressure = opponent.attributes.positioning * 0.5 * fatigueMod(opponent.stamina) * opponentMod;
         const keeper = getPlayerByRole(defendingTeam, ['GK'])!;
@@ -209,6 +208,11 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
         attackingStats.shots++;
         ballCarrier.stats.shots++;
         
+        const isBigChance = Math.random() < 0.2;
+        const xG_value = isBigChance ? 0.4 : 0.12;
+        attackingStats.xG += xG_value;
+        if(isBigChance) attackingStats.bigChances++;
+
         const onTargetChance = (ballCarrier.attributes.shooting / (ballCarrier.attributes.shooting + 30)) * 0.9;
         if (Math.random() < onTargetChance) {
              attackingStats.shotsOnTarget++;
@@ -249,6 +253,8 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
              newEvents.push({ minute: newState.minute, text: `${ballCarrier.name} shoots, but it's wide of the mark!`, type: 'Chance' });
              updateRating(ballCarrier, -0.15);
         }
+        
+        newState.lastPasser = null;
 
     } else if (willPass) {
         // --- PASS ---

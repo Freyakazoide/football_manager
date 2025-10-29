@@ -413,7 +413,8 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                                     <h4 className="font-bold text-white mb-2">Bench <span className="text-gray-400 font-normal text-xs">({5-playerSubsMade} left)</span></h4>
                                     {playerBench.map(p => {
                                         const fullPlayer = gameState.players[p.id];
-                                        const isUnavailable = fullPlayer.suspension;
+                                        {/* FIX: Coerce `suspension` (object or null) to a boolean for the `disabled` prop. */}
+                                        const isUnavailable = !!fullPlayer.suspension;
                                         return (
                                             <button key={p.id} onClick={() => { if(playerToSub) { dispatch({ type: 'MAKE_SUBSTITUTION', payload: { playerOutId: playerToSub, playerInId: p.id } }); setPlayerToSub(null); } }} disabled={!playerToSub || playerSubsMade >= 5 || isUnavailable} className="w-full text-left p-1.5 rounded mb-1 text-xs bg-gray-700 disabled:opacity-50 relative">
                                                 {p.name.split(' ')[1]}
@@ -483,7 +484,8 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                                <div className={`relative w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-lg border-2 ${isPlayerTeam ? `border-yellow-400 ${player.stamina > 60 ? 'bg-blue-600' : player.stamina > 30 ? 'bg-yellow-600' : 'bg-red-600'}` : 'border-gray-900 bg-gray-600'}`}>
                                    {player.role}
                                    {liveMatch.ballCarrierId === player.id && <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-yellow-300 rounded-full border border-black animate-pulse" />}
-                                   {player.yellowCards === 1 && <div className="absolute -top-1 -left-1 w-3 h-4 bg-yellow-400 rounded-sm border border-black" title="Yellow Card" />}
+                                   {/* FIX: Corrected property name from `yellowCards` to `yellowCardCount` to match the LivePlayer type definition. */}
+                                   {player.yellowCardCount === 1 && <div className="absolute -top-1 -left-1 w-3 h-4 bg-yellow-400 rounded-sm border border-black" title="Yellow Card" />}
                                    {player.isSentOff && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full border-2 border-white" />}
                                    {player.isInjured && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full border-2 border-white flex items-center justify-center font-bold text-white text-xs">✚</div>}
                                </div>

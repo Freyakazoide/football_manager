@@ -17,6 +17,7 @@ import MatchView from './components/MatchView';
 import NewsView from './components/NewsView';
 import MatchResultsModal from './components/MatchResultsModal';
 import MatchReportModal from './components/MatchReportModal';
+import TeamView from './components/TeamView';
 
 const roleOrder: Record<PlayerRole, number> = {
     'GK': 1, 'LB': 10, 'LWB': 11, 'CB': 12, 'RB': 13, 'RWB': 14, 'DM': 20, 'LM': 21, 
@@ -153,6 +154,8 @@ const App: React.FC = () => {
         switch (currentView) {
             case View.SQUAD:
                 return <SquadView gameState={state} onPlayerClick={handlePlayerClick} />;
+            case View.TEAM:
+                return <TeamView gameState={state} />;
             case View.TACTICS:
                 return <TacticsView gameState={state} dispatch={dispatch} />;
             case View.COMPETITION:

@@ -74,7 +74,8 @@ const InstructionEditor: React.FC<{
                                     onChange={(e) => onInstructionChange(inst.key as keyof PlayerInstructions, e.target.value)}
                                     className="w-full bg-gray-700 text-white p-1 rounded text-sm"
                                 >
-                                    {Object.values(inst.enum).map(val => <option key={val} value={val}>{val}</option>)}
+                                    {/* FIX: Cast Object.values to string[] to resolve TypeScript error where `val` was of type `unknown`. */}
+                                    {(Object.values(inst.enum) as string[]).map(val => <option key={val} value={val}>{val}</option>)}
                                 </select>
                             </div>
                         ))}

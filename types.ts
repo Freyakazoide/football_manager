@@ -1,6 +1,7 @@
 // Enums
 export enum View {
     SQUAD = 'Squad',
+    TEAM = 'Team',
     TACTICS = 'Tactics',
     COMPETITION = 'Competition',
     CALENDAR = 'Calendar',

@@ -4,24 +4,61 @@ import { Action } from '../services/reducerTypes';
 import { runMinute } from '../services/matchEngine';
 import { getUnitRatings } from '../services/simulationService';
 
-// This function can be moved to a shared utility file later
 const getRoleFromPosition = (x: number, y: number): PlayerRole => {
     if (y > 90) return 'GK';
-    if (y > 65) { // Defence
-        if (x < 30) return 'LB';
-        if (x > 70) return 'RB';
-        return 'CB';
+    if (y > 65) {
+        if (x < 30) return 'LB'; if (x > 70) return 'RB'; return 'CB';
     }
-    if (y > 35) { // Midfield
-        if (x < 30) return 'LM';
-        if (x > 70) return 'RM';
-        if (y > 55) return 'DM';
-        return 'CM';
+    if (y > 35) {
+        if (x < 30) return 'LM'; if (x > 70) return 'RM';
+        if (y > 55) return 'DM'; return 'CM';
     }
-    // Attack
-    if (x < 35) return 'LW';
-    if (x > 65) return 'RW';
-    return 'ST';
+    if (x < 35) return 'LW'; if (x > 65) return 'RW'; return 'ST';
+};
+
+const ForcedSubstitutionModal: React.FC<{
+    liveMatch: LiveMatchState;
+    dispatch: React.Dispatch<Action>;
+    playerBench: LivePlayer[];
+    playerTeam: LivePlayer[];
+    subsMade: number;
+}> = ({ liveMatch, dispatch, playerBench, playerTeam, subsMade }) => {
+    if (!liveMatch.forcedSubstitution) return null;
+
+    const { playerOutId, reason } = liveMatch.forcedSubstitution;
+    const playerOut = [...playerTeam, ...playerBench].find(p => p.id === playerOutId);
+    
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-md text-white p-6">
+                <h2 className={`text-2xl font-bold mb-2 ${reason === 'injury' ? 'text-red-400' : 'text-yellow-400'}`}>
+                    {reason === 'injury' ? 'Player Injured!' : 'Player Sent Off!'}
+                </h2>
+                <p className="text-gray-300 mb-4">{playerOut?.name} must leave the pitch. You need to make a tactical change.</p>
+                
+                <h3 className="font-bold mb-2">Substitute with:</h3>
+                <div className="grid grid-cols-2 gap-2 mb-4 max-h-48 overflow-y-auto">
+                    {playerBench.map(p => (
+                        <button 
+                            key={p.id}
+                            onClick={() => dispatch({ type: 'MAKE_SUBSTITUTION', payload: { playerOutId, playerInId: p.id }})}
+                            disabled={subsMade >= 5}
+                            className="bg-gray-700 hover:bg-green-600 p-2 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                            {p.name}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                    <button 
+                        onClick={() => dispatch({ type: 'DISMISS_FORCED_SUBSTITUTION' })}
+                        className="w-full bg-gray-600 hover:bg-gray-700 p-2 rounded text-sm">
+                        Continue with fewer players
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 
@@ -164,7 +201,6 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
 
         const playerTeamIsHome = liveMatch.homeTeamId === gameState.playerClubId;
         
-        // Convert back to model coordinates (home is always bottom)
         const modelX = playerTeamIsHome ? x : 100 - x;
         const modelY = playerTeamIsHome ? y : 100 - y;
 
@@ -272,7 +308,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <h4 className="font-bold text-white mb-2">On Pitch <span className="text-gray-400 font-normal text-xs">(click to sub)</span></h4>
-                                    {playerTeam.filter(p => !p.isSentOff).map(p => (
+                                    {playerTeam.filter(p => !p.isSentOff && !p.isInjured).map(p => (
                                         <button key={p.id} onClick={() => setPlayerToSub(p.id)} className={`w-full text-left p-1.5 rounded mb-1 text-xs ${playerToSub === p.id ? 'bg-green-600' : 'bg-gray-700'}`}>
                                             {p.name.split(' ')[1]} ({p.role}) <span className="text-gray-400">{Math.round(p.stamina)}%</span>
                                         </button>
@@ -280,11 +316,16 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                                 </div>
                                 <div>
                                     <h4 className="font-bold text-white mb-2">Bench <span className="text-gray-400 font-normal text-xs">({5-playerSubsMade} left)</span></h4>
-                                    {playerBench.map(p => (
-                                        <button key={p.id} onClick={() => { if(playerToSub) { dispatch({ type: 'MAKE_SUBSTITUTION', payload: { playerOutId: playerToSub, playerInId: p.id } }); setPlayerToSub(null); } }} disabled={!playerToSub || playerSubsMade >= 5} className="w-full text-left p-1.5 rounded mb-1 text-xs bg-gray-700 disabled:opacity-50">
-                                            {p.name.split(' ')[1]}
-                                        </button>
-                                    ))}
+                                    {playerBench.map(p => {
+                                        const fullPlayer = gameState.players[p.id];
+                                        const isUnavailable = fullPlayer.suspension;
+                                        return (
+                                            <button key={p.id} onClick={() => { if(playerToSub) { dispatch({ type: 'MAKE_SUBSTITUTION', payload: { playerOutId: playerToSub, playerInId: p.id } }); setPlayerToSub(null); } }} disabled={!playerToSub || playerSubsMade >= 5 || isUnavailable} className="w-full text-left p-1.5 rounded mb-1 text-xs bg-gray-700 disabled:opacity-50 relative">
+                                                {p.name.split(' ')[1]}
+                                                {isUnavailable && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-red-500 font-bold">■</span>}
+                                            </button>
+                                        )
+                                    })}
                                 </div>
                             </div>
                          </div>
@@ -306,6 +347,15 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
 
     return (
         <div className="h-screen bg-gray-900 text-white flex flex-col p-4 gap-4 font-sans">
+             {liveMatch.forcedSubstitution && (
+                <ForcedSubstitutionModal
+                    liveMatch={liveMatch}
+                    dispatch={dispatch}
+                    playerBench={playerBench}
+                    playerTeam={playerTeam}
+                    subsMade={playerSubsMade}
+                />
+            )}
             <header className="bg-gray-800 rounded-lg p-4 flex items-center justify-between shadow-lg">
                 <div className="text-right w-2/5"><h2 className="text-2xl font-bold">{liveMatch.homeTeamName}</h2></div>
                 <div className="text-center w-1/5">
@@ -317,7 +367,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
 
             <main className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 overflow-hidden min-h-0">
                 <div className="lg:col-span-2 relative bg-green-800 bg-center bg-no-repeat rounded-lg shadow-inner min-h-0" ref={pitchRef} style={{ backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' stroke='%2338A169' stroke-width='4' stroke-dasharray='6%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e")`}}>
-                    {playersToRender.map((player) => {
+                    {playersToRender.filter(p => !p.isSentOff && !p.isInjured).map((player) => {
                         const isPlayerTeam = playerTeam.some(p => p.id === player.id);
                         const displayPos = {
                             x: isPlayerTeam ? (playerTeamIsHome ? player.currentPosition.x : 100 - player.currentPosition.x) : (playerTeamIsHome ? 100 - player.currentPosition.x : player.currentPosition.x),
@@ -332,8 +382,14 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                                <div className={`relative w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-lg border-2 ${isPlayerTeam ? `border-yellow-400 ${player.stamina > 60 ? 'bg-blue-600' : player.stamina > 30 ? 'bg-yellow-600' : 'bg-red-600'}` : 'border-gray-900 bg-gray-600'}`}>
                                    {player.role}
                                    {liveMatch.ballCarrierId === player.id && <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-yellow-300 rounded-full border border-black animate-pulse" />}
+                                   {player.yellowCards === 1 && <div className="absolute -top-1 -left-1 w-3 h-4 bg-yellow-400 rounded-sm border border-black" title="Yellow Card" />}
+                                   {player.isSentOff && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full border-2 border-white" />}
+                                   {player.isInjured && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full border-2 border-white flex items-center justify-center font-bold text-white text-xs">✚</div>}
                                </div>
-                               <div className="absolute top-full mt-1 text-center text-xs font-semibold whitespace-nowrap bg-black/50 px-1 rounded">{player.name.split(' ')[1]}</div>
+                               <div className="absolute top-full mt-1 text-center text-xs font-semibold whitespace-nowrap bg-black/50 px-1 rounded">
+                                   {player.name.split(' ')[1]}
+                                   <span className="block text-yellow-300 font-mono">{player.stats.rating.toFixed(1)}</span>
+                               </div>
                             </div>
                         );
                     })}

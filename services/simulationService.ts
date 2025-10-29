@@ -148,14 +148,51 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
     awayStats.passes = 300 + Math.floor((100 - homePossession) * 3.5);
     homeStats.passAccuracy = 75 + Math.floor(Math.random() * 15);
     awayStats.passAccuracy = 75 + Math.floor(Math.random() * 15);
-    homeStats.fouls = Math.floor(Math.random() * 5);
-    awayStats.fouls = Math.floor(Math.random() * 5);
+    homeStats.fouls = Math.floor(Math.random() * 8) + 2;
+    awayStats.fouls = Math.floor(Math.random() * 8) + 2;
     homeStats.corners = Math.floor(homeStats.shots / 5);
     awayStats.corners = Math.floor(awayStats.shots / 5);
 
+    // Simplified event simulation for cards and injuries in AI matches
+    const disciplinaryEvents: { playerId: number, type: 'yellow' | 'red' }[] = [];
+    const injuryEvents: { playerId: number, returnDate: Date }[] = [];
+    const yellowCards: Record<number, number> = {};
+
+    const totalFouls = homeStats.fouls + awayStats.fouls;
+    for(let i=0; i<totalFouls; i++) {
+        const cardChance = 0.20; // Increased from 0.15
+        if (Math.random() < cardChance) {
+            const isHomeFoul = Math.random() < 0.5;
+            const lineup = isHomeFoul ? homeLineup : awayLineup;
+            const playerEntry = pickRandom(lineup.filter(Boolean));
+            if (playerEntry) {
+                const playerId = playerEntry.playerId;
+                yellowCards[playerId] = (yellowCards[playerId] || 0) + 1;
+                if (yellowCards[playerId] === 2) {
+                    disciplinaryEvents.push({ playerId, type: 'red' });
+                } else {
+                    disciplinaryEvents.push({ playerId, type: 'yellow' });
+                }
+            }
+        }
+    }
+
+    const injuryChancePerMatch = 0.50; // Increased from 0.35
+    if (Math.random() < injuryChancePerMatch) {
+        const isHomeInjury = Math.random() < 0.5;
+        const lineup = isHomeInjury ? homeLineup : awayLineup;
+        const playerEntry = pickRandom(lineup.filter(Boolean));
+        if (playerEntry) {
+            const returnDate = new Date(match.date);
+            returnDate.setDate(returnDate.getDate() + Math.floor(Math.random() * 21) + 7); // 7-28 days
+            injuryEvents.push({ playerId: playerEntry.playerId, returnDate });
+        }
+    }
+
+
     log.sort((a, b) => a.minute - b.minute);
 
-    return { ...match, homeScore, awayScore, homeStats, awayStats, log, playerStats, homeLineup, awayLineup };
+    return { ...match, homeScore, awayScore, homeStats, awayStats, log, playerStats, homeLineup, awayLineup, disciplinaryEvents, injuryEvents };
 };
 
 export const processPlayerDevelopment = (players: Record<number, Player>): Record<number, Player> => {

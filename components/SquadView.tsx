@@ -13,6 +13,12 @@ const roleOrder: Record<PlayerRole, number> = {
     'LW': 30, 'ST': 31, 'CF': 32, 'RW': 33,
 };
 
+const getMoraleIcon = (morale: number): string => {
+    if (morale > 75) return '😊'; // Happy
+    if (morale > 50) return '😐'; // Content
+    return '😞'; // Unhappy
+}
+
 const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
     if (!gameState.playerClubId) return null;
 
@@ -30,6 +36,9 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                         <tr>
                             <th className="p-3">Name</th>
                             <th className="p-3">Position</th>
+                            <th className="p-3 text-center" title="Status">St</th>
+                            <th className="p-3 text-center" title="Morale">Mor</th>
+                            <th className="p-3 text-center" title="Match Fitness">Fit</th>
                             <th className="p-3">Age</th>
                             <th className="p-3 text-right">Wage</th>
                             <th className="p-3 text-right">Market Value</th>
@@ -39,11 +48,17 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                         {squadPlayers.map((player: Player) => (
                             <tr
                                 key={player.id}
-                                className="border-b border-gray-700 hover:bg-gray-700 cursor-pointer"
+                                className={`border-b border-gray-700 hover:bg-gray-700 cursor-pointer ${(player.injury || player.suspension) ? 'opacity-60' : ''}`}
                                 onClick={() => onPlayerClick(player)}
                             >
                                 <td className="p-3 font-semibold">{player.name}</td>
                                 <td className="p-3">{player.naturalPosition}</td>
+                                <td className="p-3 text-center">
+                                    {player.injury && <span className="text-red-500 font-bold" title={`Injured: ${player.injury.type}`}>✚</span>}
+                                    {player.suspension && <span className="text-red-500 font-bold" title={`Suspended until ${player.suspension.returnDate.toLocaleDateString()}`}>■</span>}
+                                </td>
+                                <td className="p-3 text-center" title={`${player.morale}`}>{getMoraleIcon(player.morale)}</td>
+                                <td className="p-3 text-center">{player.matchFitness}</td>
                                 <td className="p-3">{player.age}</td>
                                 <td className="p-3 text-right">
                                     {player.wage.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}

@@ -65,7 +65,7 @@ const generatePlayerAttributes = (): PlayerAttributes => ({
     naturalFitness: randInt(30, 95),
 });
 
-const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubId' | 'contractExpires' | 'history'>): number => {
+const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubId' | 'contractExpires' | 'history' | 'morale' | 'satisfaction' | 'matchFitness' | 'injury' | 'suspension' | 'seasonYellowCards'>): number => {
     const avgAttr = Object.values(player.attributes).reduce((a, b) => a + b, 0) / Object.values(player.attributes).length;
     let value = (avgAttr * 20000) + (player.potential * 15000);
     if (player.age < 22) value *= 1.5;
@@ -162,6 +162,12 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
                 contractExpires,
                 marketValue: calculateMarketValue(partialPlayer as any),
                 positionalFamiliarity: generateFamiliarity(naturalPos),
+                morale: randInt(75, 95),
+                satisfaction: randInt(70, 90),
+                matchFitness: 100,
+                injury: null,
+                suspension: null,
+                seasonYellowCards: 0,
                 history: [],
             };
             players[playerIdCounter] = player;

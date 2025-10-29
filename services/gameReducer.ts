@@ -60,24 +60,61 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             let newState = { ...state, currentDate: newDate, transferResult: null };
 
+            // Process player status updates (injuries, suspensions, fitness decay)
+            const updatedPlayers: Record<number, Player> = JSON.parse(JSON.stringify(newState.players));
+            let playerDidChange = false;
+            for (const pId in updatedPlayers) {
+                const player = updatedPlayers[pId];
+                let hasChanged = false;
+
+                if (player.injury && newDate >= new Date(player.injury.returnDate)) {
+                    player.injury = null; hasChanged = true;
+                }
+                if (player.suspension && newDate >= new Date(player.suspension.returnDate)) {
+                    player.suspension = null; hasChanged = true;
+                }
+                
+                if (hasChanged) playerDidChange = true;
+            }
+            if(playerDidChange) newState.players = updatedPlayers;
+
             const matchesToday = newState.schedule.filter(m =>
                 m.date.toDateString() === newDate.toDateString() && m.homeScore === undefined
             );
 
-            // Monthly/Yearly processing if no matches
+            // Decrease fitness for players NOT playing today
+            const playersPlayingToday = new Set<number>();
+            matchesToday.forEach(m => {
+                [m.homeTeamId, m.awayTeamId].forEach(clubId => {
+                    const club = newState.clubs[clubId];
+                    club.tactics.lineup.forEach(p => p && playersPlayingToday.add(p.playerId));
+                    club.tactics.bench.forEach(pId => pId && playersPlayingToday.add(pId));
+                });
+            });
+            const playersToUpdateFitness: Record<number, Player> = JSON.parse(JSON.stringify(newState.players));
+            let fitnessDidChange = false;
+            for (const pId in playersToUpdateFitness) {
+                if (!playersPlayingToday.has(Number(pId))) {
+                    const player = playersToUpdateFitness[pId];
+                    player.matchFitness = Math.max(70, player.matchFitness - 1);
+                    fitnessDidChange = true;
+                }
+            }
+            if(fitnessDidChange) newState.players = playersToUpdateFitness;
+
             if (matchesToday.length === 0) {
                  if (newDate.getDate() === 1) {
                     newState.players = processPlayerDevelopment(newState.players);
                     newState.clubs = processWages(newState.clubs, newState.players);
-                    if (newDate.getMonth() === 0) { // January 1st
+                    if (newDate.getMonth() === 0) { // New year
                         const { players } = processPlayerAging(newState.players);
                         newState.players = players;
+                    } else if (newDate.getMonth() === 6 && newDate.getDate() === 1) { // New season
+                        Object.values(newState.players).forEach(p => p.seasonYellowCards = 0);
                     }
                 }
                 return newState;
             }
-            
-            // --- REFACTORED LOGIC ---
 
             const playerClubId = newState.playerClubId;
             const aiMatches: Match[] = [];
@@ -91,7 +128,6 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 }
             }
             
-            // --- STEP 1: SIMULATE ALL AI MATCHES FIRST ---
             if (aiMatches.length > 0) {
                 const roundResults: Match[] = [];
                 const season = getSeason(newState.currentDate);
@@ -104,15 +140,41 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             
                     newState.leagueTable = updateLeagueTableForMatch(newState.leagueTable, result);
                     newState.players = updatePlayerStatsFromMatchResult(newState.players, result, season);
+
+                    // Process injuries and suspensions from AI matches
+                    if (result.injuryEvents) {
+                        result.injuryEvents.forEach(injury => {
+                            const player = newState.players[injury.playerId];
+                            if (player) player.injury = { type: 'Match Injury', returnDate: new Date(injury.returnDate) };
+                        });
+                    }
+                    if (result.disciplinaryEvents) {
+                        result.disciplinaryEvents.forEach(card => {
+                            const player = newState.players[card.playerId];
+                            if (!player) return;
+
+                            if (card.type === 'red') {
+                                const returnDate = new Date(result.date);
+                                returnDate.setDate(returnDate.getDate() + 8);
+                                player.suspension = { returnDate };
+                            } else if (card.type === 'yellow') {
+                                player.seasonYellowCards = (player.seasonYellowCards || 0) + 1;
+                                if (player.seasonYellowCards >= 3) {
+                                    const returnDate = new Date(result.date);
+                                    returnDate.setDate(returnDate.getDate() + 8);
+                                    player.suspension = { returnDate };
+                                    player.seasonYellowCards = 0;
+                                }
+                            }
+                        });
+                    }
                 }
                 newState.leagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
                 
-                // --- STEP 2: GENERATE NEWS FOR AI MATCHES ---
                 const content = roundResults.map(r => `${newState.clubs[r.homeTeamId].name} ${r.homeScore} - ${r.awayScore} ${newState.clubs[r.awayTeamId].name}`).join('\n');
                 newState = addNewsItem(newState, "League Round-up", `Here are the results from around the league:\n\n${content}`, 'round_summary');
             }
 
-            // --- STEP 3: HALT FOR PLAYER MATCH ---
             if (playerMatchToday) {
                 newState.matchDayFixtures = {
                     playerMatch: {
@@ -122,16 +184,17 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     },
                     aiMatches: aiMatches,
                 }
-                return newState; // Stop and wait for player
+                return newState;
             }
 
-            // --- STEP 4: (If no player match today) Continue to next checks ---
             if (newDate.getDate() === 1) {
                 newState.players = processPlayerDevelopment(newState.players);
                 newState.clubs = processWages(newState.clubs, newState.players);
-                if (newDate.getMonth() === 0) { // January 1st
+                if (newDate.getMonth() === 0) { // New year
                     const { players } = processPlayerAging(newState.players);
                     newState.players = players;
+                } else if (newDate.getMonth() === 6 && newDate.getDate() === 1) { // New season
+                    Object.values(newState.players).forEach(p => p.seasonYellowCards = 0);
                 }
             }
 
@@ -145,11 +208,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             let newState = { ...state };
             
-            // Generate player match news
             const { headline, content } = generateNarrativeReport(state.matchDayResults.playerResult, state.playerClubId, state.clubs);
             newState = addNewsItem(newState, headline, content, 'match_summary_player', state.matchDayResults.playerResult.id);
-
-            // News for AI matches was already generated in ADVANCE_DAY, so no need to do it here.
 
             return { ...newState, matchDayResults: null };
         }
@@ -207,7 +267,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             // If AI is playing, generate dynamic tactics for them
             const opponent = homeTeam.id === playerClubId ? awayTeam : homeTeam;
-            const opponentPlayers = Object.values(state.players).filter(p => p.clubId === opponent.id);
+            const opponentPlayers = Object.values(state.players).filter(p => p.clubId === opponent.id && !p.injury && !p.suspension);
             const newAITactics = generateAITactics(opponentPlayers);
             
             tempClubs[opponent.id] = { ...tempClubs[opponent.id], tactics: newAITactics };
@@ -246,13 +306,12 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             
             const wasBallCarrier = liveMatch.ballCarrierId === playerOut.id;
 
-            // Create the new player for the lineup, inheriting tactical info from the player coming off
             const newPlayerIn: LivePlayer = {
                 ...playerInFromBench,
                 role: playerOut.role,
                 instructions: { ...playerOut.instructions },
                 currentPosition: { ...playerOut.currentPosition },
-                stats: { ...playerInFromBench.stats } // Ensure stats are fresh
+                stats: { ...playerInFromBench.stats }
             };
 
             const newLineup = [...lineup];
@@ -264,7 +323,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const teamName = isHome ? liveMatch.homeTeamName : liveMatch.awayTeamName;
             const newLog = [...liveMatch.log, { minute: liveMatch.minute, type: 'Sub' as const, text: `Substitution for ${teamName}: ${newPlayerIn.name} comes on for ${playerOut.name}.`}];
             
-            const updatedState = { ...liveMatch, log: newLog };
+            let updatedState = { ...liveMatch, log: newLog };
             if (isHome) {
                 updatedState.homeLineup = newLineup;
                 updatedState.homeBench = newBench;
@@ -275,7 +334,6 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 updatedState.awaySubsMade++;
             }
             
-            // If the player with the ball was subbed, a defender gets the ball.
             if (wasBallCarrier) {
                 const opposition = isHome ? updatedState.awayLineup : updatedState.homeLineup;
                 const newCarrier = opposition.find(p => p.role === 'CB' && !p.isSentOff) || opposition.find(p => !p.isSentOff);
@@ -285,13 +343,32 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 }
             }
 
+            if (updatedState.forcedSubstitution && updatedState.forcedSubstitution.playerOutId === action.payload.playerOutId) {
+                updatedState.forcedSubstitution = null;
+            }
 
             return { ...state, liveMatch: updatedState };
+        }
+        case 'DISMISS_FORCED_SUBSTITUTION': {
+            if (!state.liveMatch || !state.liveMatch.forcedSubstitution) return state;
+            
+            const liveMatch = { ...state.liveMatch, forcedSubstitution: null };
+            const { playerOutId, reason } = state.liveMatch.forcedSubstitution;
+
+            if (reason === 'injury') {
+                 const isHome = liveMatch.homeTeamId === state.playerClubId;
+                 let lineup = isHome ? liveMatch.homeLineup : liveMatch.awayLineup;
+                 const playerIndex = lineup.findIndex(p => p.id === playerOutId);
+                 if (playerIndex > -1) {
+                     lineup[playerIndex].isInjured = true;
+                 }
+            }
+            return { ...state, liveMatch: { ...liveMatch, isPaused: false } };
         }
         case 'CHANGE_LIVE_TACTICS': {
              if (!state.liveMatch) return state;
              const isHome = state.liveMatch.homeTeamId === state.playerClubId;
-             if (!isHome) return state; // For now, only player can change tactics
+             if (!isHome) return state; 
 
              const { mentality } = action.payload;
              const newLog = [...state.liveMatch.log, { minute: state.liveMatch.minute, type: 'Info' as const, text: `${state.liveMatch.homeTeamName} switch to an ${mentality} mentality.`}];
@@ -324,12 +401,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const homePossession = totalPossessionMinutes > 0 ? Math.round((finalMatchState.homePossessionMinutes / totalPossessionMinutes) * 100) : 50;
             const awayPossession = totalPossessionMinutes > 0 ? 100 - homePossession : 50;
 
-            const allPlayersInMatch = [...finalMatchState.homeLineup, ...finalMatchState.awayLineup, ...finalMatchState.homeBench, ...finalMatchState.awayBench];
             const collectedPlayerStats: Record<number, PlayerMatchStats> = {};
-            allPlayersInMatch.forEach(p => {
-                if (p) { // Bench players can be null if squad is not full
-                    collectedPlayerStats[p.id] = p.stats;
-                }
+            [...finalMatchState.homeLineup, ...finalMatchState.awayLineup, ...finalMatchState.homeBench, ...finalMatchState.awayBench].forEach(p => {
+                if (p) collectedPlayerStats[p.id] = p.stats;
             });
 
             const finalResult: Match = {
@@ -345,31 +419,60 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 playerStats: collectedPlayerStats,
             };
             
+            let updatedPlayers: Record<number, Player> = JSON.parse(JSON.stringify(state.players));
+            const allPlayersInMatchLive = [...finalMatchState.homeLineup, ...finalMatchState.awayLineup, ...finalMatchState.homeBench, ...finalMatchState.awayBench].filter(Boolean) as LivePlayer[];
+
+            for (const livePlayer of allPlayersInMatchLive) {
+                const playerToUpdate = updatedPlayers[livePlayer.id];
+                if (!playerToUpdate) continue;
+
+                const isHome = playerToUpdate.clubId === finalMatchState.homeTeamId;
+                const scoreDiff = finalMatchState.homeScore - finalMatchState.awayScore;
+                playerToUpdate.morale = Math.max(0, Math.min(100, playerToUpdate.morale + ((isHome && scoreDiff > 0) || (!isHome && scoreDiff < 0) ? 5 : scoreDiff === 0 ? 0 : -5)));
+                
+                const played = finalMatchState.homeLineup.some(p => p.id === livePlayer.id) || finalMatchState.awayLineup.some(p => p.id === livePlayer.id);
+                if (played) playerToUpdate.matchFitness = Math.min(100, playerToUpdate.matchFitness + 5);
+
+                if (livePlayer.isSentOff) {
+                    const returnDate = new Date(finalResult.date); returnDate.setDate(returnDate.getDate() + 8);
+                    playerToUpdate.suspension = { returnDate };
+                }
+                if (livePlayer.isInjured) {
+                    const returnDate = new Date(finalResult.date); returnDate.setDate(returnDate.getDate() + (Math.floor(Math.random() * 21) + 7));
+                    playerToUpdate.injury = { type: 'Match Injury', returnDate };
+                }
+
+                if (livePlayer.yellowCards > 0) {
+                    playerToUpdate.seasonYellowCards = (playerToUpdate.seasonYellowCards || 0) + livePlayer.yellowCards;
+                    if (playerToUpdate.seasonYellowCards >= 3) { // Suspension threshold
+                        const returnDate = new Date(finalResult.date);
+                        returnDate.setDate(returnDate.getDate() + 8);
+                        playerToUpdate.suspension = { returnDate };
+                        playerToUpdate.seasonYellowCards = 0; // Reset after suspension
+                    }
+                }
+            }
+
             const scheduleIndex = state.schedule.findIndex(m => m.id === finalMatchState.matchId);
             const newSchedule = [...state.schedule];
-            if (scheduleIndex !== -1) {
-                newSchedule[scheduleIndex] = finalResult;
-            }
+            if (scheduleIndex !== -1) newSchedule[scheduleIndex] = finalResult;
+            
             const newLeagueTable = updateLeagueTableForMatch(state.leagueTable, finalResult);
             newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
             
             const aiResultsToday = state.schedule.filter(m => m.date.toDateString() === finalResult.date.toDateString() && m.id !== finalResult.id && m.homeScore !== undefined);
 
-            const newState = { 
+            const season = getSeason(finalResult.date);
+            const statsUpdatedPlayers = updatePlayerStatsFromMatchResult(updatedPlayers, finalResult, season, finalMatchState);
+
+            return { 
                 ...state, 
                 liveMatch: null, 
                 schedule: newSchedule, 
                 leagueTable: newLeagueTable,
-                matchDayResults: {
-                    playerResult: finalResult,
-                    aiResults: aiResultsToday,
-                }
+                players: statsUpdatedPlayers,
+                matchDayResults: { playerResult: finalResult, aiResults: aiResultsToday }
             };
-
-            const season = getSeason(finalResult.date);
-            newState.players = updatePlayerStatsFromMatchResult(newState.players, finalResult, season, finalMatchState);
-            
-            return newState;
         }
         default:
             return state;

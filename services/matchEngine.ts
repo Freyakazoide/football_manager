@@ -12,11 +12,12 @@ const formatCommentary = (template: string, replacements: Record<string, string>
 }
 
 const getPlayerByRole = (players: LivePlayer[], roles: PlayerRole[]): LivePlayer | null => {
-    const candidates = players.filter(p => !p.isSentOff && roles.includes(p.role));
+    const candidates = players.filter(p => !p.isSentOff && !p.isInjured && roles.includes(p.role));
     return pickRandom(candidates) || null;
 }
 
 const getNearestOpponent = (player: LivePlayer, zone: number, opponents: LivePlayer[]): LivePlayer | null => {
+    const activeOpponents = opponents.filter(p => !p.isSentOff && !p.isInjured);
     // This is a simplified logic, a real engine would be more complex
     const opponentRoles: Record<PlayerRole, PlayerRole[]> = {
         'ST': ['CB', 'GK'], 'CF': ['CB', 'GK'], 'RW': ['LB', 'CB'], 'LW': ['RB', 'CB'],
@@ -24,7 +25,7 @@ const getNearestOpponent = (player: LivePlayer, zone: number, opponents: LivePla
         'DM': ['AM', 'ST'], 'RB': ['LW', 'LM'], 'LB': ['RW', 'RM'], 'CB': ['ST', 'CF'], 'GK': ['ST', 'CF'],
         'RWB': ['LW', 'LM'], 'LWB': ['RW', 'RM']
     };
-    return getPlayerByRole(opponents, opponentRoles[player.role]) || getPlayerByRole(opponents, ['CB', 'DM', 'CM']);
+    return getPlayerByRole(activeOpponents, opponentRoles[player.role]) || getPlayerByRole(activeOpponents, ['CB', 'DM', 'CM']);
 }
 
 const initialPlayerStats: PlayerMatchStats = { shots: 0, goals: 0, assists: 0, passes: 0, keyPasses: 0, tackles: 0, dribbles: 0, rating: 6.0 };
@@ -38,12 +39,14 @@ export const createLiveMatchState = (matchInfo: MatchDayInfo, clubs: Record<numb
         const p = players[pId];
         return { 
             id: p.id, name: p.name,
-            attributes: p.attributes, stamina: 100, yellowCards: 0, isSentOff: false,
+            attributes: p.attributes, stamina: 100, yellowCards: 0, isSentOff: false, isInjured: false,
             stats: { ...initialPlayerStats },
             role: lineupPlayer?.role || p.naturalPosition,
             instructions: lineupPlayer?.instructions || ({} as any),
             currentPosition: lineupPlayer?.position || {x:0, y:0},
             positionalFamiliarity: p.positionalFamiliarity,
+            morale: p.morale,
+            matchFitness: p.matchFitness,
         };
     };
 
@@ -76,16 +79,26 @@ export const createLiveMatchState = (matchInfo: MatchDayInfo, clubs: Record<numb
         awayPossessionMinutes: 0,
         initialHomeLineupIds: homeLineup.map(p => p.id),
         initialAwayLineupIds: awayLineup.map(p => p.id),
+        lastPasser: null,
+        forcedSubstitution: null,
     };
 };
 
 const fatigueMod = (stamina: number) => (stamina / 100) * 0.75 + 0.25;
+const fitnessMod = (matchFitness: number) => 0.5 + (matchFitness / 200);
+const moraleMod = (morale: number) => 0.75 + (morale / 400);
 const getPositionalModifier = (familiarity: number): number => 0.5 + (familiarity / 200);
 
 export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, newEvents: MatchEvent[] } => {
     const newState = JSON.parse(JSON.stringify(state)) as LiveMatchState;
     const newEvents: MatchEvent[] = [];
     newState.minute++;
+
+    const updateRating = (player: LivePlayer | undefined, change: number) => {
+        if (player) {
+            player.stats.rating = Math.max(3.0, Math.min(10, player.stats.rating + change));
+        }
+    };
 
     if (newState.minute === 1) { newState.status = 'first-half'; newEvents.push({ minute: 1, text: "The first half kicks off!", type: 'Info' }); }
     if (newState.minute === 45) {
@@ -143,13 +156,14 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     const attackingStats = isHomeAttacking ? newState.homeStats : newState.awayStats;
     const defendingStats = isHomeAttacking ? newState.awayStats : newState.homeStats;
 
-    const ballCarrier = attackingTeam.find(p => p.id === newState.ballCarrierId);
-    if (!ballCarrier || ballCarrier.isSentOff) {
+    const ballCarrier = attackingTeam.find(p => p.id === newState.ballCarrierId && !p.isSentOff && !p.isInjured);
+    if (!ballCarrier) {
         const newCarrier = getPlayerByRole(defendingTeam, ['CB', 'DM']);
         if(newCarrier) {
              newState.ballCarrierId = newCarrier.id;
              newState.attackingTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
              newEvents.push({minute: newState.minute, text: `The ball is loose, and ${newCarrier.name} picks it up.`, type: 'Info'});
+             newState.lastPasser = null;
         }
         newState.log.push(...newEvents);
         return {newState, newEvents};
@@ -170,87 +184,127 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     const passMod = inst.passing === PassingInstruction.Shorter ? 1.2 : (inst.passing === PassingInstruction.Risky ? 0.8 : 1.0);
     const dribbleMod = inst.dribbling === DribblingInstruction.DribbleMore ? 1.3 : (inst.dribbling === DribblingInstruction.DribbleLess ? 0.7 : 1.0);
     const shootMod = inst.shooting === ShootingInstruction.ShootMoreOften ? 1.4 : (inst.shooting === ShootingInstruction.ShootLessOften ? 0.6 : 1.0);
+    
+    const currentFitnessMod = fitnessMod(ballCarrier.matchFitness);
+    const currentMoraleMod = moraleMod(ballCarrier.morale);
 
     const willPass = (basePassDesire * passMod) > (baseDribbleDesire * dribbleMod);
     const isInShootingZone = (isHomeAttacking && newState.ballZone >= 7) || (!isHomeAttacking && newState.ballZone <= 3);
 
     if (isInShootingZone && Math.random() < (ballCarrier.attributes.shooting / 150) * shootMod * carrierMod) {
         // --- SHOT ---
-        const shotPower = (ballCarrier.attributes.shooting * 1.5) * fatigueMod(ballCarrier.stamina) * carrierMod;
+        newState.lastPasser = null;
+        const shotPower = (ballCarrier.attributes.shooting * 1.5) * fatigueMod(ballCarrier.stamina) * carrierMod * currentFitnessMod * currentMoraleMod;
         const pressure = opponent.attributes.positioning * 0.5 * fatigueMod(opponent.stamina) * opponentMod;
         const keeper = getPlayerByRole(defendingTeam, ['GK'])!;
         const keeperMod = getPositionalModifier(keeper.positionalFamiliarity[keeper.role] || 20);
-        const keeperPower = (keeper.attributes.positioning * 1.2) * fatigueMod(keeper.stamina) * keeperMod;
+        const keeperPower = (keeper.attributes.positioning * 1.2) * fatigueMod(keeper.stamina) * keeperMod * fitnessMod(keeper.matchFitness) * moraleMod(keeper.morale);
         
         attackingStats.shots++;
         ballCarrier.stats.shots++;
-
-        newEvents.push({minute: newState.minute, text: formatCommentary(pickRandom(commentary.highlight), {creatorName: ballCarrier.name, attackerName: ballCarrier.name}), type: 'Highlight'});
-        attackingStats.bigChances++;
-        attackingStats.xG += 0.40;
-
-        if (shotPower * Math.random() > (keeperPower + pressure) * Math.random()) {
-            // GOAL
-            newEvents.push({ minute: newState.minute, text: formatCommentary(pickRandom(commentary.goal), { attackerName: ballCarrier.name, assistMaker: '' }), type: 'Goal' });
-            attackingStats.shotsOnTarget++;
-            ballCarrier.stats.goals++;
-            ballCarrier.stats.rating = Math.min(10, ballCarrier.stats.rating + 1.5);
-            if (isHomeAttacking) newState.homeScore++; else newState.awayScore++;
-            newState.ballCarrierId = null; // Reset for kickoff
-        } else {
-             newEvents.push({ minute: newState.minute, text: formatCommentary(pickRandom(commentary.save), { keeperName: keeper.name, attackerName: ballCarrier.name }), type: 'Chance' });
+        
+        const onTargetChance = (ballCarrier.attributes.shooting / (ballCarrier.attributes.shooting + 30)) * 0.9;
+        if (Math.random() < onTargetChance) {
              attackingStats.shotsOnTarget++;
-             if (Math.random() < 0.4) {
-                 newEvents.push({ minute: newState.minute, text: `Corner kick for ${isHomeAttacking ? newState.homeTeamName : newState.awayTeamName}.`, type: 'Corner'});
-                 attackingStats.corners++;
+             newEvents.push({minute: newState.minute, text: formatCommentary(pickRandom(commentary.highlight), {creatorName: ballCarrier.name, attackerName: ballCarrier.name}), type: 'Highlight'});
+            
+             if (shotPower * Math.random() > (keeperPower + pressure) * Math.random()) {
+                 // GOAL
+                 updateRating(ballCarrier, 1.5);
+                 ballCarrier.stats.goals++;
+                 if (isHomeAttacking) newState.homeScore++; else newState.awayScore++;
+
+                 let assisterName = '';
+                 if (newState.lastPasser && newState.lastPasser.teamId === newState.attackingTeamId) {
+                     const assister = attackingTeam.find(p => p.id === newState.lastPasser!.playerId);
+                     if (assister) {
+                         updateRating(assister, 1.0);
+                         assister.stats.assists++;
+                         assisterName = assister.name;
+                     }
+                 }
+                 newEvents.push({ minute: newState.minute, text: formatCommentary(pickRandom(commentary.goal), { attackerName: ballCarrier.name, assistMaker: assisterName }), type: 'Goal' });
+
+                 defendingTeam.forEach(p => {
+                     const isDefenderOrGk = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'DM'].includes(p.role);
+                     updateRating(p, isDefenderOrGk ? -0.3 : -0.15);
+                 });
+                 newState.ballCarrierId = null; // Reset for kickoff
+             } else {
+                 newEvents.push({ minute: newState.minute, text: formatCommentary(pickRandom(commentary.save), { keeperName: keeper.name, attackerName: ballCarrier.name }), type: 'Chance' });
+                 updateRating(ballCarrier, 0.2);
+                 updateRating(keeper, 0.3);
+                 if (Math.random() < 0.4) {
+                     newEvents.push({ minute: newState.minute, text: `Corner kick for ${isHomeAttacking ? newState.homeTeamName : newState.awayTeamName}.`, type: 'Corner'});
+                     attackingStats.corners++;
+                 }
              }
+        } else {
+             newEvents.push({ minute: newState.minute, text: `${ballCarrier.name} shoots, but it's wide of the mark!`, type: 'Chance' });
+             updateRating(ballCarrier, -0.15);
         }
 
     } else if (willPass) {
         // --- PASS ---
         const passTarget = getPlayerByRole(attackingTeam, ['ST', 'CF', 'CM', 'AM', 'LW', 'RW']);
         if (passTarget) {
-            const passQuality = (ballCarrier.attributes.passing + ballCarrier.attributes.creativity) * fatigueMod(ballCarrier.stamina) * carrierMod * (inst.passing === PassingInstruction.Risky ? 1.1 : 1.0);
+            const passQuality = (ballCarrier.attributes.passing + ballCarrier.attributes.creativity) * fatigueMod(ballCarrier.stamina) * carrierMod * (inst.passing === PassingInstruction.Risky ? 1.1 : 1.0) * currentFitnessMod * currentMoraleMod;
             const interceptionQuality = (opponent.attributes.positioning + opponent.attributes.workRate) * fatigueMod(opponent.stamina) * opponentMod;
 
             if (passQuality * Math.random() > interceptionQuality * Math.random()) {
                 ballCarrier.stats.passes++;
                 attackingStats.passes++;
+                updateRating(ballCarrier, 0.01);
+                updateRating(passTarget, 0.01);
                 newState.ballCarrierId = passTarget.id;
+                newState.lastPasser = { teamId: newState.attackingTeamId, playerId: ballCarrier.id };
                 if (isHomeAttacking) newState.ballZone = Math.min(9, newState.ballZone + 1 + Math.floor(Math.random()*2));
                 else newState.ballZone = Math.max(1, newState.ballZone - 1 - Math.floor(Math.random()*2));
             } else { // Interception
                 newEvents.push({minute: newState.minute, text: formatCommentary(commentary.interception[0], {interceptor: opponent.name, intendedTarget: passTarget.name}), type: 'Tackle'});
                 defendingStats.tackles++;
                 opponent.stats.tackles++;
-                opponent.stats.rating = Math.min(10, opponent.stats.rating + 0.2);
+                updateRating(ballCarrier, -0.1);
+                updateRating(opponent, 0.2);
                 newState.attackingTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
                 newState.ballCarrierId = opponent.id;
+                newState.lastPasser = null;
             }
         }
     } else {
         // --- DRIBBLE ---
-        const dribblePower = (ballCarrier.attributes.dribbling + ballCarrier.attributes.pace) * fatigueMod(ballCarrier.stamina) * carrierMod;
+        newState.lastPasser = null;
+        const dribblePower = (ballCarrier.attributes.dribbling + ballCarrier.attributes.pace) * fatigueMod(ballCarrier.stamina) * carrierMod * currentFitnessMod * currentMoraleMod;
         const tacklePower = (opponent.attributes.tackling + opponent.attributes.pace) * fatigueMod(opponent.stamina) * opponentMod;
         const tackleMod = opponent.instructions.tackling === TacklingInstruction.Harder ? 1.2 : (opponent.instructions.tackling === TacklingInstruction.Cautious ? 0.8 : 1.0);
         
         if (dribblePower * Math.random() > (tacklePower * tackleMod) * Math.random()) {
              ballCarrier.stats.dribbles++;
+             updateRating(ballCarrier, 0.05);
              if (isHomeAttacking) newState.ballZone = Math.min(9, newState.ballZone + 1);
              else newState.ballZone = Math.max(1, newState.ballZone - 1);
         } else { // Tackled
-             const foulChance = (opponent.attributes.aggression / 200) * (opponent.instructions.tackling === TacklingInstruction.Harder ? 1.8 : 1.0) / newState.refereeStrictness;
+             const foulChance = (opponent.attributes.aggression / 120) * (opponent.instructions.tackling === TacklingInstruction.Harder ? 1.8 : 1.0) / newState.refereeStrictness;
              if (Math.random() < foulChance) {
                  // FOUL
                  newEvents.push({minute: newState.minute, text: formatCommentary(pickRandom(commentary.foul), {defenderName: opponent.name, creatorName: ballCarrier.name}), type: 'Foul'});
                  defendingStats.fouls++;
-                 const cardChance = (opponent.attributes.aggression / 150) * newState.refereeStrictness;
+                 updateRating(opponent, -0.1);
+                 const cardChance = (opponent.attributes.aggression / 110) * newState.refereeStrictness;
                  if (Math.random() < cardChance) {
                     if (opponent.yellowCards === 1) {
                          opponent.isSentOff = true;
+                         updateRating(opponent, -2.0);
                          newEvents.push({minute: newState.minute, text: `Second yellow! ${opponent.name} is sent off!`, type: 'RedCard'});
+                         const sentOffTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
+                         const playerClubId = isHomeAttacking ? state.homeTeamId : state.awayTeamId; // Assuming player is one of them. For AI vs AI this is ok.
+                         if (sentOffTeamId === playerClubId) {
+                            newState.forcedSubstitution = { teamId: sentOffTeamId, playerOutId: opponent.id, reason: 'red_card' };
+                            newState.isPaused = true;
+                         }
                     } else {
                          opponent.yellowCards = 1;
+                         updateRating(opponent, -0.5);
                          newEvents.push({minute: newState.minute, text: `${opponent.name} receives a yellow card.`, type: 'YellowCard'});
                     }
                  }
@@ -258,9 +312,24 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
                  newEvents.push({minute: newState.minute, text: formatCommentary(pickRandom(commentary.tackle), {defenderName: opponent.name, creatorName: ballCarrier.name}), type: 'Tackle'});
                  defendingStats.tackles++;
                  opponent.stats.tackles++;
-                 opponent.stats.rating = Math.min(10, opponent.stats.rating + 0.2);
+                 updateRating(ballCarrier, -0.05);
+                 updateRating(opponent, 0.2);
                  newState.attackingTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
                  newState.ballCarrierId = opponent.id;
+                 
+                 const injuryChance = (opponent.attributes.aggression / 300) * (opponent.instructions.tackling === TacklingInstruction.Harder ? 1.5 : 1.0);
+                 if (Math.random() < injuryChance) {
+                     ballCarrier.isInjured = true;
+                     const eventText = `${ballCarrier.name} has picked up an injury from that challenge and has to come off!`;
+                     newEvents.push({ minute: newState.minute, text: eventText, type: 'Injury' });
+                     const injuredTeamId = isHomeAttacking ? newState.homeTeamId : newState.awayTeamId;
+                     const playerClubId = isHomeAttacking ? state.homeTeamId : state.awayTeamId;
+                     // Only force pause for player's team
+                     if (injuredTeamId === playerClubId) {
+                         newState.forcedSubstitution = { teamId: injuredTeamId, playerOutId: ballCarrier.id, reason: 'injury' };
+                         newState.isPaused = true;
+                     }
+                 }
              }
         }
     }

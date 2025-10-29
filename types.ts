@@ -60,6 +60,12 @@ export interface Player {
     potential: number;
     attributes: PlayerAttributes;
     history: PlayerSeasonStats[];
+    morale: number; // 0-100
+    satisfaction: number; // 0-100
+    matchFitness: number; // 0-100
+    injury: { type: string; returnDate: Date } | null;
+    suspension: { returnDate: Date } | null;
+    seasonYellowCards: number;
 }
 
 export interface LineupPlayer {
@@ -102,7 +108,7 @@ export interface MatchStats {
 export interface MatchEvent {
     minute: number;
     text: string;
-    type: 'Goal' | 'Sub' | 'Info' | 'Chance' | 'Corner' | 'Highlight' | 'Tackle' | 'Foul' | 'YellowCard' | 'RedCard';
+    type: 'Goal' | 'Sub' | 'Info' | 'Chance' | 'Corner' | 'Highlight' | 'Tackle' | 'Foul' | 'YellowCard' | 'RedCard' | 'Injury';
 }
 
 export interface Match {
@@ -118,6 +124,8 @@ export interface Match {
     playerStats?: Record<number, PlayerMatchStats>;
     homeLineup?: (LineupPlayer | null)[]; // For match report
     awayLineup?: (LineupPlayer | null)[]; // for match report
+    disciplinaryEvents?: { playerId: number, type: 'yellow' | 'red' }[];
+    injuryEvents?: { playerId: number, returnDate: Date }[];
 }
 
 export interface TransferResult {
@@ -147,11 +155,14 @@ export interface LivePlayer {
     stamina: number;
     yellowCards: number;
     isSentOff: boolean;
+    isInjured: boolean;
     stats: PlayerMatchStats;
     role: PlayerRole;
     instructions: PlayerInstructions;
     currentPosition: { x: number; y: number };
     positionalFamiliarity: Record<PlayerRole, number>;
+    morale: number;
+    matchFitness: number;
 }
 
 export interface LiveMatchState {
@@ -176,6 +187,12 @@ export interface LiveMatchState {
     awayPossessionMinutes: number;
     initialHomeLineupIds: number[];
     initialAwayLineupIds: number[];
+    lastPasser: { teamId: number, playerId: number } | null;
+    forcedSubstitution: {
+        teamId: number;
+        playerOutId: number;
+        reason: 'injury' | 'red_card';
+    } | null;
 }
 
 export interface GameState {

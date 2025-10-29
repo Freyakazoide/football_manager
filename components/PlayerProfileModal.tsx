@@ -27,8 +27,27 @@ const AttributeBar: React.FC<{ label: string, value: number }> = ({ label, value
     );
 };
 
+const StatusProgressBar: React.FC<{ label: string, value: number, max?: number }> = ({ label, value, max=100 }) => {
+    const getBarColor = () => {
+        const percentage = (value / max) * 100;
+        if (percentage > 75) return 'bg-green-500';
+        if (percentage > 50) return 'bg-yellow-500';
+        return 'bg-red-500';
+    };
+    return (
+         <div>
+            <div className="flex justify-between items-baseline mb-1">
+                <span className="text-sm text-gray-300">{label}</span>
+                <span className="text-xs font-bold text-gray-400">{value} / {max}</span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2.5">
+                <div className={`${getBarColor()} h-2.5 rounded-full`} style={{width: `${(value/max)*100}%`}}></div>
+            </div>
+        </div>
+    );
+}
+
 const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ player, gameState, dispatch, onClose }) => {
-    // BUG FIX: Added a guard in case the player is somehow missing to prevent a crash.
     if (!player) return null;
     
     const club = gameState.clubs[player.clubId];
@@ -54,7 +73,6 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ player, gameSta
 
     const renderAttributes = () => (
          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Attributes in 3 columns */}
             <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-8">
                 {attributeGroups.map(group => (
                     <div key={group.title}>
@@ -66,9 +84,25 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ player, gameSta
                 ))}
             </div>
 
-            {/* Info & Transfer Column */}
             <div className="space-y-6 lg:col-span-1">
+                 {(player.injury || player.suspension) && (
+                    <div className={`p-3 rounded-lg ${player.injury ? 'bg-red-900/50 border-red-500' : 'bg-yellow-900/50 border-yellow-500'} border`}>
+                         <h3 className="text-lg font-semibold text-red-400 mb-2">{player.injury ? 'Injured' : 'Suspended'}</h3>
+                         <div className="text-sm space-y-1">
+                            {player.injury && <p>{player.injury.type}</p>}
+                            <p>Expected back: <span className="font-semibold">{(player.injury?.returnDate || player.suspension?.returnDate)?.toLocaleDateString()}</span></p>
+                         </div>
+                    </div>
+                )}
                 <div>
+                   <h3 className="text-lg font-semibold text-green-400 mb-2">Status</h3>
+                   <div className="text-sm space-y-3">
+                       <StatusProgressBar label="Morale" value={player.morale} />
+                       <StatusProgressBar label="Satisfaction" value={player.satisfaction} />
+                       <StatusProgressBar label="Match Fitness" value={player.matchFitness} />
+                   </div>
+                </div>
+                 <div>
                    <h3 className="text-lg font-semibold text-green-400 mb-2">Contract</h3>
                    <div className="text-sm space-y-1">
                         <p>Wage: <span className="font-semibold">{formatCurrency(player.wage)}/wk</span></p>
@@ -154,7 +188,6 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({ player, gameSta
                     <div>
                         <h2 className="text-2xl font-bold">{player.name}</h2>
                         <p className="text-gray-400">{player.naturalPosition} | {player.age} y/o | {player.nationality}</p>
-                        {/* BUG FIX: Use optional chaining to prevent crash if club is not found */}
                         <p className="text-sm text-gray-500">Club: {club?.name || 'N/A'}</p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>

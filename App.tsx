@@ -1,5 +1,5 @@
 import React, { useState, useReducer, useEffect, useCallback } from 'react';
-import { GameState, View, Club, Player, Match } from './types';
+import { GameState, View, Club, Player, Match, PlayerRole } from './types';
 import { gameReducer, initialState } from './services/gameReducer';
 import { generateInitialDatabase } from './services/database';
 import Navigation from './components/Navigation';
@@ -18,11 +18,81 @@ import NewsView from './components/NewsView';
 import MatchResultsModal from './components/MatchResultsModal';
 import MatchReportModal from './components/MatchReportModal';
 
+const roleOrder: Record<PlayerRole, number> = {
+    'GK': 1, 'LB': 10, 'LWB': 11, 'CB': 12, 'RB': 13, 'RWB': 14, 'DM': 20, 'LM': 21, 
+    'CM': 22, 'RM': 23, 'AM': 24, 'LW': 30, 'ST': 31, 'CF': 32, 'RW': 33,
+};
+
+const getMoraleIcon = (morale: number): string => {
+    if (morale > 75) return '😊'; if (morale > 50) return '😐'; return '😞';
+}
+
+const ClubSquadModal: React.FC<{
+    club: Club;
+    gameState: GameState;
+    onClose: () => void;
+    onPlayerClick: (player: Player) => void;
+}> = ({ club, gameState, onClose, onPlayerClick }) => {
+    const squadPlayers = Object.values(gameState.players)
+        .filter((p: Player) => p.clubId === club.id)
+        .sort((a: Player, b: Player) => (roleOrder[a.naturalPosition] || 99) - (roleOrder[b.naturalPosition] || 99));
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+                    <h2 className="text-2xl font-bold">{club.name} - Squad</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl font-bold">&times;</button>
+                </div>
+                <div className="p-4 overflow-y-auto">
+                    <table className="w-full text-left">
+                        <thead className="border-b-2 border-gray-700 text-gray-400">
+                            <tr>
+                                <th className="p-3">Name</th>
+                                <th className="p-3">Position</th>
+                                <th className="p-3 text-center" title="Status">St</th>
+                                <th className="p-3 text-center" title="Morale">Mor</th>
+                                <th className="p-3 text-center" title="Match Fitness">Fit</th>
+                                <th className="p-3">Age</th>
+                                <th className="p-3 text-right">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {squadPlayers.map((player: Player) => (
+                                <tr
+                                    key={player.id}
+                                    className={`border-b border-gray-700 hover:bg-gray-700 cursor-pointer ${(player.injury || player.suspension) ? 'opacity-60' : ''}`}
+                                    onClick={() => onPlayerClick(player)}
+                                >
+                                    <td className="p-3 font-semibold">{player.name}</td>
+                                    <td className="p-3">{player.naturalPosition}</td>
+                                    <td className="p-3 text-center">
+                                        {player.injury && <span className="text-red-500 font-bold" title={`Injured: ${player.injury.type}`}>✚</span>}
+                                        {player.suspension && <span className="text-red-500 font-bold" title={`Suspended`}>■</span>}
+                                    </td>
+                                    <td className="p-3 text-center" title={`${player.morale}`}>{getMoraleIcon(player.morale)}</td>
+                                    <td className="p-3 text-center">{player.matchFitness}</td>
+                                    <td className="p-3">{player.age}</td>
+                                    <td className="p-3 text-right">
+                                        {player.marketValue.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 const App: React.FC = () => {
     const [state, dispatch] = useReducer(gameReducer, initialState);
     const [currentView, setCurrentView] = useState<View>(View.SQUAD);
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
     const [selectedMatchForReport, setSelectedMatchForReport] = useState<Match | null>(null);
+    const [viewingClub, setViewingClub] = useState<Club | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
 
     useEffect(() => {
@@ -71,6 +141,13 @@ const App: React.FC = () => {
         setSelectedMatchForReport(null);
     };
 
+    const handleViewClub = (clubId: number) => {
+        setViewingClub(state.clubs[clubId]);
+    };
+    const closeViewClubModal = () => {
+        setViewingClub(null);
+    };
+
     const renderView = () => {
         if (!state.playerClubId) return null;
         switch (currentView) {
@@ -79,7 +156,7 @@ const App: React.FC = () => {
             case View.TACTICS:
                 return <TacticsView gameState={state} dispatch={dispatch} />;
             case View.COMPETITION:
-                return <CompetitionView gameState={state} />;
+                return <CompetitionView gameState={state} onClubClick={handleViewClub} />;
             case View.CALENDAR:
                 return <CalendarView gameState={state} onMatchClick={handleMatchClick} />;
             case View.FINANCES:
@@ -139,6 +216,7 @@ const App: React.FC = () => {
             {state.matchDayResults && <MatchResultsModal results={state.matchDayResults} gameState={state} onClose={closeMatchResultsModal} />}
             {state.transferResult && <TransferResultModal result={state.transferResult} onClose={closeTransferResultModal} />}
             {selectedMatchForReport && <MatchReportModal match={selectedMatchForReport} gameState={state} onClose={closeMatchReportModal} onPlayerClick={handlePlayerClick} />}
+            {viewingClub && <ClubSquadModal club={viewingClub} gameState={state} onClose={closeViewClubModal} onPlayerClick={handlePlayerClick} />}
         </div>
     );
 };

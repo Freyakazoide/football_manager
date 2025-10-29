@@ -1,12 +1,12 @@
-
 import React from 'react';
-import { GameState } from '../types';
+import { GameState, Club } from '../types';
 
 interface CompetitionViewProps {
     gameState: GameState;
+    onClubClick: (clubId: number) => void;
 }
 
-const CompetitionView: React.FC<CompetitionViewProps> = ({ gameState }) => {
+const CompetitionView: React.FC<CompetitionViewProps> = ({ gameState, onClubClick }) => {
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
             <h2 className="text-2xl font-bold text-white mb-4">League Table</h2>
@@ -36,7 +36,12 @@ const CompetitionView: React.FC<CompetitionViewProps> = ({ gameState }) => {
                                     className={`border-b border-gray-700 ${isPlayerClub ? 'bg-green-900' : 'hover:bg-gray-700'}`}
                                 >
                                     <td className="p-3 font-semibold">{index + 1}</td>
-                                    <td className={`p-3 font-semibold ${isPlayerClub ? 'text-green-300' : ''}`}>{club.name}</td>
+                                    <td 
+                                        onClick={() => onClubClick(club.id)}
+                                        className={`p-3 font-semibold ${isPlayerClub ? 'text-green-300' : 'cursor-pointer hover:text-green-400'}`}
+                                    >
+                                        {club.name}
+                                    </td>
                                     <td className="p-3 text-center">{entry.played}</td>
                                     <td className="p-3 text-center">{entry.wins}</td>
                                     <td className="p-3 text-center">{entry.draws}</td>

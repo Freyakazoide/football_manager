@@ -3,17 +3,17 @@ import { GameState, View } from '../types';
 
 interface NavigationProps {
     currentView: View;
-    setCurrentView: (view: View) => void;
+    onNavigate: (view: View) => void;
     gameState: GameState;
 }
 
 const NavItem: React.FC<{
     view: View;
     currentView: View;
-    setCurrentView: (view: View) => void;
+    onNavigate: (view: View) => void;
     children: React.ReactNode;
     badgeCount: number;
-}> = ({ view, currentView, setCurrentView, children, badgeCount }) => {
+}> = ({ view, currentView, onNavigate, children, badgeCount }) => {
     const isActive = currentView === view;
     return (
         <li>
@@ -21,7 +21,7 @@ const NavItem: React.FC<{
                 href="#"
                 onClick={(e) => {
                     e.preventDefault();
-                    setCurrentView(view);
+                    onNavigate(view);
                 }}
                 className={`relative flex items-center justify-between p-3 my-1 rounded-lg transition-colors duration-200 ${
                     isActive
@@ -41,7 +41,7 @@ const NavItem: React.FC<{
 };
 
 
-const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentView, gameState }) => {
+const Navigation: React.FC<NavigationProps> = ({ currentView, onNavigate, gameState }) => {
     const unreadNewsCount = gameState.news.filter(item => !item.isRead).length;
 
     return (
@@ -50,12 +50,12 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentView, ga
                 foot
             </div>
             <ul className="space-y-2">
-                {Object.values(View).map((view) => (
+                {Object.values(View).filter(v => v !== 'Player Profile').map((view) => (
                    <NavItem 
                         key={view} 
                         view={view} 
                         currentView={currentView} 
-                        setCurrentView={setCurrentView}
+                        onNavigate={onNavigate}
                         badgeCount={view === View.NEWS ? unreadNewsCount : 0}
                    >
                         <span className="md:hidden">{view.substring(0,1)}</span>

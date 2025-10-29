@@ -30,7 +30,7 @@ const getOverallRating = (p: Player) => {
 };
 
 // FIX: Import missing instruction enums to resolve 'Cannot find name' errors.
-const createDefaultInstructions = (): PlayerInstructions => ({
+export const createDefaultInstructions = (): PlayerInstructions => ({
     shooting: ShootingInstruction.Normal,
     passing: PassingInstruction.Normal,
     dribbling: DribblingInstruction.Normal,
@@ -40,6 +40,39 @@ const createDefaultInstructions = (): PlayerInstructions => ({
     pressing: PressingInstruction.Normal,
     marking: MarkingInstruction.Normal,
 });
+
+export const suggestBestXI = (lineupSlots: (Omit<LineupPlayer, 'playerId' | 'instructions'> | null)[], availablePlayers: Player[]): (LineupPlayer | null)[] => {
+    const filledLineup: (LineupPlayer | null)[] = Array(11).fill(null);
+    let playersPool = [...availablePlayers];
+
+    const getPlayerScoreForRole = (player: Player, role: PlayerRole): number => {
+        const familiarity = player.positionalFamiliarity[role] || 20;
+        const overall = getOverallRating(player);
+        return (familiarity * 1.5) + overall;
+    };
+    
+    lineupSlots.forEach((slot, index) => {
+        if (slot) {
+            if (playersPool.length === 0) return;
+
+            playersPool.sort((a, b) => getPlayerScoreForRole(b, slot.role) - getPlayerScoreForRole(a, slot.role));
+            
+            const bestPlayer = playersPool[0];
+            
+            filledLineup[index] = {
+                playerId: bestPlayer.id,
+                position: slot.position,
+                role: slot.role,
+                instructions: createDefaultInstructions(),
+            };
+            
+            playersPool = playersPool.filter(p => p.id !== bestPlayer.id);
+        }
+    });
+
+    return filledLineup;
+};
+
 
 export const generateAITactics = (clubPlayers: Player[]): Tactics => {
     // 1. Select Best XI based on positions for a 4-4-2

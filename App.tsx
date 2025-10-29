@@ -10,7 +10,7 @@ import CompetitionView from './components/CompetitionView';
 import CalendarView from './components/CalendarView';
 import FinancesView from './components/FinancesView';
 import TransfersView from './components/TransfersView';
-import PlayerProfileModal from './components/PlayerProfileModal';
+import PlayerProfileView from './components/PlayerProfileView';
 import MatchDayModal from './components/MatchDayModal';
 import TransferResultModal from './components/TransferResultModal';
 import MatchView from './components/MatchView';
@@ -102,11 +102,14 @@ const ClubSquadModal: React.FC<{
 
 const App: React.FC = () => {
     const [state, dispatch] = useReducer(gameReducer, initialState);
-    const [currentView, setCurrentView] = useState<View>(View.SQUAD);
-    const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+    const [viewHistory, setViewHistory] = useState<{ view: View; context?: any }[]>([{ view: View.SQUAD }]);
+    const [historyIndex, setHistoryIndex] = useState(0);
     const [selectedMatchForReport, setSelectedMatchForReport] = useState<Match | null>(null);
     const [viewingClub, setViewingClub] = useState<Club | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
+
+    const currentViewInfo = viewHistory[historyIndex];
+    const currentView = currentViewInfo.view;
 
     useEffect(() => {
         if (!isInitialized) {
@@ -115,6 +118,25 @@ const App: React.FC = () => {
             setIsInitialized(true);
         }
     }, [isInitialized]);
+
+    const handleNavigate = useCallback((view: View, context?: any) => {
+        const newHistoryEntry = { view, context };
+        const newHistory = [...viewHistory.slice(0, historyIndex + 1), newHistoryEntry];
+        setViewHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+    }, [viewHistory, historyIndex]);
+
+    const handleGoBack = useCallback(() => {
+        if (historyIndex > 0) {
+            setHistoryIndex(prev => prev - 1);
+        }
+    }, [historyIndex]);
+
+    const handleGoForward = useCallback(() => {
+        if (historyIndex < viewHistory.length - 1) {
+            setHistoryIndex(prev => prev + 1);
+        }
+    }, [historyIndex, viewHistory.length]);
 
     const handleSelectClub = (clubId: number) => {
         dispatch({ type: 'SELECT_PLAYER_CLUB', payload: clubId });
@@ -125,11 +147,7 @@ const App: React.FC = () => {
     }, [dispatch]);
 
     const handlePlayerClick = (player: Player) => {
-        setSelectedPlayer(player);
-    };
-
-    const closePlayerModal = () => {
-        setSelectedPlayer(null);
+        handleNavigate(View.PLAYER_PROFILE, { playerId: player.id });
     };
 
     const closeMatchDayModal = () => {
@@ -180,6 +198,10 @@ const App: React.FC = () => {
                 return <TransfersView gameState={state} onPlayerClick={handlePlayerClick} />;
             case View.NEWS:
                 return <NewsView gameState={state} dispatch={dispatch} />;
+            case View.PLAYER_PROFILE:
+                const playerId = currentViewInfo.context?.playerId;
+                if (!playerId) return <SquadView gameState={state} onPlayerClick={handlePlayerClick} />;
+                return <PlayerProfileView playerId={playerId} gameState={state} dispatch={dispatch} onPlayerClick={handlePlayerClick} />;
             default:
                 return <SquadView gameState={state} onPlayerClick={handlePlayerClick} />;
         }
@@ -219,14 +241,20 @@ const App: React.FC = () => {
     
     return (
         <div className="flex h-screen bg-gray-800 font-sans">
-            <Navigation currentView={currentView} setCurrentView={setCurrentView} gameState={state} />
+            <Navigation currentView={currentView} onNavigate={handleNavigate} gameState={state} />
             <div className="flex-1 flex flex-col overflow-hidden">
-                <Header gameState={state} onAdvanceDay={handleAdvanceDay} />
+                <Header 
+                    gameState={state} 
+                    onAdvanceDay={handleAdvanceDay} 
+                    onGoBack={handleGoBack}
+                    onGoForward={handleGoForward}
+                    canGoBack={historyIndex > 0}
+                    canGoForward={historyIndex < viewHistory.length - 1}
+                />
                 <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-900 p-4 sm:p-6 lg:p-8">
                     {renderView()}
                 </main>
             </div>
-            {selectedPlayer && <PlayerProfileModal player={selectedPlayer} gameState={state} dispatch={dispatch} onClose={closePlayerModal} />}
             {state.matchDayFixtures && <MatchDayModal fixtures={state.matchDayFixtures} gameState={state} dispatch={dispatch} onClose={closeMatchDayModal} />}
             {state.matchDayResults && <MatchResultsModal results={state.matchDayResults} gameState={state} onClose={closeMatchResultsModal} />}
             {state.transferResult && <TransferResultModal result={state.transferResult} onClose={closeTransferResultModal} />}

@@ -1,7 +1,7 @@
 import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole } from '../types';
 
 export type Action =
-    | { type: 'INITIALIZE_GAME'; payload: Omit<GameState, 'playerClubId' | 'transferResult'| 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults'> }
+    | { type: 'INITIALIZE_GAME'; payload: Omit<GameState, 'playerClubId' | 'transferResult'| 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError'> }
     | { type: 'SELECT_PLAYER_CLUB'; payload: number }
     | { type: 'ADVANCE_DAY' }
     | { type: 'UPDATE_TACTICS'; payload: Tactics }
@@ -11,6 +11,7 @@ export type Action =
     // New Match Flow Actions
     | { type: 'CLEAR_MATCH_DAY_FIXTURES' }
     | { type: 'CLEAR_MATCH_RESULTS' }
+    | { type: 'CLEAR_MATCH_START_ERROR' }
     // Match Engine Actions
     | { type: 'START_MATCH'; payload: MatchDayInfo }
     | { type: 'ADVANCE_MINUTE'; payload: { newState: LiveMatchState, newEvents: any[] } }

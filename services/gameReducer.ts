@@ -1,4 +1,4 @@
-import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer } from '../types';
 import { Action } from './reducerTypes';
 import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
@@ -19,6 +19,7 @@ export const initialState: GameState = {
     nextNewsId: 1,
     matchDayFixtures: null,
     matchDayResults: null,
+    matchStartError: null,
 };
 
 const rehydratePlayers = (players: Record<number, Player>): Record<number, Player> => {
@@ -241,6 +242,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             return { ...newState, matchDayResults: null };
         }
+        case 'CLEAR_MATCH_START_ERROR': {
+            return { ...state, matchStartError: null };
+        }
         case 'UPDATE_TACTICS': {
              if (!state.playerClubId) return state;
              const newClubs = { ...state.clubs };
@@ -290,7 +294,36 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
         // Match Engine Reducers
         case 'START_MATCH': {
             const { homeTeam, awayTeam } = action.payload;
-            const playerClubId = state.playerClubId;
+            const playerClubId = state.playerClubId!;
+            const playerClub = state.clubs[playerClubId];
+
+            // --- VALIDATION LOGIC ---
+            const lineup = playerClub.tactics.lineup.filter((p): p is LineupPlayer => p !== null);
+            if (lineup.length < 11) {
+                return { ...state, matchStartError: `You must select a full lineup of 11 players.` };
+            }
+            
+            const invalidPlayersMessages: string[] = [];
+            for (const lineupPlayer of lineup) {
+                const player = state.players[lineupPlayer.playerId];
+                const issues = [];
+                if (player.injury) {
+                    issues.push('Injured');
+                }
+                if (player.suspension) {
+                    issues.push('Suspended');
+                }
+                if (issues.length > 0) {
+                    invalidPlayersMessages.push(`${player.name} (${issues.join(' & ')})`);
+                }
+            }
+
+            if (invalidPlayersMessages.length > 0) {
+                const errorMessage = `Your lineup is invalid. The following players cannot play: ${invalidPlayersMessages.join(', ')}.`;
+                return { ...state, matchStartError: errorMessage };
+            }
+            // --- END VALIDATION ---
+
             let tempClubs = { ...state.clubs };
 
             // If AI is playing, generate dynamic tactics for them
@@ -301,7 +334,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             tempClubs[opponent.id] = { ...tempClubs[opponent.id], tactics: newAITactics };
 
             const liveMatch = createLiveMatchState(action.payload, tempClubs, state.players);
-            return { ...state, clubs: tempClubs, matchDayFixtures: null, liveMatch };
+            return { ...state, clubs: tempClubs, matchDayFixtures: null, liveMatch, matchStartError: null };
         }
         case 'ADVANCE_MINUTE': {
             if (!state.liveMatch) return state;

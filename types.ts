@@ -8,6 +8,7 @@ export enum View {
     FINANCES = 'Finances',
     TRANSFERS = 'Transfers',
     NEWS = 'News',
+    PLAYER_PROFILE = 'Player Profile',
 }
 
 export type PlayerRole =
@@ -226,4 +227,5 @@ export interface GameState {
     nextNewsId: number;
     matchDayFixtures: { playerMatch: MatchDayInfo; aiMatches: Match[] } | null;
     matchDayResults: { playerResult: Match; aiResults: Match[] } | null;
+    matchStartError: string | null;
 }

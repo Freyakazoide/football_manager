@@ -1,5 +1,6 @@
 import { GameState, LiveMatchState, MatchDayInfo, Club, Player, LivePlayer, MatchEvent, Mentality, MatchStats, PlayerMatchStats, PlayerRole, LineupPlayer, TacklingInstruction, ShootingInstruction, DribblingInstruction, PassingInstruction, PressingInstruction, PositioningInstruction } from '../types';
 import { commentary } from './commentary';
+import { getRoleCategory } from './database';
 
 const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
@@ -18,21 +19,39 @@ const getPlayerByRole = (players: LivePlayer[], roles: PlayerRole[]): LivePlayer
 
 const getNearestOpponent = (player: LivePlayer, zone: number, opponents: LivePlayer[]): LivePlayer | null => {
     const activeOpponents = opponents.filter(p => !p.isSentOff && !p.isInjured);
-    // This is a simplified logic, a real engine would be more complex
-    const opponentRoles: Partial<Record<PlayerRole, PlayerRole[]>> = {
-        'Striker': ['Central Defender', 'Goalkeeper'], 'Poacher': ['Central Defender'],
-        'Advanced Forward': ['Central Defender', 'Libero'], 'Complete Forward': ['Central Defender', 'Defensive Midfielder'],
-        'Deep-Lying Forward': ['Central Defender', 'Defensive Midfielder'], 'False Nine': ['Defensive Midfielder', 'Central Midfielder'],
-        'Attacking Midfielder': ['Defensive Midfielder', 'Central Defender'], 'Shadow Striker': ['Defensive Midfielder', 'Central Defender'],
-        'Advanced Playmaker': ['Defensive Midfielder', 'Central Midfielder'], 'Trequartista': ['Defensive Midfielder', 'Central Midfielder'],
-        'Wide Midfielder': ['Full-Back', 'Wing-Back'], 'Wide Playmaker': ['Full-Back', 'Wing-Back'],
-        'Central Midfielder': ['Central Midfielder', 'Ball Winning Midfielder'], 'Box-To-Box Midfielder': ['Central Midfielder', 'Box-To-Box Midfielder'],
-        'Defensive Midfielder': ['Attacking Midfielder', 'Striker'], 'Ball Winning Midfielder': ['Attacking Midfielder', 'Mezzala'],
-        'Full-Back': ['Wide Midfielder', 'Wide Playmaker'], 'Wing-Back': ['Wide Midfielder', 'Wide Playmaker'],
-        'Central Defender': ['Striker', 'Advanced Forward'], 'Goalkeeper': ['Striker', 'Poacher'],
-    };
-    return getPlayerByRole(activeOpponents, opponentRoles[player.role] || []) || getPlayerByRole(activeOpponents, ['Central Defender', 'Defensive Midfielder', 'Central Midfielder']);
-}
+    if (activeOpponents.length === 0) return null;
+
+    const playerRoleCat = getRoleCategory(player.role);
+    let opponentCandidates: LivePlayer[] = [];
+
+    // Find direct positional opponents first
+    if (playerRoleCat === 'FWD') {
+        opponentCandidates = activeOpponents.filter(p => getRoleCategory(p.role) === 'DEF');
+    } else if (playerRoleCat === 'MID') {
+        opponentCandidates = activeOpponents.filter(p => getRoleCategory(p.role) === 'MID');
+    } else if (playerRoleCat === 'DEF') {
+        opponentCandidates = activeOpponents.filter(p => getRoleCategory(p.role) === 'FWD');
+    }
+    
+    // If no direct opponents, broaden the search
+    if (opponentCandidates.length === 0) {
+        if (playerRoleCat === 'FWD') {
+            opponentCandidates = activeOpponents.filter(p => getRoleCategory(p.role) === 'MID');
+        } else if (playerRoleCat === 'MID') {
+            opponentCandidates = activeOpponents.filter(p => ['DEF', 'FWD'].includes(getRoleCategory(p.role)));
+        } else { // DEF or GK
+            opponentCandidates = activeOpponents.filter(p => getRoleCategory(p.role) === 'MID');
+        }
+    }
+
+    // If still no one, just pick anyone
+    if (opponentCandidates.length === 0) {
+        return pickRandom(activeOpponents);
+    }
+    
+    return pickRandom(opponentCandidates);
+};
+
 
 const initialPlayerStats: PlayerMatchStats = { shots: 0, goals: 0, assists: 0, passes: 0, keyPasses: 0, tackles: 0, dribbles: 0, rating: 6.0 };
 
@@ -146,14 +165,26 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     }
 
     if (!newState.ballCarrierId) {
-        const startingPlayer = getPlayerByRole(newState.homeLineup, ['Central Midfielder', 'Striker']);
-        if(startingPlayer) {
+        const activePlayers = newState.homeLineup.filter(p => !p.isSentOff && !p.isInjured);
+        let startingPlayer = pickRandom(activePlayers.filter(p => getRoleCategory(p.role) === 'FWD'));
+        if (!startingPlayer) {
+            startingPlayer = pickRandom(activePlayers.filter(p => getRoleCategory(p.role) === 'MID'));
+        }
+        
+        if (startingPlayer) {
             newState.ballCarrierId = startingPlayer.id;
             newState.attackingTeamId = newState.homeTeamId;
             newState.ballZone = 5;
         } else {
-            newState.log.push(...newEvents);
-            return { newState, newEvents };
+            const anyPlayer = pickRandom(activePlayers);
+            if(anyPlayer) {
+                 newState.ballCarrierId = anyPlayer.id;
+                 newState.attackingTeamId = newState.homeTeamId;
+                 newState.ballZone = 5;
+            } else {
+                newState.log.push(...newEvents);
+                return { newState, newEvents };
+            }
         }
     }
 

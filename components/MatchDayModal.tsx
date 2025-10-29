@@ -31,6 +31,14 @@ const MatchDayModal: React.FC<MatchDayModalProps> = ({ fixtures, gameState, disp
                         </div>
                     </div>
                 </div>
+
+                {gameState.matchStartError && (
+                    <div className="p-4 bg-red-900/50 text-red-300 text-center text-sm">
+                        <p className="font-bold">Cannot Start Match</p>
+                        <p>{gameState.matchStartError}</p>
+                        <button onClick={() => dispatch({type: 'CLEAR_MATCH_START_ERROR'})} className="mt-2 text-xs text-gray-300 underline">Dismiss</button>
+                    </div>
+                )}
                 
                 <div className="p-6 overflow-y-auto flex-1">
                     <h3 className="text-lg font-semibold text-gray-300 mb-3 text-center">Today's Other Fixtures</h3>

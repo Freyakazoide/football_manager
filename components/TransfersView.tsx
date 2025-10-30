@@ -26,9 +26,10 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick,
         });
     }, [allPlayers, searchTerm, positionFilter, gameState.playerClubId]);
 
-    const activeNegotiations = useMemo(() => 
-        // FIX: Cast the result of Object.values to the correct type to allow type inference.
-        (Object.values(gameState.transferNegotiations) as TransferNegotiation[]).filter((n) => n.buyingClubId === gameState.playerClubId && !['completed', 'cancelled_player', 'cancelled_ai'].includes(n.status))
+    const activeNegotiations = useMemo(() =>
+        (Object.values(gameState.transferNegotiations) as TransferNegotiation[]).filter((n) =>
+            (n.buyingClubId === gameState.playerClubId || n.sellingClubId === gameState.playerClubId) &&
+            !['completed', 'cancelled_player', 'cancelled_ai'].includes(n.status))
     , [gameState.transferNegotiations, gameState.playerClubId]);
 
     const renderMarket = () => (
@@ -90,13 +91,16 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick,
         <div className="space-y-3">
             {activeNegotiations.length > 0 ? activeNegotiations.map(neg => {
                 const player = gameState.players[neg.playerId];
-                const sellingClub = gameState.clubs[neg.sellingClubId];
+                const isPlayerBuying = neg.buyingClubId === gameState.playerClubId;
+                const otherClub = gameState.clubs[isPlayerBuying ? neg.sellingClubId : neg.buyingClubId];
                 return (
                     <div key={neg.id} onClick={() => onOpenNegotiation(neg.id)} className="p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
                         <div className="flex justify-between items-center">
                             <div>
                                 <p className="font-bold text-lg">{player.name}</p>
-                                <p className="text-sm text-gray-400">Negotiating with {sellingClub.name}</p>
+                                <p className="text-sm text-gray-400">
+                                    {isPlayerBuying ? 'Outgoing offer to' : 'Incoming offer from'} {otherClub.name}
+                                </p>
                             </div>
                             <div className="text-right">
                                 <p className={`font-semibold text-sm px-2 py-1 rounded-full ${neg.status === 'player_turn' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>

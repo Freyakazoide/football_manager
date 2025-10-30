@@ -1,7 +1,6 @@
 
 
 import React from 'react';
-// FIX: Import StaffDepartment to correctly type department objects.
 import { GameState, Player, DepartmentType, Staff, StaffDepartment } from '../types';
 
 interface FinancesViewProps {

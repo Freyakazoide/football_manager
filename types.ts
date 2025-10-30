@@ -247,7 +247,7 @@ export interface NewsItem {
     date: Date;
     headline: string;
     content: string;
-    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted';
+    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed';
     relatedEntityId?: number;
     isRead: boolean;
     matchStatsSummary?: Match;
@@ -370,7 +370,7 @@ export interface TransferNegotiation {
     // player_turn: player needs to make an offer or accept/reject counter
     // ai_turn: AI is considering player's offer
     // club_agreed: move to agent stage
-    status: 'player_turn' | 'ai_turn' | 'club_agreed' | 'completed' | 'cancelled_player' | 'cancelled_ai';
+    status: 'player_turn' | 'ai_turn' | 'completed' | 'cancelled_player' | 'cancelled_ai';
     lastOfferBy: 'player' | 'ai';
     clubOfferHistory: { offer: TransferOffer, by: 'player' | 'ai' }[];
     agentOfferHistory: { offer: ContractOffer, by: 'player' | 'ai' }[];

@@ -12,7 +12,6 @@ const getOverallRating = (p: Player) => {
     return keyAttrs / 6;
 };
 
-// FIX: Import missing instruction enums to resolve 'Cannot find name' errors.
 export const createDefaultInstructions = (): PlayerInstructions => ({
     shooting: ShootingInstruction.Normal,
     passing: PassingInstruction.Normal,

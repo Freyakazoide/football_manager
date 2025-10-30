@@ -42,4 +42,7 @@ export type Action =
     | { type: 'SUBMIT_AGENT_OFFER'; payload: { negotiationId: number; offer: ContractOffer } }
     | { type: 'ACCEPT_AGENT_COUNTER'; payload: { negotiationId: number } }
     | { type: 'CANCEL_NEGOTIATION'; payload: { negotiationId: number } }
-    | { type: 'PROCESS_AI_NEGOTIATION_RESPONSE'; payload: { negotiationId: number } };
+    | { type: 'PROCESS_AI_NEGOTIATION_RESPONSE'; payload: { negotiationId: number } }
+    // Actions for selling players
+    | { type: 'ACCEPT_INCOMING_CLUB_OFFER'; payload: { negotiationId: number } }
+    | { type: 'SUBMIT_COUNTER_OFFER'; payload: { negotiationId: number; offer: TransferOffer } };

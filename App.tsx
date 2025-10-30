@@ -129,17 +129,13 @@ const App: React.FC = () => {
     }, [isInitialized]);
 
     useEffect(() => {
-        // If a new negotiation is created, automatically open its modal.
-        // This effect is designed to fire only when a new negotiation is added to the state.
-        // It should not re-trigger when the modal is closed (which changes activeNegotiationId).
-        const newNegotiation = (Object.values(state.transferNegotiations) as TransferNegotiation[]).find((n) => n.id === state.nextNegotiationId - 1);
+        const latestNegotiationId = state.nextNegotiationId - 1;
+        const newNegotiation = state.transferNegotiations[latestNegotiationId];
+        
         if (newNegotiation && activeNegotiationId !== newNegotiation.id) {
              setActiveNegotiationId(newNegotiation.id);
         }
-        // Disabling exhaustive-deps is intentional here to prevent the modal from re-opening
-        // immediately after being closed by the user.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [state.nextNegotiationId, state.transferNegotiations]);
+    }, [state.nextNegotiationId, state.transferNegotiations, activeNegotiationId]);
 
     const handleNavigate = useCallback((view: View, context?: any) => {
         const newHistoryEntry = { view, context };

@@ -7,6 +7,7 @@ import { generateAITactics } from './aiTacticsService';
 import { updatePlayerStatsFromMatchResult, getSeason } from './playerStatsService';
 import { generateInjury } from './injuryService';
 import { getRoleCategory, generateScheduleForCompetition } from './database';
+import { processAITransfers } from './AITransferService';
 
 export const initialState: GameState = {
     currentDate: new Date(2024, 7, 1), // July 1st, 2024
@@ -170,7 +171,6 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 const { promoted, relegated } = processPromotionsAndRelegations(state.clubs, finalTable);
 
                 const playerClub = state.clubs[state.playerClubId!];
-                // FIX: Cast Object.values result to prevent type errors on an array of 'unknown'.
                 const playerClubPlayers = (Object.values(state.players) as Player[]).filter(p => p.clubId === state.playerClubId);
                 
                 const getPlayerSeasonStats = (p: Player) => p.history.find(s => s.season === season);
@@ -213,7 +213,12 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             let newState = { ...state, currentDate: newDate };
             
-            // Process negotiations
+            // On Sundays, process AI transfer market activity
+            if (newDate.getDay() === 0) { // 0 is Sunday
+                newState = processAITransfers(newState);
+            }
+
+            // Process negotiations (this will also handle AI responses to offers)
             newState = processNegotiations(newState);
 
 
@@ -832,6 +837,38 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             };
             return { ...state, transferNegotiations: newNegotiations };
         }
+        case 'ACCEPT_INCOMING_CLUB_OFFER': {
+            const { negotiationId } = action.payload;
+            const negotiation = state.transferNegotiations[negotiationId];
+            if (!negotiation || negotiation.sellingClubId !== state.playerClubId) return state;
+
+            const lastOffer = negotiation.clubOfferHistory.slice().reverse().find(o => o.by === 'ai')?.offer;
+            if (!lastOffer) return state;
+
+            const newNegotiations = { ...state.transferNegotiations };
+            newNegotiations[negotiationId] = {
+                ...negotiation,
+                stage: 'agent',
+                status: 'ai_turn', // Now AI will simulate agent talks
+                lastOfferBy: 'player', // Player accepted the offer
+                agreedFee: lastOffer.fee,
+            };
+            return { ...state, transferNegotiations: newNegotiations };
+        }
+        case 'SUBMIT_COUNTER_OFFER': {
+            const { negotiationId, offer } = action.payload;
+            const negotiation = state.transferNegotiations[negotiationId];
+            if (!negotiation || negotiation.sellingClubId !== state.playerClubId) return state;
+            
+            const newNegotiations = { ...state.transferNegotiations };
+            newNegotiations[negotiationId] = {
+                ...negotiation,
+                status: 'ai_turn',
+                lastOfferBy: 'player',
+                clubOfferHistory: [...negotiation.clubOfferHistory, { offer, by: 'player' }]
+            };
+            return { ...state, transferNegotiations: newNegotiations };
+        }
         case 'SUBMIT_AGENT_OFFER': {
             const { negotiationId, offer } = action.payload;
             const negotiation = state.transferNegotiations[negotiationId];
@@ -876,6 +913,11 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 if (player.squadStatus === 'youth') {
                     player.squadStatus = 'senior';
                 }
+            } else { // It's a new signing
+                 const newExpiryDate = new Date(state.currentDate);
+                 newExpiryDate.setFullYear(newExpiryDate.getFullYear() + lastOffer.durationYears);
+                 player.contractExpires = newExpiryDate;
+                 player.lastRenewalDate = undefined;
             }
 
             const newPlayers = { ...state.players, [player.id]: player };
@@ -931,66 +973,75 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     currentNeg.lastOfferBy = 'ai';
                 }
             } else if (currentNeg.stage === 'agent') {
-                const lastOffer = currentNeg.agentOfferHistory[currentNeg.agentOfferHistory.length - 1].offer;
-                const expectedWage = player.marketValue / 100;
-                const wageRatio = lastOffer.wage / expectedWage;
-                const acceptanceChance = Math.max(0.1, Math.min(0.95, (wageRatio - 0.9) * 2));
-                const isRenewal = currentNeg.sellingClubId === currentNeg.buyingClubId;
+                const isPlayerSelling = negotiation.sellingClubId === state.playerClubId;
+                const isPlayerBuying = negotiation.buyingClubId === state.playerClubId;
                 
-                if (Math.random() < acceptanceChance) {
-                    // Accept and complete transfer/renewal
-                    const buyerClub = { ...state.clubs[negotiation.buyingClubId] };
-                    const sellerClub = { ...state.clubs[negotiation.sellingClubId] };
-                    const updatedPlayer = { ...player };
+                // --- SIMULATION FOR WHEN PLAYER IS SELLING ---
+                if (isPlayerSelling) {
+                    const buyerClub = state.clubs[currentNeg.buyingClubId];
+                    const wageOffer = Math.max(player.wage * 1.1, player.marketValue / 120);
+                    const wageRatio = wageOffer / player.wage;
+                    const repRatio = buyerClub.reputation / state.clubs[player.clubId].reputation;
+                    const acceptanceChance = Math.max(0.2, Math.min(0.95, (wageRatio * 0.4) + (repRatio * 0.4)));
 
-                    buyerClub.balance -= (currentNeg.agreedFee + lastOffer.signingBonus);
-                    if (!isRenewal) {
-                         sellerClub.balance += currentNeg.agreedFee;
-                    }
-                    updatedPlayer.clubId = negotiation.buyingClubId;
-                    updatedPlayer.wage = lastOffer.wage;
-                    updatedPlayer.scoutedAttributes = player.attributes;
+                    if (Math.random() < acceptanceChance) {
+                        // Transfer successful
+                        const sellerClub = { ...state.clubs[currentNeg.sellingClubId] };
+                        const updatedBuyerClub = { ...buyerClub };
+                        const updatedPlayer = { ...player };
 
-                     if (isRenewal) {
-                        const newExpiryDate = new Date(state.currentDate);
-                        newExpiryDate.setFullYear(newExpiryDate.getFullYear() + lastOffer.durationYears);
-                        updatedPlayer.contractExpires = newExpiryDate;
-                        updatedPlayer.lastRenewalDate = new Date(state.currentDate);
-                        updatedPlayer.satisfaction = Math.min(100, player.satisfaction + 20);
-                        updatedPlayer.morale = Math.min(100, player.morale + 15);
-                        if (updatedPlayer.squadStatus === 'youth') {
-                            updatedPlayer.squadStatus = 'senior';
-                        }
-                    }
-                    
-                    const newPlayers = { ...state.players, [player.id]: updatedPlayer };
-                    const newClubs = { ...state.clubs, [buyerClub.id]: buyerClub, [sellerClub.id]: sellerClub };
-                    currentNeg.status = 'completed';
-                    
-                    let newState = { ...state };
-                    if (isRenewal) {
-                        newState = addNewsItem(newState, `Contract Extended: ${player.name}`, `${player.name} has signed a new contract with ${buyerClub.name}, keeping him at the club until ${updatedPlayer.contractExpires.toLocaleDateString()}.`, 'transfer_completed', player.id);
+                        sellerClub.balance += currentNeg.agreedFee;
+                        updatedBuyerClub.balance -= currentNeg.agreedFee;
+                        updatedPlayer.clubId = currentNeg.buyingClubId;
+                        updatedPlayer.wage = wageOffer;
+                        const newExpiry = new Date(state.currentDate);
+                        newExpiry.setFullYear(newExpiry.getFullYear() + 3);
+                        updatedPlayer.contractExpires = newExpiry;
+
+                        const newPlayers = { ...state.players, [player.id]: updatedPlayer };
+                        const newClubs = { ...state.clubs, [sellerClub.id]: sellerClub, [updatedBuyerClub.id]: updatedBuyerClub };
+                        currentNeg.status = 'completed';
+                        
+                        let newState = addNewsItem(state, `Transfer Confirmed: ${player.name} joins ${buyerClub.name}`, `${player.name} has completed a move from ${sellerClub.name} to ${buyerClub.name} for a fee of ${currentNeg.agreedFee.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}.`, 'transfer_completed', player.id);
+                        newNegotiations[negotiationId] = currentNeg;
+                        return { ...newState, players: rehydratePlayers(newPlayers), clubs: newClubs, transferNegotiations: newNegotiations };
+
                     } else {
-                        newState = addNewsItem(newState, `Transfer Confirmed: ${player.name} joins ${buyerClub.name}`, `${player.name} has completed a move from ${sellerClub.name} to ${buyerClub.name} for a fee of ${currentNeg.agreedFee.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}.`, 'transfer_completed', player.id);
+                        // Transfer collapses
+                        currentNeg.status = 'cancelled_ai';
+                        newNegotiations[negotiationId] = currentNeg;
+                        let newState = addNewsItem(state, `Transfer Collapses`, `The transfer of ${player.name} to ${buyerClub.name} has collapsed after the player failed to agree personal terms.`, 'transfer_deal_collapsed', player.id);
+                        return { ...newState, transferNegotiations: newNegotiations };
                     }
-                    
-                    newNegotiations[negotiationId] = currentNeg;
-                    return { ...newState, players: rehydratePlayers(newPlayers), clubs: newClubs, transferNegotiations: newNegotiations };
+                }
 
-                } else {
-                    // Counter agent offer
-                    const wageMultiplier = 1.05 + Math.random() * 0.15;
-                    const counterWage = Math.round((Math.max(lastOffer.wage, expectedWage) * wageMultiplier) / 100) * 100;
-                    const counterOffer = {
-                        wage: counterWage,
-                        signingBonus: Math.max(lastOffer.signingBonus, player.marketValue * 0.05),
-                        goalBonus: lastOffer.goalBonus,
-                        releaseClause: lastOffer.releaseClause,
-                        durationYears: lastOffer.durationYears,
-                    };
-                    currentNeg.agentOfferHistory.push({ offer: counterOffer, by: 'ai' });
-                    currentNeg.status = 'player_turn';
-                    currentNeg.lastOfferBy = 'ai';
+                // --- AI RESPONSE LOGIC FOR WHEN PLAYER IS BUYING ---
+                if (isPlayerBuying) {
+                    const lastOffer = currentNeg.agentOfferHistory[currentNeg.agentOfferHistory.length - 1].offer;
+                    const expectedWage = player.marketValue / 100;
+                    const wageRatio = lastOffer.wage / expectedWage;
+                    const acceptanceChance = Math.max(0.1, Math.min(0.95, (wageRatio - 0.9) * 2));
+                    const isRenewal = currentNeg.sellingClubId === currentNeg.buyingClubId;
+                    
+                    if (Math.random() < acceptanceChance) {
+                        // Player accepts player's contract offer
+                        return gameReducer(state, { type: 'ACCEPT_AGENT_COUNTER', payload: { negotiationId } });
+
+                    } else {
+                        // Counter agent offer
+                        const wageMultiplier = 1.05 + Math.random() * 0.15;
+                        const counterWage = Math.round((Math.max(lastOffer.wage, expectedWage) * wageMultiplier) / 100) * 100;
+                        const counterOffer = {
+                            wage: counterWage,
+                            signingBonus: Math.max(lastOffer.signingBonus, player.marketValue * 0.05),
+                            goalBonus: lastOffer.goalBonus,
+                            releaseClause: lastOffer.releaseClause,
+                            durationYears: lastOffer.durationYears,
+                        };
+                        currentNeg.agentOfferHistory.push({ offer: counterOffer, by: 'ai' });
+                        currentNeg.status = 'player_turn';
+                        currentNeg.lastOfferBy = 'ai';
+                    }
                 }
             }
 

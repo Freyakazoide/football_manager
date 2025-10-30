@@ -75,7 +75,6 @@ const LeaguePositionWidget: React.FC<{ leagueEntry: LeagueEntry | undefined; pos
 
 const TeamStatsWidget: React.FC<{ gameState: GameState }> = ({ gameState }) => {
     const season = getSeason(gameState.currentDate);
-    // FIX: Cast Object.values to Player[] to correctly infer player type.
     const clubPlayers = (Object.values(gameState.players) as Player[]).filter(p => p.clubId === gameState.playerClubId);
 
     const playersWithStats = clubPlayers.map(p => {
@@ -113,7 +112,6 @@ const TeamStatsWidget: React.FC<{ gameState: GameState }> = ({ gameState }) => {
 
 const SquadStatsTable: React.FC<{ gameState: GameState }> = ({ gameState }) => {
     const season = getSeason(gameState.currentDate);
-    // FIX: Cast Object.values to Player[] to correctly infer player type in subsequent methods.
     const clubPlayers = (Object.values(gameState.players) as Player[])
         .filter(p => p.clubId === gameState.playerClubId)
         .map(player => {

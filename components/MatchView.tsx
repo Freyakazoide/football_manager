@@ -568,7 +568,6 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
         instructions: instructionModalPlayer.instructions,
     } : null;
     
-    // FIX: Changed JSX.Element to React.JSX.Element to fix TypeScript error.
     const shouts: {label: string, key: Extract<Action, { type: 'UPDATE_TEAM_INSTRUCTIONS' }>['payload']['shout'], icon: React.JSX.Element}[] = [
         { label: 'Press More', key: 'press_more', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.707-10.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L9.414 11H13a1 1 0 100-2H9.414l1.293-1.293z" clipRule="evenodd" /></svg> },
         { label: 'Hold Position', key: 'hold_position', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg> },

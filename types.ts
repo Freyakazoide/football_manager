@@ -125,6 +125,8 @@ export interface MatchEvent {
     minute: number;
     text: string;
     type: 'Goal' | 'Sub' | 'Info' | 'Chance' | 'Corner' | 'Highlight' | 'Tackle' | 'Foul' | 'YellowCard' | 'RedCard' | 'Injury';
+    primaryPlayerId?: number;
+    secondaryPlayerId?: number;
 }
 
 export interface Match {

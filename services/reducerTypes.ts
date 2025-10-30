@@ -20,6 +20,7 @@ export type Action =
     | { type: 'MAKE_SUBSTITUTION'; payload: { playerOutId: number, playerInId: number } }
     | { type: 'DISMISS_FORCED_SUBSTITUTION' }
     | { type: 'CHANGE_LIVE_TACTICS'; payload: { mentality: Mentality } }
+    | { type: 'UPDATE_TEAM_INSTRUCTIONS'; payload: { shout: 'press_more' | 'hold_position' | 'attack_flanks' | 'short_passes' | 'go_direct' } }
     | { type: 'UPDATE_LIVE_PLAYER_POSITION'; payload: { playerId: number; position: { x: number; y: number }; role: PlayerRole } }
     | { type: 'UPDATE_LIVE_PLAYER_INSTRUCTIONS'; payload: { playerId: number; instructions: PlayerInstructions } }
     | { type: 'END_MATCH' };

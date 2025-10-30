@@ -1,4 +1,4 @@
-import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction } from '../types';
 import { Action } from './reducerTypes';
 import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
@@ -6,6 +6,7 @@ import { generateNarrativeReport } from './newsGenerator';
 import { generateAITactics } from './aiTacticsService';
 import { updatePlayerStatsFromMatchResult, getSeason } from './playerStatsService';
 import { generateInjury } from './injuryService';
+import { getRoleCategory } from './database';
 
 export const initialState: GameState = {
     currentDate: new Date(2024, 7, 1), // July 1st, 2024
@@ -384,7 +385,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             newBench.splice(playerInFromBenchIndex, 1);
 
             const teamName = isHome ? liveMatch.homeTeamName : liveMatch.awayTeamName;
-            const newLog = [...liveMatch.log, { minute: liveMatch.minute, type: 'Sub' as const, text: `Substitution for ${teamName}: ${newPlayerIn.name} comes on for ${playerOut.name}.`}];
+            const newLog = [...liveMatch.log, { minute: liveMatch.minute, type: 'Sub' as const, text: `Substitution for ${teamName}: ${newPlayerIn.name} comes on for ${playerOut.name}.`, primaryPlayerId: newPlayerIn.id, secondaryPlayerId: playerOut.id }];
             
             let updatedState = { ...liveMatch, log: newLog };
             if (isHome) {
@@ -444,42 +445,86 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
              const newLog = [...state.liveMatch.log, { minute: state.liveMatch.minute, type: 'Info' as const, text: `${state.liveMatch.homeTeamName} switch to an ${mentality} mentality.`}];
              return { ...state, liveMatch: { ...state.liveMatch, homeMentality: mentality, log: newLog }};
         }
+        case 'UPDATE_TEAM_INSTRUCTIONS': {
+            if (!state.liveMatch || !state.playerClubId) return state;
+
+            // Use a deep copy to prevent state mutation bugs
+            const newLiveMatch = JSON.parse(JSON.stringify(state.liveMatch));
+            const isHome = newLiveMatch.homeTeamId === state.playerClubId;
+            const lineup = isHome ? newLiveMatch.homeLineup : newLiveMatch.awayLineup;
+            const teamName = isHome ? newLiveMatch.homeTeamName : newLiveMatch.awayTeamName;
+
+            let shoutText = '';
+
+            switch(action.payload.shout) {
+                case 'press_more':
+                    shoutText = 'Press More Urgently!';
+                    lineup.forEach((p: LivePlayer) => {
+                        const cat = getRoleCategory(p.role);
+                        if(cat === 'FWD' || cat === 'MID') p.instructions.pressing = PressingInstruction.Urgent;
+                        else p.instructions.pressing = PressingInstruction.Normal;
+                    });
+                    break;
+                case 'hold_position':
+                    shoutText = 'Hold Position!';
+                    lineup.forEach((p: LivePlayer) => {
+                        p.instructions.positioning = PositioningInstruction.HoldPosition;
+                        p.instructions.pressing = PressingInstruction.DropOff;
+                    });
+                    break;
+                case 'attack_flanks':
+                    shoutText = 'Attack the Flanks!';
+                    lineup.forEach((p: LivePlayer) => {
+                        if (p.role.includes('Wing') || p.role.includes('Wide') || p.role.includes('Full-Back')) {
+                            p.instructions.dribbling = DribblingInstruction.DribbleMore;
+                            p.instructions.crossing = CrossingInstruction.CrossMore;
+                            p.instructions.positioning = PositioningInstruction.GetForward;
+                        }
+                    });
+                    break;
+                case 'short_passes':
+                    shoutText = 'Play Shorter Passes!';
+                    lineup.forEach((p: LivePlayer) => p.instructions.passing = PassingInstruction.Shorter);
+                    break;
+                case 'go_direct':
+                    shoutText = 'Go More Direct!';
+                    lineup.forEach((p: LivePlayer) => p.instructions.passing = PassingInstruction.Risky);
+                    break;
+            }
+            
+            newLiveMatch.log.push({ minute: newLiveMatch.minute, type: 'Info', text: `${teamName} shout: "${shoutText}"`});
+            return { ...state, liveMatch: newLiveMatch };
+        }
         case 'UPDATE_LIVE_PLAYER_POSITION': {
             if (!state.liveMatch) return state;
-            const isHome = state.liveMatch.homeTeamId === state.playerClubId;
-            const lineup = isHome ? [...state.liveMatch.homeLineup] : [...state.liveMatch.awayLineup];
 
-            const playerIndex = lineup.findIndex(p => p.id === action.payload.playerId);
+            // BUG FIX: Use a deep copy to prevent accidental state mutation which can reset the game.
+            const newLiveMatch = JSON.parse(JSON.stringify(state.liveMatch));
+            const isHome = newLiveMatch.homeTeamId === state.playerClubId;
+            const lineup = isHome ? newLiveMatch.homeLineup : newLiveMatch.awayLineup;
+
+            const playerIndex = lineup.findIndex((p: LivePlayer) => p.id === action.payload.playerId);
             if (playerIndex === -1) return state;
 
             lineup[playerIndex].currentPosition = action.payload.position;
             lineup[playerIndex].role = action.payload.role;
 
-            const updatedLiveMatch = { ...state.liveMatch };
-            if (isHome) {
-                updatedLiveMatch.homeLineup = lineup;
-            } else {
-                updatedLiveMatch.awayLineup = lineup;
-            }
-            return { ...state, liveMatch: updatedLiveMatch };
+            return { ...state, liveMatch: newLiveMatch };
         }
         case 'UPDATE_LIVE_PLAYER_INSTRUCTIONS': {
             if (!state.liveMatch) return state;
-            const isHome = state.liveMatch.homeTeamId === state.playerClubId;
-            const lineup = isHome ? [...state.liveMatch.homeLineup] : [...state.liveMatch.awayLineup];
+
+            // BUG FIX: Use a deep copy to prevent accidental state mutation which can reset the game.
+            const newLiveMatch = JSON.parse(JSON.stringify(state.liveMatch));
+            const isHome = newLiveMatch.homeTeamId === state.playerClubId;
+            const lineup = isHome ? newLiveMatch.homeLineup : newLiveMatch.awayLineup;
         
-            const playerIndex = lineup.findIndex(p => p.id === action.payload.playerId);
+            const playerIndex = lineup.findIndex((p: LivePlayer) => p.id === action.payload.playerId);
             if (playerIndex === -1) return state;
         
             lineup[playerIndex].instructions = action.payload.instructions;
         
-            const updatedLiveMatch = { ...state.liveMatch };
-            if (isHome) {
-                updatedLiveMatch.homeLineup = lineup;
-            } else {
-                updatedLiveMatch.awayLineup = lineup;
-            }
-            return { ...state, liveMatch: updatedLiveMatch };
+            return { ...state, liveMatch: newLiveMatch };
         }
         case 'END_MATCH': {
             if (!state.liveMatch) return state;

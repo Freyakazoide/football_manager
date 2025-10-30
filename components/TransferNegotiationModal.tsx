@@ -68,7 +68,8 @@ const SellingClubNegotiation: React.FC<{
     buyingClub: Club;
     dispatch: React.Dispatch<Action>;
     onCancel: () => void;
-}> = ({ negotiation, player, buyingClub, dispatch, onCancel }) => {
+    onClose: () => void;
+}> = ({ negotiation, player, buyingClub, dispatch, onCancel, onClose }) => {
     // Encontra a última oferta da IA
     const latestAiOffer = negotiation.clubOfferHistory.filter(o => o.by === 'ai').slice(-1)[0]?.offer;
     
@@ -82,6 +83,7 @@ const SellingClubNegotiation: React.FC<{
     
     const handleAccept = () => {
         dispatch({ type: 'ACCEPT_INCOMING_CLUB_OFFER', payload: { negotiationId: negotiation.id } });
+        onClose();
     };
 
     const handleCounter = () => {
@@ -242,8 +244,27 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
     const player = gameState.players[negotiation.playerId];
     const sellingClub = gameState.clubs[negotiation.sellingClubId];
     const buyingClub = gameState.clubs[negotiation.buyingClubId];
+    
+    if (!player || !sellingClub || !buyingClub) {
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-sm">
+                    <div className="p-6 text-center">
+                        <h2 className="text-2xl font-bold mb-4 text-red-400">Negotiation Error</h2>
+                        <p className="text-gray-300 mb-6">Could not load details for this transfer. The data may be outdated or corrupted.</p>
+                        <button
+                            onClick={onClose}
+                            className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition duration-300"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    
     const isRenewal = negotiation.sellingClubId === negotiation.buyingClubId;
-
     const isPlayerSelling = negotiation.sellingClubId === gameState.playerClubId;
     const isPlayerBuying = negotiation.buyingClubId === gameState.playerClubId;
 
@@ -253,8 +274,6 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
             return () => clearTimeout(timer);
         }
     }, [negotiation.status, onClose]);
-
-    if (!player || !sellingClub || !buyingClub) return null;
 
     const handleCancel = () => {
         dispatch({ type: 'CANCEL_NEGOTIATION', payload: { negotiationId: negotiation.id } });
@@ -280,7 +299,7 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
                 return <BuyingClubNegotiation negotiation={negotiation} player={player} dispatch={dispatch} balance={buyingClub.balance} />;
             }
             if (isPlayerSelling) {
-                return <SellingClubNegotiation negotiation={negotiation} player={player} buyingClub={buyingClub} dispatch={dispatch} onCancel={handleCancel} />;
+                return <SellingClubNegotiation negotiation={negotiation} player={player} buyingClub={buyingClub} dispatch={dispatch} onCancel={handleCancel} onClose={onClose} />;
             }
         }
 

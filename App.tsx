@@ -1,6 +1,8 @@
 
 
-import React, { useState, useReducer, useEffect, useCallback } from 'react';
+
+
+import React, { useState, useReducer, useEffect, useCallback, useRef } from 'react';
 import { GameState, View, Club, Player, Match, PlayerRole, TransferNegotiation } from './types';
 import { gameReducer, initialState } from './services/gameReducer';
 import { generateInitialDatabase } from './services/database';
@@ -127,15 +129,6 @@ const App: React.FC = () => {
             setIsInitialized(true);
         }
     }, [isInitialized]);
-
-    useEffect(() => {
-        const latestNegotiationId = state.nextNegotiationId - 1;
-        const newNegotiation = state.transferNegotiations[latestNegotiationId];
-        
-        if (newNegotiation && activeNegotiationId !== newNegotiation.id) {
-             setActiveNegotiationId(newNegotiation.id);
-        }
-    }, [state.nextNegotiationId, state.transferNegotiations, activeNegotiationId]);
 
     const handleNavigate = useCallback((view: View, context?: any) => {
         const newHistoryEntry = { view, context };

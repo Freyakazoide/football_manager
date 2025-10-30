@@ -10,7 +10,19 @@ interface PlayerProfileViewProps {
     onPlayerClick: (player: Player) => void;
 }
 
-const AttributeBar: React.FC<{ label: string, value: number }> = ({ label, value }) => {
+const AttributeBar: React.FC<{ label: string, value: number, isScouted: boolean }> = ({ label, value, isScouted }) => {
+    const getDisplayValue = () => {
+        if (isScouted) return value;
+        const lower = Math.max(20, Math.floor(value / 10) * 10 - 5);
+        const upper = Math.min(99, Math.ceil(value / 10) * 10 + 5);
+        return `${lower}-${upper}`;
+    };
+
+    const getBarWidth = () => {
+        if (isScouted) return `${value}%`;
+        return `${Math.floor(value / 10) * 10}%`; // Show a bar based on the lower bound
+    };
+
     const getColor = (val: number) => {
         if (val >= 85) return 'bg-green-500';
         if (val >= 70) return 'bg-yellow-500';
@@ -19,14 +31,16 @@ const AttributeBar: React.FC<{ label: string, value: number }> = ({ label, value
     return (
         <div className="grid grid-cols-3 items-center gap-2 text-sm">
             <span className="text-gray-400 capitalize">{label.replace(/([A-Z])/g, ' $1')}</span>
-            <div className="col-span-2 bg-gray-600 rounded-full h-4">
-                <div className={`${getColor(value)} h-4 rounded-full text-center text-xs text-white font-bold flex items-center justify-center`} style={{ width: `${value}%` }}>
-                   {value}
+            <div className="col-span-2 bg-gray-600 rounded-full h-4 relative">
+                <div className={`${getColor(value)} h-4 rounded-full ${!isScouted ? 'opacity-50' : ''}`} style={{ width: getBarWidth() }}></div>
+                 <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
+                   {getDisplayValue()}
                 </div>
             </div>
         </div>
     );
 };
+
 
 const StatusProgressBar: React.FC<{ label: string, value: number, max?: number }> = ({ label, value, max=100 }) => {
     const getBarColor = () => {
@@ -113,17 +127,40 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
 
     const [offerAmount, setOfferAmount] = useState(player.marketValue);
     const [activeTab, setActiveTab] = useState<'attributes' | 'history'>('attributes');
+    const [isRenewing, setIsRenewing] = useState(false);
+    const [newWage, setNewWage] = useState(player.wage);
+    const [newDuration, setNewDuration] = useState(3); // years
     
     const isTransferTarget = player.clubId !== gameState.playerClubId;
+    const areAttributesFullyScouted = Object.keys(player.scoutedAttributes).length > 0 || !isTransferTarget;
+
+    const interactionCooldownDays = 7;
+    let daysSinceInteraction = 999;
+    let canInteract = true;
+
+    if (player.lastInteractionDate) {
+        const diffTime = Math.abs(gameState.currentDate.getTime() - new Date(player.lastInteractionDate).getTime());
+        daysSinceInteraction = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        canInteract = daysSinceInteraction >= interactionCooldownDays;
+    }
+
+    const cooldownRemaining = interactionCooldownDays - daysSinceInteraction;
 
     const makeOffer = () => {
         dispatch({ type: 'MAKE_TRANSFER_OFFER', payload: { player, offerAmount } });
+    };
+    
+    const handleRenewContract = () => {
+        const newExpiryDate = new Date(gameState.currentDate);
+        newExpiryDate.setFullYear(newExpiryDate.getFullYear() + newDuration);
+        dispatch({ type: 'RENEW_CONTRACT', payload: { playerId: player.id, newWage, newExpiryDate } });
+        setIsRenewing(false);
     };
 
     const formatCurrency = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
 
     const attributeGroups: {title: string, attrs: (keyof PlayerAttributes)[]}[] = [
-        { title: 'Technical', attrs: ['passing', 'dribbling', 'shooting', 'tackling', 'heading'] },
+        { title: 'Technical', attrs: ['passing', 'dribbling', 'shooting', 'tackling', 'heading', 'crossing'] },
         { title: 'Mental', attrs: ['aggression', 'creativity', 'positioning', 'teamwork', 'workRate'] },
         { title: 'Physical', attrs: ['pace', 'stamina', 'strength', 'naturalFitness'] },
     ];
@@ -135,7 +172,7 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                     <div key={group.title}>
                         <h3 className="text-lg font-semibold text-green-400 mb-3">{group.title}</h3>
                         <div className="space-y-2">
-                            {group.attrs.map(attr => <AttributeBar key={attr} label={attr} value={player.attributes[attr]}/>)}
+                            {group.attrs.map(attr => <AttributeBar key={attr} label={attr} value={player.attributes[attr]} isScouted={areAttributesFullyScouted} />)}
                         </div>
                     </div>
                 ))}
@@ -196,6 +233,75 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                         Make Offer
                     </button>
                 </div>
+                )}
+                {!isTransferTarget && (
+                    <>
+                        <div className="bg-gray-700 p-4 rounded-lg">
+                            <h3 className="text-lg font-semibold text-green-400 mb-2">Contract Renewal</h3>
+                            {!isRenewing ? (
+                                <button onClick={() => setIsRenewing(true)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded">
+                                    Offer New Contract
+                                </button>
+                            ) : (
+                                <div>
+                                    <label className="text-xs text-gray-400">New Weekly Wage</label>
+                                    <input
+                                        type="number"
+                                        step="100"
+                                        value={newWage}
+                                        onChange={(e) => setNewWage(Number(e.target.value))}
+                                        className="w-full bg-gray-800 p-2 rounded mb-2"
+                                    />
+                                    <label className="text-xs text-gray-400">Contract Duration (years)</label>
+                                    <select
+                                        value={newDuration}
+                                        onChange={(e) => setNewDuration(Number(e.target.value))}
+                                        className="w-full bg-gray-800 p-2 rounded mb-4"
+                                    >
+                                        <option value={1}>1 Year</option>
+                                        <option value={2}>2 Years</option>
+                                        <option value={3}>3 Years</option>
+                                        <option value={4}>4 Years</option>
+                                        <option value={5}>5 Years</option>
+                                    </select>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setIsRenewing(false)} className="w-1/2 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 rounded">
+                                            Cancel
+                                        </button>
+                                        <button onClick={handleRenewContract} className="w-1/2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded">
+                                            Confirm Offer
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="bg-gray-700 p-4 rounded-lg">
+                            <h3 className="text-lg font-semibold text-green-400 mb-3">Player Interaction</h3>
+                             {!canInteract ? (
+                                <div className="text-center text-sm text-gray-400 p-4 bg-gray-800 rounded-md">
+                                    You have recently interacted with this player.
+                                    <p>You can interact again in <span className="font-bold text-white">{cooldownRemaining}</span> day(s).</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-2">
+                                    <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'praise' } })} className="bg-gray-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm">
+                                        Praise Player
+                                    </button>
+                                    <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'criticize' } })} className="bg-gray-600 hover:bg-orange-500 text-white font-bold py-2 rounded text-sm">
+                                        Criticize Player
+                                    </button>
+                                    <button 
+                                        onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'promise' } })}
+                                        disabled={!!player.promise}
+                                        className="bg-gray-600 hover:bg-yellow-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
+                                    >
+                                        {player.promise ? 'Promise Active' : 'Promise Playing Time'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </>
                 )}
             </div>
         </div>

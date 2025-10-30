@@ -136,7 +136,7 @@ const generatePlayerAttributes = (): PlayerAttributes => ({
     naturalFitness: randInt(30, 95),
 });
 
-const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubId' | 'contractExpires' | 'history' | 'morale' | 'satisfaction' | 'matchFitness' | 'injury' | 'suspension' | 'seasonYellowCards'>): number => {
+const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubId' | 'contractExpires' | 'history' | 'morale' | 'satisfaction' | 'matchFitness' | 'injury' | 'suspension' | 'seasonYellowCards' | 'individualTrainingFocus' | 'scoutedAttributes'>): number => {
     const avgAttr = Object.values(player.attributes).reduce((a, b) => a + b, 0) / Object.values(player.attributes).length;
     let value = (avgAttr * 20000) + (player.potential * 15000);
     if (player.age < 22) value *= 1.5;
@@ -169,7 +169,7 @@ const defaultPositions442: { position: { x: number, y: number }, role: PlayerRol
     { position: { x: 60, y: 25 }, role: 'Striker' },
 ];
 
-export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'transferResult' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults'> => {
+export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'transferResult' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError'> => {
     const clubs: Record<number, Club> = {};
     const players: Record<number, Player> = {};
     const leagueTable: LeagueEntry[] = [];
@@ -190,6 +190,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
             reputation: randInt(50, 90),
             balance: randInt(5_000_000, 20_000_000),
             tactics: initialTactics,
+            trainingFocus: 'Balanced',
         };
         leagueTable.push({
             clubId: i, played: 0, wins: 0, draws: 0, losses: 0, 
@@ -240,6 +241,8 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
                 suspension: null,
                 seasonYellowCards: 0,
                 history: [],
+                scoutedAttributes: {},
+                individualTrainingFocus: null,
             };
             players[playerIdCounter] = player;
             clubPlayers.push(player);
@@ -339,5 +342,6 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
     
     schedule.sort((a,b) => a.date.getTime() - b.date.getTime());
 
-    return { clubs, players, schedule, leagueTable, matchStartError: null };
+    // FIX: Removed matchStartError from return as it is omitted in the function's return type and handled by initialState in the reducer.
+    return { clubs, players, schedule, leagueTable, scoutingAssignments: [], nextScoutAssignmentId: 1 };
 };

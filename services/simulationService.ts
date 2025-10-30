@@ -1,4 +1,4 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus } from '../types';
 import { getRoleCategory } from './database';
 import { generateInjury } from './injuryService';
 
@@ -206,19 +206,63 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
     return { ...match, homeScore, awayScore, homeStats, awayStats, log, playerStats, homeLineup, awayLineup, disciplinaryEvents, injuryEvents };
 };
 
-export const processPlayerDevelopment = (players: Record<number, Player>): Record<number, Player> => {
-    const newPlayers = { ...players };
-    for (const player of Object.values(newPlayers)) {
+const getTrainingFocusAttributes = (focus: TeamTrainingFocus): (keyof PlayerAttributes)[] => {
+    switch (focus) {
+        case 'Attacking': return ['shooting', 'dribbling', 'crossing', 'creativity'];
+        case 'Defending': return ['tackling', 'heading', 'positioning', 'strength'];
+        case 'Physical': return ['pace', 'stamina', 'strength', 'naturalFitness'];
+        case 'Tactical': return ['positioning', 'teamwork', 'workRate'];
+        default: return [];
+    }
+};
+
+export const processPlayerDevelopment = (players: Record<number, Player>, clubs: Record<number, Club>): Record<number, Player> => {
+    const newPlayers = JSON.parse(JSON.stringify(players));
+    for (const pId in newPlayers) {
+        const player: Player = newPlayers[pId];
+        const club = clubs[player.clubId];
+        const teamFocus = club.trainingFocus;
+        const individualFocus = player.individualTrainingFocus;
+        
+        let developmentHappened = false;
+
+        // Handle individual role training
+        if (individualFocus?.type === 'role' && Math.random() < 0.5) { // 50% chance to improve role familiarity each month
+            const roleToTrain = individualFocus.role;
+            if (player.positionalFamiliarity[roleToTrain] < 100) {
+                player.positionalFamiliarity[roleToTrain] = Math.min(100, player.positionalFamiliarity[roleToTrain] + 2);
+                developmentHappened = true;
+            }
+        }
+
+        // Handle attribute development
         if (player.age < 29 && Math.random() < 0.2) { // 20% chance of development per month
             const potentialFactor = player.potential / 100;
             if (Math.random() < potentialFactor) {
                 const attrs = Object.keys(player.attributes) as (keyof PlayerAttributes)[];
-                const attrToImprove = attrs[Math.floor(Math.random() * attrs.length)];
-                if (player.attributes[attrToImprove] < 99) {
+                let attrToImprove = attrs[Math.floor(Math.random() * attrs.length)];
+                
+                let improvementChance = 1.0;
+                
+                // Boost chance based on team focus
+                const focusAttrs = getTrainingFocusAttributes(teamFocus);
+                if (focusAttrs.includes(attrToImprove)) {
+                    improvementChance *= 1.5;
+                }
+                
+                // Greatly boost chance based on individual focus
+                if (individualFocus?.type === 'attribute' && individualFocus.attribute === attrToImprove) {
+                    improvementChance *= 2.5;
+                }
+
+                if (Math.random() < improvementChance && player.attributes[attrToImprove] < 99) {
                     player.attributes[attrToImprove] += 1;
+                    developmentHappened = true;
                 }
             }
         }
+        
+        // Handle attribute decline
          if (player.age > 30 && Math.random() < 0.2) { // 20% chance of decline per month
             const ageFactor = (player.age - 30) / 10;
              if (Math.random() < ageFactor) {
@@ -226,12 +270,14 @@ export const processPlayerDevelopment = (players: Record<number, Player>): Recor
                 const attrToDecline = physicalAttrs[Math.floor(Math.random() * physicalAttrs.length)];
                 if (player.attributes[attrToDecline] > 30) {
                     player.attributes[attrToDecline] -= 1;
+                    developmentHappened = true;
                 }
              }
         }
     }
     return newPlayers;
 };
+
 
 export const processPlayerAging = (players: Record<number, Player>) => {
     const newPlayers = { ...players };

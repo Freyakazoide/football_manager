@@ -14,11 +14,12 @@ const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
     return ROLE_DEFINITIONS[role]?.category || 'MID';
 };
 
-const getMoraleIcon = (morale: number): string => {
-    if (morale > 75) return '😊'; // Happy
-    if (morale > 50) return '😐'; // Content
-    return '😞'; // Unhappy
+const MoraleDisplay: React.FC<{ morale: number }> = ({ morale }) => {
+    if (morale > 75) return <span className="text-green-400 text-sm">😊 Happy</span>;
+    if (morale > 50) return <span className="text-gray-300 text-sm">😐 Content</span>;
+    return <span className="text-red-400 text-sm">😞 Unhappy</span>;
 };
+
 
 const FitnessBar: React.FC<{ fitness: number }> = ({ fitness }) => {
     const getColor = (val: number) => {
@@ -199,7 +200,7 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                                             </span>
                                         }
                                     </td>
-                                    <td className="p-3 text-center" title={`${player.morale}`}>{getMoraleIcon(player.morale)}</td>
+                                    <td className="p-3 text-center whitespace-nowrap"><MoraleDisplay morale={player.morale} /></td>
                                     <td className="p-3"><FitnessBar fitness={player.matchFitness} /></td>
                                     <td className="p-3 text-center">{player.apps}</td>
                                     <td className="p-3 text-center">{player.goals}</td>

@@ -1,4 +1,4 @@
-import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment } from '../types';
 import { Action } from './reducerTypes';
 import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
@@ -22,6 +22,8 @@ export const initialState: GameState = {
     matchDayFixtures: null,
     matchDayResults: null,
     matchStartError: null,
+    scoutingAssignments: [],
+    nextScoutAssignmentId: 1,
 };
 
 const rehydratePlayers = (players: Record<number, Player>): Record<number, Player> => {
@@ -30,6 +32,8 @@ const rehydratePlayers = (players: Record<number, Player>): Record<number, Playe
         if (player.contractExpires) player.contractExpires = new Date(player.contractExpires);
         if (player.injury?.returnDate) player.injury.returnDate = new Date(player.injury.returnDate);
         if (player.suspension?.returnDate) player.suspension.returnDate = new Date(player.suspension.returnDate);
+        if (player.promise?.deadline) player.promise.deadline = new Date(player.promise.deadline);
+        if (player.lastInteractionDate) player.lastInteractionDate = new Date(player.lastInteractionDate);
     }
     return players;
 }
@@ -61,9 +65,18 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             };
         }
         case 'SELECT_PLAYER_CLUB': {
+            const playerClubId = action.payload;
+            const newPlayers = JSON.parse(JSON.stringify(state.players));
+            // Reveal all attributes for the player's own team
+            for (const pId in newPlayers) {
+                if (newPlayers[pId].clubId === playerClubId) {
+                    newPlayers[pId].scoutedAttributes = newPlayers[pId].attributes;
+                }
+            }
             return {
                 ...state,
-                playerClubId: action.payload,
+                playerClubId: playerClubId,
+                players: newPlayers
             };
         }
         case 'ADVANCE_DAY': {
@@ -73,6 +86,42 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             newDate.setDate(newDate.getDate() + 1);
 
             let newState = { ...state, currentDate: newDate, transferResult: null };
+
+            // Process scouting assignments
+            const clonedAssignments = JSON.parse(JSON.stringify(newState.scoutingAssignments)) as ScoutingAssignment[];
+            clonedAssignments.forEach(assignment => {
+                if (!assignment.isComplete && newDate >= new Date(assignment.completionDate)) {
+                    assignment.isComplete = true;
+                    const { filters } = assignment;
+                    const foundPlayers = Object.values(newState.players).filter(p => {
+                        if (p.clubId === newState.playerClubId) return false;
+                        if (filters.minAge && p.age < filters.minAge) return false;
+                        if (filters.maxAge && p.age > filters.maxAge) return false;
+                        if (filters.position && getRoleCategory(p.naturalPosition) !== filters.position) return false;
+                        if (filters.minPotential && p.potential < filters.minPotential) return false;
+                        if (filters.attributes) {
+                            for (const attr in filters.attributes) {
+                                const key = attr as keyof PlayerAttributes;
+                                if (p.attributes[key] < filters.attributes[key]!) return false;
+                            }
+                        }
+                        return true;
+                    });
+
+                    assignment.reportPlayerIds = foundPlayers.map(p => p.id);
+                    
+                    // Reveal attributes for found players
+                    const clonedPlayersForScouting = JSON.parse(JSON.stringify(newState.players));
+                    assignment.reportPlayerIds.forEach(pId => {
+                        clonedPlayersForScouting[pId].scoutedAttributes = clonedPlayersForScouting[pId].attributes;
+                    });
+                    newState.players = clonedPlayersForScouting;
+
+                    newState = addNewsItem(newState, "Scouting Report Ready", `Your scouting assignment "${assignment.description}" is complete. ${foundPlayers.length} players were found matching your criteria.`, 'scouting_report_ready', assignment.id);
+                }
+            });
+            newState.scoutingAssignments = clonedAssignments;
+
 
             // Process player status updates (injuries, suspensions, fitness decay)
             const clonedPlayersForStatus: Record<number, Player> = JSON.parse(JSON.stringify(newState.players));
@@ -89,6 +138,16 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     player.suspension = null; hasChanged = true;
                 }
                 
+                if (player.promise && newDate >= player.promise.deadline) {
+                    player.satisfaction = Math.max(0, player.satisfaction - 25);
+                    player.morale = Math.max(0, player.morale - 15);
+                    player.promise = null;
+                    hasChanged = true;
+                    if (player.clubId === newState.playerClubId) {
+                        newState = addNewsItem(newState, `Promise Broken: ${player.name}`, `${player.name} is unhappy that you did not keep your promise to give him more playing time.`, 'promise_broken', player.id);
+                    }
+                }
+
                 if (hasChanged) playerDidChange = true;
             }
             if(playerDidChange) newState.players = updatedPlayers;
@@ -121,7 +180,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             if (matchesToday.length === 0) {
                  if (newDate.getDate() === 1) {
-                    newState.players = processPlayerDevelopment(newState.players);
+                    newState.players = processPlayerDevelopment(newState.players, newState.clubs);
                     newState.clubs = processWages(newState.clubs, newState.players);
                     if (newDate.getMonth() === 0) { // New year
                         const { players } = processPlayerAging(newState.players);
@@ -220,7 +279,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             }
 
             if (newDate.getDate() === 1) {
-                newState.players = processPlayerDevelopment(newState.players);
+                newState.players = processPlayerDevelopment(newState.players, newState.clubs);
                 newState.clubs = processWages(newState.clubs, newState.players);
                 if (newDate.getMonth() === 0) { // New year
                     const { players } = processPlayerAging(newState.players);
@@ -272,6 +331,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 const newContractYears = updatedPlayer.age < 28 ? 4 : 2;
                 updatedPlayer.contractExpires = new Date(state.currentDate.getFullYear() + newContractYears, state.currentDate.getMonth(), state.currentDate.getDate());
                 updatedPlayer.marketValue = recalculateMarketValue(updatedPlayer);
+                // Reveal all attributes upon signing
+                updatedPlayer.scoutedAttributes = updatedPlayer.attributes;
                 const newPlayers = { ...state.players, [player.id]: updatedPlayer };
                 const newClubs = { ...state.clubs, [buyerClub.id]: updatedBuyerClub, [sellerClub.id]: sellerClub };
 
@@ -293,6 +354,126 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 item.id === action.payload.newsItemId ? { ...item, isRead: true } : item
             );
             return { ...state, news: newNews };
+        }
+        case 'RENEW_CONTRACT': {
+            const { playerId, newWage, newExpiryDate } = action.payload;
+            const player = state.players[playerId];
+            if (!player || player.clubId !== state.playerClubId) return state;
+
+            // Acceptance logic
+            const wageIncreaseFactor = (newWage / player.wage) - 1.0; // e.g., 0.1 for 10% increase
+            const satisfactionBonus = (player.satisfaction - 50) / 100; // range from -0.5 to 0.5
+            let acceptanceChance = 0.6 + (wageIncreaseFactor * 0.5) + satisfactionBonus;
+            acceptanceChance = Math.max(0.1, Math.min(0.95, acceptanceChance));
+
+            if (Math.random() < acceptanceChance) {
+                // Accepted
+                const newPlayers = { ...state.players };
+                const updatedPlayer = { ...player };
+                updatedPlayer.wage = newWage;
+                updatedPlayer.contractExpires = newExpiryDate;
+                updatedPlayer.satisfaction = Math.min(100, player.satisfaction + 15);
+                updatedPlayer.morale = Math.min(100, player.morale + 10);
+                newPlayers[playerId] = updatedPlayer;
+
+                return {
+                    ...state,
+                    players: newPlayers,
+                    transferResult: { success: true, message: `${player.name} has accepted the new contract offer.` }
+                };
+            } else {
+                // Rejected
+                const newPlayers = { ...state.players };
+                const updatedPlayer = { ...player };
+                updatedPlayer.satisfaction = Math.max(0, player.satisfaction - 10);
+                updatedPlayer.morale = Math.max(0, player.morale - 5);
+                newPlayers[playerId] = updatedPlayer;
+                
+                return {
+                    ...state,
+                    players: newPlayers,
+                    transferResult: { success: false, message: `${player.name} has rejected your contract offer. He feels it doesn't meet his expectations.` }
+                };
+            }
+        }
+        case 'PLAYER_INTERACTION': {
+            const { playerId, interactionType } = action.payload;
+            const player = state.players[playerId];
+            if (!player || player.clubId !== state.playerClubId) return state;
+            
+            const newPlayers = JSON.parse(JSON.stringify(state.players));
+            const updatedPlayer = newPlayers[playerId];
+            let newState = { ...state };
+
+            updatedPlayer.lastInteractionDate = new Date(state.currentDate);
+
+            switch (interactionType) {
+                case 'praise':
+                    updatedPlayer.morale = Math.min(100, player.morale + 7);
+                    updatedPlayer.satisfaction = Math.min(100, player.satisfaction + 5);
+                     newState = addNewsItem(
+                        newState,
+                        `Manager praises ${player.name}`,
+                        `Following a string of good performances, the manager has publicly praised ${player.name}, hoping it will spur the player on to even greater heights.`,
+                        'interaction_praise',
+                        player.id
+                    );
+                    break;
+                case 'criticize':
+                    updatedPlayer.morale = Math.max(0, player.morale - 10);
+                    newState = addNewsItem(
+                        newState,
+                        `Manager demands improvement from ${player.name}`,
+                        `The manager has publicly stated that they expect more from ${player.name}. "We know the quality he has, and we need to see it more consistently," the manager was quoted as saying.`,
+                        'interaction_criticize',
+                        player.id
+                    );
+                    break;
+                case 'promise':
+                    updatedPlayer.satisfaction = Math.min(100, player.satisfaction + 20);
+                    const deadline = new Date(state.currentDate);
+                    deadline.setDate(deadline.getDate() + 14); // 2 week deadline
+                    updatedPlayer.promise = { type: 'playing_time', deadline };
+                    newState = addNewsItem(
+                        newState,
+                        `${player.name} gets playing time promise`,
+                        `After a private discussion, the manager has promised ${player.name} more first-team opportunities in the coming weeks.`,
+                        'interaction_promise',
+                        player.id
+                    );
+                    break;
+            }
+
+            return { ...newState, players: rehydratePlayers(newPlayers) };
+        }
+        case 'UPDATE_TRAINING_SETTINGS': {
+            if (!state.playerClubId) return state;
+            const { teamFocus, individualFocuses } = action.payload;
+
+            const newClubs = { ...state.clubs };
+            newClubs[state.playerClubId].trainingFocus = teamFocus;
+
+            const newPlayers = { ...state.players };
+            for (const pId in individualFocuses) {
+                if (newPlayers[pId]) {
+                    newPlayers[pId].individualTrainingFocus = individualFocuses[pId];
+                }
+            }
+
+            return { ...state, clubs: newClubs, players: newPlayers };
+        }
+        case 'CREATE_SCOUTING_ASSIGNMENT': {
+            const newAssignment: ScoutingAssignment = {
+                ...action.payload,
+                id: state.nextScoutAssignmentId,
+                isComplete: false,
+                reportPlayerIds: [],
+            };
+            return {
+                ...state,
+                scoutingAssignments: [...state.scoutingAssignments, newAssignment],
+                nextScoutAssignmentId: state.nextScoutAssignmentId + 1,
+            };
         }
         // Match Engine Reducers
         case 'START_MATCH': {

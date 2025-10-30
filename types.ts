@@ -9,6 +9,8 @@ export enum View {
     TRANSFERS = 'Transfers',
     NEWS = 'News',
     PLAYER_PROFILE = 'Player Profile',
+    TRAINING = 'Training',
+    SCOUTING = 'Scouting',
 }
 
 export type PlayerRole =
@@ -64,6 +66,9 @@ export interface PlayerSeasonStats {
     ratingPoints: number; // Sum of all match ratings
 }
 
+export type IndividualTrainingFocus = { type: 'attribute', attribute: keyof PlayerAttributes } | { type: 'role', role: PlayerRole } | null;
+
+
 export interface Player {
     id: number;
     clubId: number;
@@ -77,6 +82,7 @@ export interface Player {
     marketValue: number;
     potential: number;
     attributes: PlayerAttributes;
+    scoutedAttributes: Partial<PlayerAttributes>; // Revealed attributes
     history: PlayerSeasonStats[];
     morale: number; // 0-100
     satisfaction: number; // 0-100
@@ -84,6 +90,9 @@ export interface Player {
     injury: { type: string; returnDate: Date } | null;
     suspension: { returnDate: Date } | null;
     seasonYellowCards: number;
+    promise?: { type: 'playing_time', deadline: Date } | null;
+    lastInteractionDate?: Date | null;
+    individualTrainingFocus: IndividualTrainingFocus;
 }
 
 export interface LineupPlayer {
@@ -99,6 +108,8 @@ export interface Tactics {
     bench: (number | null)[];
 }
 
+export type TeamTrainingFocus = 'Balanced' | 'Attacking' | 'Defending' | 'Tactical' | 'Physical' | 'Set Pieces';
+
 export interface Club {
     id: number;
     name: string;
@@ -106,6 +117,7 @@ export interface Club {
     reputation: number;
     balance: number;
     tactics: Tactics;
+    trainingFocus: TeamTrainingFocus;
 }
 
 export interface LeagueEntry {
@@ -158,7 +170,7 @@ export interface NewsItem {
     date: Date;
     headline: string;
     content: string;
-    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player';
+    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready';
     relatedEntityId?: number;
     isRead: boolean;
     matchStatsSummary?: Match;
@@ -219,6 +231,24 @@ export interface LiveMatchState {
     injuredPlayerIds: number[];
 }
 
+export type ScoutingFilters = {
+    minAge?: number;
+    maxAge?: number;
+    position?: 'GK' | 'DEF' | 'MID' | 'FWD';
+    minPotential?: number;
+    attributes?: Partial<Record<keyof PlayerAttributes, number>>;
+    name?: string;
+};
+
+export interface ScoutingAssignment {
+    id: number;
+    description: string;
+    filters: ScoutingFilters;
+    completionDate: Date;
+    isComplete: boolean;
+    reportPlayerIds: number[];
+}
+
 export interface GameState {
     currentDate: Date;
     playerClubId: number | null;
@@ -233,4 +263,6 @@ export interface GameState {
     matchDayFixtures: { playerMatch: MatchDayInfo; aiMatches: Match[] } | null;
     matchDayResults: { playerResult: Match; aiResults: Match[] } | null;
     matchStartError: string | null;
+    scoutingAssignments: ScoutingAssignment[];
+    nextScoutAssignmentId: number;
 }

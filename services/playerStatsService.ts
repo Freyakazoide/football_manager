@@ -40,6 +40,10 @@ export const updatePlayerStatsFromMatchResult = (
             player.suspension.returnDate = new Date(player.suspension.returnDate);
         }
 
+        if (player.promise) {
+            player.promise = null; // Promise fulfilled by playing
+        }
+
         let seasonStats: PlayerSeasonStats | undefined = player.history.find((h: PlayerSeasonStats) => h.season === season && h.clubId === player.clubId);
 
         if (!seasonStats) {

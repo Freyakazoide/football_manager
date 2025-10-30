@@ -18,6 +18,8 @@ import NewsView from './components/NewsView';
 import MatchResultsModal from './components/MatchResultsModal';
 import MatchReportModal from './components/MatchReportModal';
 import TeamView from './components/TeamView';
+import TrainingView from './components/TrainingView';
+import ScoutingView from './components/ScoutingView';
 
 const roleOrder: Record<PlayerRole, number> = {
     // GK
@@ -198,6 +200,10 @@ const App: React.FC = () => {
                 return <TransfersView gameState={state} onPlayerClick={handlePlayerClick} />;
             case View.NEWS:
                 return <NewsView gameState={state} dispatch={dispatch} />;
+            case View.TRAINING:
+                return <TrainingView gameState={state} dispatch={dispatch} />;
+            case View.SCOUTING:
+                return <ScoutingView gameState={state} dispatch={dispatch} onPlayerClick={handlePlayerClick} />;
             case View.PLAYER_PROFILE:
                 const playerId = currentViewInfo.context?.playerId;
                 if (!playerId) return <SquadView gameState={state} onPlayerClick={handlePlayerClick} />;

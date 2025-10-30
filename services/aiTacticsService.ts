@@ -1,4 +1,4 @@
-import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction } from '../types';
+import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction, AssistantAttributes, Staff, StaffRole } from '../types';
 import { ROLE_DEFINITIONS } from './database';
 import { FORMATION_PRESETS } from './formations';
 
@@ -24,14 +24,23 @@ export const createDefaultInstructions = (): PlayerInstructions => ({
     marking: MarkingInstruction.Normal,
 });
 
-export const suggestBestXI = (lineupSlots: (Omit<LineupPlayer, 'playerId' | 'instructions'> | null)[], availablePlayers: Player[]): (LineupPlayer | null)[] => {
+export const suggestBestXI = (lineupSlots: (Omit<LineupPlayer, 'playerId' | 'instructions'> | null)[], availablePlayers: Player[], assistantAttrs?: AssistantAttributes): (LineupPlayer | null)[] => {
     const filledLineup: (LineupPlayer | null)[] = Array(11).fill(null);
     let playersPool = [...availablePlayers];
 
     const getPlayerScoreForRole = (player: Player, role: PlayerRole): number => {
         const familiarity = player.positionalFamiliarity[role] || 20;
         const overall = getOverallRating(player);
-        return (familiarity * 1.5) + overall;
+        let score = (familiarity * 1.5) + overall;
+
+        // Apply error factor based on assistant's skill
+        if (assistantAttrs) {
+            const errorMargin = (100 - assistantAttrs.judgingPlayerAbility) / 5; // Max error of 20 for 0 skill
+            const randomError = (Math.random() - 0.5) * errorMargin; // -10 to +10 error
+            score += randomError;
+        }
+
+        return score;
     };
     
     lineupSlots.forEach((slot, index) => {
@@ -57,16 +66,24 @@ export const suggestBestXI = (lineupSlots: (Omit<LineupPlayer, 'playerId' | 'ins
 };
 
 
-export const generateAITactics = (clubPlayers: Player[]): Tactics => {
+export const generateAITactics = (clubPlayers: Player[], clubStaff: Staff[]): Tactics => {
     // --- New Formation Selection Logic ---
     let bestFormation = FORMATION_PRESETS[0];
     let bestFormationScore = 0;
+
+    const assistant = clubStaff.find(s => s.role === StaffRole.Assistant) as Staff & { attributes: AssistantAttributes } | undefined;
 
     const getPlayerScoreForRole = (player: Player, role: PlayerRole): number => {
         const familiarity = player.positionalFamiliarity[role] || 20;
         const overall = getOverallRating(player);
         // More weight on familiarity for AI team cohesion
-        return (familiarity * 2) + overall; 
+        let score = (familiarity * 2) + overall;
+        if (assistant) {
+             const errorMargin = (100 - assistant.attributes.judgingPlayerAbility) / 8;
+             const randomError = (Math.random() - 0.5) * errorMargin;
+             score += randomError;
+        }
+        return score;
     };
 
     for (const formation of FORMATION_PRESETS) {
@@ -95,7 +112,7 @@ export const generateAITactics = (clubPlayers: Player[]): Tactics => {
 
     // --- Generate Best XI for the chosen formation ---
     const lineupSlots = bestFormation.positions.map(p => ({ position: { x: p.x, y: p.y }, role: p.role }));
-    const lineup = suggestBestXI(lineupSlots, clubPlayers);
+    const lineup = suggestBestXI(lineupSlots, clubPlayers, assistant?.attributes);
 
     const lineupPlayers = lineup.map(lp => lp ? clubPlayers.find(p => p.id === lp.playerId) : null).filter(Boolean) as Player[];
     const lineupIds = new Set(lineupPlayers.map(p => p.id));

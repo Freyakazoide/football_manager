@@ -3,6 +3,7 @@ export enum View {
     SQUAD = 'Squad',
     TEAM = 'Team',
     TACTICS = 'Tactics',
+    STAFF = 'Staff',
     COMPETITION = 'Competition',
     CALENDAR = 'Calendar',
     FINANCES = 'Finances',
@@ -37,10 +38,48 @@ export enum TacklingInstruction { Normal = 'Normal', Cautious = 'Cautious', Hard
 export enum PressingInstruction { Normal = 'Normal', Urgent = 'Urgent', DropOff = 'Drop Off' }
 export enum MarkingInstruction { Normal = 'Normal', Zonal = 'Zonal', ManMarking = 'Man Marking' }
 
+// Staff Types
+export enum StaffRole {
+    Assistant = 'Assistant Manager',
+    Scout = 'Scout',
+    Physio = 'Physiotherapist',
+}
+
+export interface AssistantAttributes {
+    tacticalKnowledge: number;
+    judgingPlayerAbility: number;
+    manManagement: number;
+}
+
+export interface ScoutAttributes {
+    judgingPlayerAbility: number;
+    judgingPlayerPotential: number;
+    adaptability: number;
+}
+
+export interface PhysioAttributes {
+    physiotherapy: number;
+    injuryPrevention: number;
+}
+
+export type StaffAttributes = AssistantAttributes | ScoutAttributes | PhysioAttributes;
+
+export interface Staff {
+    id: number;
+    clubId: number | null; // null if unemployed
+    name: string;
+    age: number;
+    nationality: string;
+    role: StaffRole;
+    wage: number;
+    contractExpires: Date;
+    attributes: StaffAttributes;
+}
+
+
 // Interfaces & Types
 export interface PlayerAttributes {
     passing: number; dribbling: number; shooting: number; tackling: number; heading: number;
-    // FIX: Add 'crossing' attribute to PlayerAttributes interface.
     crossing: number;
     aggression: number; creativity: number; positioning: number; teamwork: number; workRate: number;
     pace: number; stamina: number; strength: number; naturalFitness: number;
@@ -83,6 +122,7 @@ export interface Player {
     potential: number;
     attributes: PlayerAttributes;
     scoutedAttributes: Partial<PlayerAttributes>; // Revealed attributes
+    scoutedPotentialRange: [number, number] | null;
     history: PlayerSeasonStats[];
     morale: number; // 0-100
     satisfaction: number; // 0-100
@@ -118,6 +158,18 @@ export interface Club {
     balance: number;
     tactics: Tactics;
     trainingFocus: TeamTrainingFocus;
+    staffIds: {
+        assistant: number | null;
+        physios: number[];
+        scouts: number[];
+    };
+    competitionId: number;
+}
+
+export interface Competition {
+    id: number;
+    name: string;
+    level: number; // e.g., 1 for top division, 2 for second
 }
 
 export interface LeagueEntry {
@@ -242,6 +294,7 @@ export type ScoutingFilters = {
 
 export interface ScoutingAssignment {
     id: number;
+    scoutId: number;
     description: string;
     filters: ScoutingFilters;
     completionDate: Date;
@@ -249,11 +302,27 @@ export interface ScoutingAssignment {
     reportPlayerIds: number[];
 }
 
+export interface SeasonReviewData {
+    season: string;
+    finalTable: LeagueEntry[];
+    leagueWinnerId: number;
+    promotedClubIds: number[];
+    relegatedClubIds: number[];
+    awards: {
+        playerOfTheSeason: Player;
+        topScorer: Player & { goals: number };
+        youngPlayer: Player;
+    };
+    prizeMoney: number;
+}
+
 export interface GameState {
     currentDate: Date;
     playerClubId: number | null;
     clubs: Record<number, Club>;
     players: Record<number, Player>;
+    staff: Record<number, Staff>;
+    competitions: Record<number, Competition>;
     schedule: Match[];
     leagueTable: LeagueEntry[];
     transferResult: TransferResult | null;
@@ -265,4 +334,5 @@ export interface GameState {
     matchStartError: string | null;
     scoutingAssignments: ScoutingAssignment[];
     nextScoutAssignmentId: number;
+    seasonReviewData: SeasonReviewData | null;
 }

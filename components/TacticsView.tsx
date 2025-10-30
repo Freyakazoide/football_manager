@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { GameState, Player, Tactics, Mentality, LineupPlayer, PlayerRole, PlayerInstructions } from '../types';
+import { GameState, Player, Tactics, Mentality, LineupPlayer, PlayerRole, PlayerInstructions, Staff, StaffRole, AssistantAttributes } from '../types';
 import { Action } from '../services/reducerTypes';
 import { FORMATION_PRESETS } from '../services/formations';
 import { suggestBestXI, createDefaultInstructions } from '../services/aiTacticsService';
@@ -60,6 +60,11 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch }) => {
     const [selectedPlayerForModal, setSelectedPlayerForModal] = useState<LineupPlayer | null>(null);
     const [selectedFormation, setSelectedFormation] = useState<string>('');
 
+    const assistant = useMemo(() => {
+        if (!playerClub?.staffIds.assistant) return null;
+        return gameState.staff[playerClub.staffIds.assistant] as Staff & { attributes: AssistantAttributes };
+    }, [playerClub, gameState.staff]);
+
     useEffect(() => {
         if (playerClub) {
             setTactics(playerClub.tactics);
@@ -104,7 +109,7 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch }) => {
         const lineupSlots = formation.positions.map(p => ({ position: { x: p.x, y: p.y }, role: p.role }));
         const allPlayers = (Object.values(gameState.players) as Player[])
             .filter(p => p.clubId === gameState.playerClubId && !p.injury && !p.suspension);
-        const bestXI = suggestBestXI(lineupSlots, allPlayers);
+        const bestXI = suggestBestXI(lineupSlots, allPlayers, assistant?.attributes);
         setTactics(prev => ({ ...prev, lineup: bestXI }));
     };
 
@@ -268,7 +273,7 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch }) => {
                     </div>
                 </div>
                  <div className="grid grid-cols-2 gap-4 mb-4">
-                     <button onClick={handleAskAssistant} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-sm">Ask Assistant</button>
+                     <button onClick={handleAskAssistant} disabled={!assistant} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded text-sm">Ask Assistant</button>
                      <button onClick={handleClearPitch} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded text-sm">Clear Squad</button>
                 </div>
 

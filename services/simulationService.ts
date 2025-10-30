@@ -1,5 +1,5 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus } from '../types';
-import { getRoleCategory } from './database';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats } from '../types';
+import { getRoleCategory, ALL_ROLES } from './database';
 import { generateInjury } from './injuryService';
 
 const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -110,7 +110,6 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
                 if(isBigChance) attackStats.bigChances++;
 
                 const shootingTeamLineup = hasPossession === 'home' ? homeLineup : awayLineup;
-                // FIX: Use getRoleCategory to correctly identify forwards.
                 const potentialShooters = shootingTeamLineup.filter(p => p && getRoleCategory(p.role) === 'FWD');
                 const shooter = pickRandom(potentialShooters.length > 0 ? potentialShooters : shootingTeamLineup);
                 if (shooter) {
@@ -139,7 +138,6 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
         } else {
             defenseStats.tackles++;
             if (Math.random() < 0.2) { // Chance for a dribble on failed progression
-                // FIX: Use getRoleCategory to correctly identify midfielders.
                 const dribbler = pickRandom(attackingLineup.filter(p => p && getRoleCategory(p.role) === 'MID'));
                 if (dribbler) playerStats[dribbler.playerId].dribbles++;
             }
@@ -280,22 +278,128 @@ export const processPlayerDevelopment = (players: Record<number, Player>, clubs:
 
 
 export const processPlayerAging = (players: Record<number, Player>) => {
-    const newPlayers = { ...players };
-    for (const player of Object.values(newPlayers)) {
+    const newPlayers: Record<number, Player> = {};
+    const retiredPlayers: Player[] = [];
+
+    for (const pId in players) {
+        const player = players[pId];
         player.age += 1;
         player.marketValue = recalculateMarketValue(player);
-    }
-    return { players: newPlayers };
-}
 
-export const processWages = (clubs: Record<number, Club>, players: Record<number, Player>): Record<number, Club> => {
+        // Retirement logic
+        if (player.age > 33) {
+            const retirementChance = (player.age - 33) * 5 + (50 - player.attributes.naturalFitness) / 2;
+            if (Math.random() * 100 < retirementChance) {
+                retiredPlayers.push(player);
+                continue; // Skip adding to newPlayers
+            }
+        }
+        newPlayers[pId] = player;
+    }
+    return { players: newPlayers, retiredPlayers };
+};
+
+export const generateRegens = (clubs: Record<number, Club>, retiredPlayerCount: number, existingPlayers: Record<number, Player>): Player[] => {
+    const newPlayers: Player[] = [];
+    const highestId = Math.max(0, ...Object.keys(existingPlayers).map(Number));
+    let newIdCounter = highestId + 1;
+
+    for (let i = 0; i < retiredPlayerCount + 5; i++) { // Generate a few extra players
+        const club = pickRandom(Object.values(clubs));
+        const age = randInt(16, 19);
+        const naturalPosition = pickRandom(ALL_ROLES);
+        const potential = randInt(Math.max(40, club.reputation - 20), Math.min(100, club.reputation + 20));
+        
+        const newPlayer: Player = {
+            id: newIdCounter++,
+            clubId: club.id,
+            name: `Regen ${newIdCounter}`, // Placeholder name
+            age,
+            nationality: club.country,
+            naturalPosition,
+            positionalFamiliarity: { [naturalPosition]: 100 } as any, // Simplified
+            wage: randInt(100, 500),
+            contractExpires: new Date(new Date().getFullYear() + randInt(2, 5), 6, 30),
+            marketValue: 0,
+            potential,
+            attributes: {
+                passing: randInt(20, 50), dribbling: randInt(20, 50), shooting: randInt(20, 50),
+                tackling: randInt(20, 50), heading: randInt(20, 50), crossing: randInt(20, 50),
+                aggression: randInt(20, 50), creativity: randInt(20, 50), positioning: randInt(20, 50),
+                teamwork: randInt(20, 50), workRate: randInt(20, 50), pace: randInt(30, 60),
+                stamina: randInt(30, 60), strength: randInt(30, 60), naturalFitness: randInt(40, 70),
+            },
+            scoutedAttributes: {},
+            scoutedPotentialRange: null,
+            history: [],
+            morale: 75,
+            satisfaction: 75,
+            matchFitness: 70,
+            injury: null,
+            suspension: null,
+            seasonYellowCards: 0,
+            individualTrainingFocus: null,
+        };
+        newPlayer.marketValue = recalculateMarketValue(newPlayer);
+        newPlayers.push(newPlayer);
+    }
+    return newPlayers;
+};
+
+export const processWages = (clubs: Record<number, Club>, players: Record<number, Player>, staff: Record<number, Staff>): Record<number, Club> => {
     const newClubs = { ...clubs };
     for (const club of Object.values(newClubs)) {
         const clubPlayers = Object.values(players).filter(p => p.clubId === club.id);
-        const totalWages = clubPlayers.reduce((sum, p) => sum + p.wage, 0);
+        const playerWages = clubPlayers.reduce((sum, p) => sum + p.wage, 0);
+
+        const clubStaff = Object.values(staff).filter(s => s.clubId === club.id);
+        const staffWages = clubStaff.reduce((sum, s) => sum + s.wage, 0);
+
+        const totalWages = playerWages + staffWages;
         club.balance -= totalWages * 4; // Monthly wage bill
     }
     return newClubs;
+};
+
+export const awardPrizeMoney = (clubs: Record<number, Club>, leagueTable: LeagueEntry[]): Record<number, Club> => {
+    const newClubs = { ...clubs };
+    const prizePool = 50_000_000;
+    const numTeams = leagueTable.length;
+    leagueTable.forEach((entry, index) => {
+        const club = newClubs[entry.clubId];
+        if (club) {
+            const prizeMoney = prizePool / (index + 1);
+            club.balance += Math.round(prizeMoney);
+        }
+    });
+    return newClubs;
+};
+
+export const processPromotionsAndRelegations = (
+    clubs: Record<number, Club>, 
+    premierLeagueTable: LeagueEntry[]
+): { updatedClubs: Record<number, Club>, promoted: number[], relegated: number[] } => {
+    const newClubs = { ...clubs };
+    const numToRelegate = 2;
+    const numToPromote = 2;
+
+    const relegatedEntries = premierLeagueTable.slice(-numToRelegate);
+    const relegatedClubIds = relegatedEntries.map(e => e.clubId);
+
+    const championshipClubs = Object.values(newClubs)
+        .filter(c => c.competitionId === 2)
+        .sort((a, b) => b.reputation - a.reputation);
+    
+    const promotedClubIds = championshipClubs.slice(0, numToPromote).map(c => c.id);
+
+    relegatedClubIds.forEach(id => {
+        if(newClubs[id]) newClubs[id].competitionId = 2;
+    });
+    promotedClubIds.forEach(id => {
+        if(newClubs[id]) newClubs[id].competitionId = 1;
+    });
+
+    return { updatedClubs: newClubs, promoted: promotedClubIds, relegated: relegatedClubIds };
 };
 
 

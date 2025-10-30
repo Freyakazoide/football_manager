@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { GameState, Player, PlayerAttributes, ScoutingFilters } from '../types';
+import React, { useState, useMemo } from 'react';
+import { GameState, Player, PlayerAttributes, ScoutingFilters, Staff, StaffRole } from '../types';
 import { Action } from '../services/reducerTypes';
 import { getRoleCategory } from '../services/database';
 
@@ -13,6 +13,13 @@ const ScoutingView: React.FC<ScoutingViewProps> = ({ gameState, dispatch, onPlay
     const [activeTab, setActiveTab] = useState<'new' | 'active' | 'reports'>('new');
     const [filters, setFilters] = useState<ScoutingFilters>({});
     const [description, setDescription] = useState('');
+    const [selectedScoutId, setSelectedScoutId] = useState<number | null>(null);
+
+    const playerClubScouts = useMemo(() => {
+        const club = gameState.clubs[gameState.playerClubId!];
+        if (!club) return [];
+        return club.staffIds.scouts.map(id => gameState.staff[id]);
+    }, [gameState.clubs, gameState.playerClubId, gameState.staff]);
 
     const handleFilterChange = (key: keyof ScoutingFilters, value: any) => {
         setFilters(prev => ({ ...prev, [key]: value }));
@@ -37,30 +44,50 @@ const ScoutingView: React.FC<ScoutingViewProps> = ({ gameState, dispatch, onPlay
             alert("Please provide a description for the assignment.");
             return;
         }
+        if (!selectedScoutId) {
+            alert("Please select a scout for this assignment.");
+            return;
+        }
         const completionDate = new Date(gameState.currentDate);
         completionDate.setDate(completionDate.getDate() + 14); // 2-week assignment
 
         dispatch({
             type: 'CREATE_SCOUTING_ASSIGNMENT',
-            payload: { description, filters, completionDate }
+            payload: { description, filters, completionDate, scoutId: selectedScoutId }
         });
         
         setDescription('');
         setFilters({});
+        setSelectedScoutId(null);
         setActiveTab('active');
     };
     
     const renderNewAssignment = () => (
         <div className="space-y-4">
-            <div>
-                <label className="block text-gray-400 text-sm font-bold mb-2">Assignment Description</label>
-                <input
-                    type="text"
-                    placeholder="e.g., 'Young Strikers for the Future'"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="w-full bg-gray-700 text-white p-2 rounded"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-gray-400 text-sm font-bold mb-2">Assignment Description</label>
+                    <input
+                        type="text"
+                        placeholder="e.g., 'Young Strikers for the Future'"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        className="w-full bg-gray-700 text-white p-2 rounded"
+                    />
+                </div>
+                <div>
+                    <label className="block text-gray-400 text-sm font-bold mb-2">Assign Scout</label>
+                    <select
+                        value={selectedScoutId || ''}
+                        onChange={e => setSelectedScoutId(Number(e.target.value))}
+                        className="w-full bg-gray-700 text-white p-2 rounded"
+                    >
+                        <option value="">Select a Scout...</option>
+                        {playerClubScouts.map(scout => (
+                            <option key={scout.id} value={scout.id}>{scout.name}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -123,12 +150,16 @@ const ScoutingView: React.FC<ScoutingViewProps> = ({ gameState, dispatch, onPlay
     
     const renderActiveAssignments = () => (
         <div>
-            {gameState.scoutingAssignments.filter(a => !a.isComplete).map(assignment => (
-                <div key={assignment.id} className="bg-gray-700/50 p-4 rounded-lg mb-3">
-                    <p className="font-bold">{assignment.description}</p>
-                    <p className="text-sm text-gray-400">In Progress - Report due on {new Date(assignment.completionDate).toLocaleDateString()}</p>
-                </div>
-            ))}
+            {gameState.scoutingAssignments.filter(a => !a.isComplete).map(assignment => {
+                const scout = gameState.staff[assignment.scoutId];
+                return (
+                    <div key={assignment.id} className="bg-gray-700/50 p-4 rounded-lg mb-3">
+                        <p className="font-bold">{assignment.description}</p>
+                        <p className="text-sm text-gray-400">Scout: {scout.name}</p>
+                        <p className="text-sm text-gray-400">In Progress - Report due on {new Date(assignment.completionDate).toLocaleDateString()}</p>
+                    </div>
+                )
+            })}
         </div>
     );
 

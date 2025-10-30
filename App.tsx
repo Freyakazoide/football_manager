@@ -20,6 +20,8 @@ import MatchReportModal from './components/MatchReportModal';
 import TeamView from './components/TeamView';
 import TrainingView from './components/TrainingView';
 import ScoutingView from './components/ScoutingView';
+import StaffView from './components/StaffView';
+import SeasonReviewModal from './components/SeasonReviewModal';
 
 const roleOrder: Record<PlayerRole, number> = {
     // GK
@@ -147,6 +149,10 @@ const App: React.FC = () => {
     const handleAdvanceDay = useCallback(() => {
         dispatch({ type: 'ADVANCE_DAY' });
     }, [dispatch]);
+    
+    const handleStartNewSeason = useCallback(() => {
+        dispatch({ type: 'START_NEW_SEASON' });
+    }, [dispatch]);
 
     const handlePlayerClick = (player: Player) => {
         handleNavigate(View.PLAYER_PROFILE, { playerId: player.id });
@@ -154,6 +160,11 @@ const App: React.FC = () => {
 
     const closeMatchDayModal = () => {
         dispatch({ type: 'CLEAR_MATCH_DAY_FIXTURES' });
+    };
+
+    const handleGoToTactics = () => {
+        handleNavigate(View.TACTICS);
+        closeMatchDayModal();
     };
     
     const closeMatchResultsModal = () => {
@@ -190,6 +201,8 @@ const App: React.FC = () => {
                 return <TeamView gameState={state} />;
             case View.TACTICS:
                 return <TacticsView gameState={state} dispatch={dispatch} />;
+            case View.STAFF:
+                return <StaffView gameState={state} dispatch={dispatch} />;
             case View.COMPETITION:
                 return <CompetitionView gameState={state} onClubClick={handleViewClub} />;
             case View.CALENDAR:
@@ -261,7 +274,8 @@ const App: React.FC = () => {
                     {renderView()}
                 </main>
             </div>
-            {state.matchDayFixtures && <MatchDayModal fixtures={state.matchDayFixtures} gameState={state} dispatch={dispatch} onClose={closeMatchDayModal} />}
+            {state.seasonReviewData && <SeasonReviewModal reviewData={state.seasonReviewData} gameState={state} onContinue={handleStartNewSeason} />}
+            {state.matchDayFixtures && <MatchDayModal fixtures={state.matchDayFixtures} gameState={state} dispatch={dispatch} onGoToTactics={handleGoToTactics} />}
             {state.matchDayResults && <MatchResultsModal results={state.matchDayResults} gameState={state} onClose={closeMatchResultsModal} />}
             {state.transferResult && <TransferResultModal result={state.transferResult} onClose={closeTransferResultModal} />}
             {selectedMatchForReport && <MatchReportModal match={selectedMatchForReport} gameState={state} onClose={closeMatchReportModal} onPlayerClick={handlePlayerClick} />}

@@ -1,17 +1,20 @@
 import React from 'react';
-import { GameState, MatchDayInfo, Match } from '../types';
+import { GameState, MatchDayInfo, Match, LineupPlayer } from '../types';
 import { Action } from '../services/reducerTypes';
 
 interface MatchDayModalProps {
     fixtures: { playerMatch: MatchDayInfo; aiMatches: Match[] };
     gameState: GameState;
     dispatch: React.Dispatch<Action>;
-    onClose: () => void;
+    onGoToTactics: () => void;
 }
 
-const MatchDayModal: React.FC<MatchDayModalProps> = ({ fixtures, gameState, dispatch, onClose }) => {
+const MatchDayModal: React.FC<MatchDayModalProps> = ({ fixtures, gameState, dispatch, onGoToTactics }) => {
     const { playerMatch, aiMatches } = fixtures;
     const { match, homeTeam, awayTeam } = playerMatch;
+    
+    const playerClub = gameState.playerClubId ? gameState.clubs[gameState.playerClubId] : null;
+    if (!playerClub) return null;
     
     const handleStartMatch = () => {
         dispatch({ type: 'START_MATCH', payload: playerMatch });
@@ -19,7 +22,7 @@ const MatchDayModal: React.FC<MatchDayModalProps> = ({ fixtures, gameState, disp
 
     return (
          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
                 <div className="p-6 text-center border-b border-gray-700">
                     <h2 className="text-2xl font-bold text-green-400 mb-2">Match Day!</h2>
                     <p className="text-gray-400 mb-4">{match.date.toDateString()}</p>
@@ -41,24 +44,36 @@ const MatchDayModal: React.FC<MatchDayModalProps> = ({ fixtures, gameState, disp
                 )}
                 
                 <div className="p-6 overflow-y-auto flex-1">
-                    <h3 className="text-lg font-semibold text-gray-300 mb-3 text-center">Today's Other Fixtures</h3>
-                    <div className="space-y-2">
-                        {aiMatches.length > 0 ? aiMatches.map(aiMatch => (
-                            <div key={aiMatch.id} className="bg-gray-700/50 rounded p-2 text-sm text-center">
-                                {gameState.clubs[aiMatch.homeTeamId].name} vs {gameState.clubs[aiMatch.awayTeamId].name}
-                            </div>
-                        )) : (
-                            <p className="text-gray-500 text-center text-sm">No other matches scheduled today.</p>
-                        )}
+                    <h3 className="text-lg font-semibold text-gray-300 mb-3 text-center">Your Starting XI</h3>
+                    <div className="bg-gray-900/50 rounded-lg p-4">
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                            {playerClub.tactics.lineup.map((lp, index) => {
+                                if (!lp) return <li key={`empty-${index}`} className="text-gray-600">- Empty Slot -</li>;
+                                const player = gameState.players[lp.playerId];
+                                const isInvalid = player.injury || player.suspension;
+                                return (
+                                    <li key={player.id} className={`flex items-center justify-between text-sm p-1 rounded ${isInvalid ? 'bg-red-900/50 text-red-300' : ''}`}>
+                                        <span className="font-semibold">{player.name}</span>
+                                        <span className="text-gray-400 text-xs">{lp.role}</span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
                     </div>
                 </div>
 
-                <div className="p-6 border-t border-gray-700">
+                <div className="p-6 border-t border-gray-700 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     <button
+                        onClick={onGoToTactics}
+                        className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-4 rounded transition duration-300"
+                    >
+                        Change Tactics
+                    </button>
                      <button
                         onClick={handleStartMatch}
                         className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition duration-300"
                     >
-                        Go to Match
+                        Confirm & Start Match
                     </button>
                 </div>
             </div>

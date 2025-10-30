@@ -1,18 +1,20 @@
-import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, PhysioAttributes, StaffRole, ScoutAttributes, SeasonReviewData, LeagueEntry } from '../types';
 import { Action } from './reducerTypes';
-import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue } from './simulationService';
+import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
 import { generateNarrativeReport } from './newsGenerator';
 import { generateAITactics } from './aiTacticsService';
 import { updatePlayerStatsFromMatchResult, getSeason } from './playerStatsService';
 import { generateInjury } from './injuryService';
-import { getRoleCategory } from './database';
+import { getRoleCategory, generateScheduleForCompetition } from './database';
 
 export const initialState: GameState = {
     currentDate: new Date(2024, 7, 1), // July 1st, 2024
     playerClubId: null,
     clubs: {},
     players: {},
+    staff: {},
+    competitions: {},
     schedule: [],
     leagueTable: [],
     transferResult: null,
@@ -24,6 +26,7 @@ export const initialState: GameState = {
     matchStartError: null,
     scoutingAssignments: [],
     nextScoutAssignmentId: 1,
+    seasonReviewData: null,
 };
 
 const rehydratePlayers = (players: Record<number, Player>): Record<number, Player> => {
@@ -80,7 +83,40 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             };
         }
         case 'ADVANCE_DAY': {
-            if (state.liveMatch) return state; // Can't advance day during a match
+            if (state.liveMatch || state.seasonReviewData) return state; // Can't advance day during a match or season review
+
+            const isSeasonOver = state.schedule.length > 0 && state.schedule.every(m => m.homeScore !== undefined);
+            if (isSeasonOver) {
+                const season = getSeason(state.currentDate);
+                const finalTable = [...state.leagueTable].sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
+                const leagueWinnerId = finalTable[0].clubId;
+                const { promoted, relegated } = processPromotionsAndRelegations(state.clubs, finalTable);
+
+                const playerClub = state.clubs[state.playerClubId!];
+                const playerClubPlayers = Object.values(state.players).filter(p => p.clubId === state.playerClubId);
+                
+                const getPlayerSeasonStats = (p: Player) => p.history.find(s => s.season === season);
+
+                const awards = {
+                    playerOfTheSeason: playerClubPlayers.sort((a,b) => (getPlayerSeasonStats(b)?.ratingPoints || 0) / (getPlayerSeasonStats(b)?.apps || 1) - (getPlayerSeasonStats(a)?.ratingPoints || 0) / (getPlayerSeasonStats(a)?.apps || 1))[0],
+                    topScorer: playerClubPlayers.map(p => ({ ...p, goals: getPlayerSeasonStats(p)?.goals || 0 })).sort((a,b) => b.goals - a.goals)[0],
+                    youngPlayer: playerClubPlayers.filter(p => p.age <= 21).sort((a,b) => (getPlayerSeasonStats(b)?.ratingPoints || 0) / (getPlayerSeasonStats(b)?.apps || 1) - (getPlayerSeasonStats(a)?.ratingPoints || 0) / (getPlayerSeasonStats(a)?.apps || 1))[0]
+                };
+                const playerClubPosition = finalTable.findIndex(e => e.clubId === state.playerClubId!) + 1;
+                const prizeMoney = 50_000_000 / playerClubPosition;
+                
+                const seasonReviewData: SeasonReviewData = {
+                    season,
+                    finalTable,
+                    leagueWinnerId,
+                    promotedClubIds: promoted,
+                    relegatedClubIds: relegated,
+                    awards,
+                    prizeMoney,
+                };
+
+                return { ...state, seasonReviewData };
+            }
 
             const newDate = new Date(state.currentDate);
             newDate.setDate(newDate.getDate() + 1);
@@ -92,7 +128,10 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             clonedAssignments.forEach(assignment => {
                 if (!assignment.isComplete && newDate >= new Date(assignment.completionDate)) {
                     assignment.isComplete = true;
-                    const { filters } = assignment;
+                    const { filters, scoutId } = assignment;
+                    const scout = newState.staff[scoutId] as Staff & { attributes: ScoutAttributes };
+                    const { judgingPlayerAbility, judgingPlayerPotential } = scout.attributes;
+                    
                     const foundPlayers = Object.values(newState.players).filter(p => {
                         if (p.clubId === newState.playerClubId) return false;
                         if (filters.minAge && p.age < filters.minAge) return false;
@@ -110,10 +149,27 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
                     assignment.reportPlayerIds = foundPlayers.map(p => p.id);
                     
-                    // Reveal attributes for found players
+                    // Reveal attributes for found players based on scout skill
                     const clonedPlayersForScouting = JSON.parse(JSON.stringify(newState.players));
                     assignment.reportPlayerIds.forEach(pId => {
-                        clonedPlayersForScouting[pId].scoutedAttributes = clonedPlayersForScouting[pId].attributes;
+                        const playerToScout = clonedPlayersForScouting[pId];
+                        // Reveal potential range
+                        const potentialErrorMargin = Math.round((100 - judgingPlayerPotential) / 3);
+                        playerToScout.scoutedPotentialRange = [
+                            Math.max(1, playerToScout.potential - potentialErrorMargin),
+                            Math.min(100, playerToScout.potential + potentialErrorMargin)
+                        ];
+
+                        // Reveal a percentage of attributes
+                        const attrsToRevealCount = Math.floor(Object.keys(playerToScout.attributes).length * (judgingPlayerAbility / 100));
+                        const allAttrs = Object.keys(playerToScout.attributes) as (keyof PlayerAttributes)[];
+                        allAttrs.sort(() => 0.5 - Math.random()); // Shuffle
+                        const revealedAttrs = allAttrs.slice(0, attrsToRevealCount);
+                        
+                        playerToScout.scoutedAttributes = {};
+                        revealedAttrs.forEach(attr => {
+                            playerToScout.scoutedAttributes[attr] = playerToScout.attributes[attr];
+                        });
                     });
                     newState.players = clonedPlayersForScouting;
 
@@ -153,7 +209,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             if(playerDidChange) newState.players = updatedPlayers;
 
             const matchesToday = newState.schedule.filter(m =>
-                m.date.toDateString() === newDate.toDateString() && m.homeScore === undefined
+                new Date(m.date).toDateString() === newDate.toDateString() && m.homeScore === undefined
             );
 
             // Decrease fitness for players NOT playing today
@@ -181,11 +237,11 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             if (matchesToday.length === 0) {
                  if (newDate.getDate() === 1) {
                     newState.players = processPlayerDevelopment(newState.players, newState.clubs);
-                    newState.clubs = processWages(newState.clubs, newState.players);
+                    newState.clubs = processWages(newState.clubs, newState.players, newState.staff);
                     if (newDate.getMonth() === 0) { // New year
                         const { players } = processPlayerAging(newState.players);
                         newState.players = players;
-                    } else if (newDate.getMonth() === 6 && newDate.getDate() === 1) { // New season
+                    } else if (newDate.getMonth() === 6 && newDate.getDate() === 1) { // New season start
                         Object.values(newState.players).forEach(p => p.seasonYellowCards = 0);
                     }
                 }
@@ -222,11 +278,19 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         result.injuryEvents.forEach(injury => {
                             const player = newState.players[injury.playerId];
                             if (player) {
-                                // The injury object from generateInjury is now just assigned directly
-                                player.injury = { type: injury.type, returnDate: new Date(injury.returnDate) };
+                                // Apply physio effect
+                                const club = newState.clubs[player.clubId];
+                                const physios = club.staffIds.physios.map(id => newState.staff[id] as Staff & { attributes: PhysioAttributes });
+                                const avgPhysioSkill = physios.length > 0 ? physios.reduce((sum, p) => sum + p.attributes.physiotherapy, 0) / physios.length : 50;
+                                const durationModifier = 1 - (avgPhysioSkill / 400); // 100 skill = 25% reduction
+                                const originalDuration = new Date(injury.returnDate).getTime() - result.date.getTime();
+                                const newDuration = originalDuration * durationModifier;
+                                const newReturnDate = new Date(result.date.getTime() + newDuration);
+                                
+                                player.injury = { type: injury.type, returnDate: newReturnDate };
+
                                 if (player.clubId === playerClubId) {
-                                    const diffTime = Math.abs(new Date(injury.returnDate).getTime() - result.date.getTime());
-                                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                    const diffDays = Math.ceil(newDuration / (1000 * 60 * 60 * 24));
                                     const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
                                     newState = addNewsItem(newState, `Player Injured: ${player.name}`, `${player.name} picked up an injury in the match against ${player.clubId === result.homeTeamId ? newState.clubs[result.awayTeamId].name : newState.clubs[result.homeTeamId].name}.\n\nHe is expected to be out for ${durationText}. The diagnosis is: ${injury.type}.`, 'injury_report_player', player.id);
                                 }
@@ -280,7 +344,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             if (newDate.getDate() === 1) {
                 newState.players = processPlayerDevelopment(newState.players, newState.clubs);
-                newState.clubs = processWages(newState.clubs, newState.players);
+                newState.clubs = processWages(newState.clubs, newState.players, newState.staff);
                 if (newDate.getMonth() === 0) { // New year
                     const { players } = processPlayerAging(newState.players);
                     newState.players = players;
@@ -288,6 +352,53 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     Object.values(newState.players).forEach(p => p.seasonYellowCards = 0);
                 }
             }
+
+            return newState;
+        }
+        case 'START_NEW_SEASON': {
+            let newState = { ...state };
+            
+            // 1. Award Prize Money
+            newState.clubs = awardPrizeMoney(newState.clubs, newState.leagueTable);
+
+            // 2. Process Promotions & Relegations (already calculated in season review)
+            const { promotedClubIds, relegatedClubIds } = newState.seasonReviewData!;
+            promotedClubIds.forEach(id => { if(newState.clubs[id]) newState.clubs[id].competitionId = 1; });
+            relegatedClubIds.forEach(id => { if(newState.clubs[id]) newState.clubs[id].competitionId = 2; });
+
+            // 3. Process Aging and Retirements
+            const { players: agedPlayers, retiredPlayers } = processPlayerAging(newState.players);
+            newState.players = agedPlayers;
+            
+            // 4. Generate Regens
+            const regens = generateRegens(newState.clubs, retiredPlayers.length, newState.players);
+            regens.forEach(regen => {
+                newState.players[regen.id] = regen;
+            });
+
+            // 5. Reset league table for the new season's top division
+            const newLeagueClubs = Object.values(newState.clubs).filter(c => c.competitionId === 1);
+            const newLeagueTable: LeagueEntry[] = newLeagueClubs.map(c => ({
+                clubId: c.id, played: 0, wins: 0, draws: 0, losses: 0, 
+                goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0,
+            }));
+            newState.leagueTable = newLeagueTable;
+
+            // 6. Set date to next season's start
+            const newStartDate = new Date(newState.currentDate);
+            newStartDate.setFullYear(newStartDate.getFullYear() + 1);
+            newStartDate.setMonth(7); // August
+            newStartDate.setDate(10);
+            newState.currentDate = newStartDate;
+
+            // 7. Generate new schedule
+            newState.schedule = generateScheduleForCompetition(newLeagueClubs, newState.currentDate);
+            
+            // 8. Reset season-specific player data
+            Object.values(newState.players).forEach(p => p.seasonYellowCards = 0);
+
+            // 9. Clear season review data
+            newState.seasonReviewData = null;
 
             return newState;
         }
@@ -475,6 +586,81 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 nextScoutAssignmentId: state.nextScoutAssignmentId + 1,
             };
         }
+         case 'HIRE_STAFF': {
+            const { staffId } = action.payload;
+            const playerClubId = state.playerClubId;
+            if (!playerClubId) return state;
+
+            const staffToHire = state.staff[staffId];
+            const club = state.clubs[playerClubId];
+
+            if (club.balance < staffToHire.wage * 4) { // Check for one month's wage
+                return { ...state, transferResult: { success: false, message: "Insufficient funds to hire staff." } };
+            }
+            
+            const newStaff = { ...state.staff };
+            const newClubs = { ...state.clubs };
+            const newClub = { ...club };
+            newClub.staffIds = { ...club.staffIds, physios: [...club.staffIds.physios], scouts: [...club.staffIds.scouts] };
+
+            const hiredStaff = { ...staffToHire, clubId: playerClubId };
+            newStaff[staffId] = hiredStaff;
+
+            switch(hiredStaff.role) {
+                case StaffRole.Assistant:
+                    if (newClub.staffIds.assistant) return { ...state, transferResult: { success: false, message: "You already have an Assistant Manager." } };
+                    newClub.staffIds.assistant = hiredStaff.id;
+                    break;
+                case StaffRole.Scout:
+                     if (newClub.staffIds.scouts.length >= 4) return { ...state, transferResult: { success: false, message: "You cannot hire more than 4 scouts." } };
+                    newClub.staffIds.scouts.push(hiredStaff.id);
+                    break;
+                case StaffRole.Physio:
+                     if (newClub.staffIds.physios.length >= 4) return { ...state, transferResult: { success: false, message: "You cannot hire more than 4 physios." } };
+                    newClub.staffIds.physios.push(hiredStaff.id);
+                    break;
+            }
+            
+            newClubs[playerClubId] = newClub;
+
+            return { ...state, staff: newStaff, clubs: newClubs, transferResult: { success: true, message: `${hiredStaff.name} (${hiredStaff.role}) has joined the club.` } };
+        }
+        case 'FIRE_STAFF': {
+            const { staffId } = action.payload;
+            const playerClubId = state.playerClubId;
+            if (!playerClubId) return state;
+
+            const staffToFire = state.staff[staffId];
+            if (staffToFire.clubId !== playerClubId) return state;
+
+            const club = { ...state.clubs[playerClubId] };
+            club.staffIds = { ...club.staffIds, physios: [...club.staffIds.physios], scouts: [...club.staffIds.scouts] };
+
+            const severance = staffToFire.wage * 4; // 1 month severance
+            if (club.balance < severance) {
+                return { ...state, transferResult: { success: false, message: "Insufficient funds for severance package." } };
+            }
+            club.balance -= severance;
+
+            const newStaff = { ...state.staff };
+            newStaff[staffId] = { ...staffToFire, clubId: null };
+            
+            switch(staffToFire.role) {
+                case StaffRole.Assistant:
+                    club.staffIds.assistant = null;
+                    break;
+                case StaffRole.Scout:
+                    club.staffIds.scouts = club.staffIds.scouts.filter(id => id !== staffId);
+                    break;
+                case StaffRole.Physio:
+                    club.staffIds.physios = club.staffIds.physios.filter(id => id !== staffId);
+                    break;
+            }
+            
+            const newClubs = { ...state.clubs, [playerClubId]: club };
+
+            return { ...state, staff: newStaff, clubs: newClubs, transferResult: { success: true, message: `${staffToFire.name}'s contract has been terminated.` } };
+        }
         // Match Engine Reducers
         case 'START_MATCH': {
             const { homeTeam, awayTeam } = action.payload;
@@ -513,7 +699,10 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             // If AI is playing, generate dynamic tactics for them
             const opponent = homeTeam.id === playerClubId ? awayTeam : homeTeam;
             const opponentPlayers = Object.values(state.players).filter(p => p.clubId === opponent.id && !p.injury && !p.suspension);
-            const newAITactics = generateAITactics(opponentPlayers);
+            
+            const opponentStaffIds = [opponent.staffIds.assistant, ...opponent.staffIds.scouts, ...opponent.staffIds.physios].filter(Boolean) as number[];
+            const opponentStaff = opponentStaffIds.map(id => state.staff[id]);
+            const newAITactics = generateAITactics(opponentPlayers, opponentStaff);
             
             tempClubs[opponent.id] = { ...tempClubs[opponent.id], tactics: newAITactics };
 
@@ -581,7 +770,6 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             
             if (wasBallCarrier) {
                 const opposition = isHome ? updatedState.awayLineup : updatedState.homeLineup;
-                // FIX: 'CB' is not a valid PlayerRole. Changed to 'Central Defender'.
                 const newCarrier = opposition.find(p => p.role === 'Central Defender' && !p.isSentOff) || opposition.find(p => !p.isSentOff);
                 if(newCarrier) {
                     updatedState.ballCarrierId = newCarrier.id;
@@ -726,7 +914,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 id: finalMatchState.matchId,
                 homeTeamId: finalMatchState.homeTeamId,
                 awayTeamId: finalMatchState.awayTeamId,
-                date: matchDate,
+                date: new Date(matchDate),
                 homeScore: finalMatchState.homeScore,
                 awayScore: finalMatchState.awayScore,
                 homeStats: { ...finalMatchState.homeStats, possession: homePossession },
@@ -788,12 +976,21 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 if (!playerToUpdate) continue;
 
                 const injuryDetails = generateInjury(finalResult.date, playerToUpdate);
-                playerToUpdate.injury = injuryDetails;
-                finalResult.injuryEvents?.push({ playerId: injuredPlayerId, ...injuryDetails });
+                
+                // Apply physio effect
+                const club = tempState.clubs[playerToUpdate.clubId];
+                const physios = club.staffIds.physios.map(id => tempState.staff[id] as Staff & { attributes: PhysioAttributes });
+                const avgPhysioSkill = physios.length > 0 ? physios.reduce((sum, p) => sum + p.attributes.physiotherapy, 0) / physios.length : 50;
+                const durationModifier = 1 - (avgPhysioSkill / 400); // 100 skill = 25% reduction
+                const originalDuration = injuryDetails.returnDate.getTime() - finalResult.date.getTime();
+                const newDuration = originalDuration * durationModifier;
+                const newReturnDate = new Date(finalResult.date.getTime() + newDuration);
+
+                playerToUpdate.injury = { type: injuryDetails.type, returnDate: newReturnDate };
+                finalResult.injuryEvents?.push({ playerId: injuredPlayerId, type: injuryDetails.type, returnDate: newReturnDate });
                 
                 if (playerToUpdate.clubId === state.playerClubId) {
-                    const diffTime = Math.abs(injuryDetails.returnDate.getTime() - finalResult.date.getTime());
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    const diffDays = Math.ceil(newDuration / (1000 * 60 * 60 * 24));
                     const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
                     const opponentName = playerToUpdate.clubId === finalResult.homeTeamId ? state.clubs[finalResult.awayTeamId].name : state.clubs[finalResult.homeTeamId].name;
                     tempState = addNewsItem(tempState, `Player Injured: ${playerToUpdate.name}`, `${playerToUpdate.name} picked up an injury in the match against ${opponentName}.\n\nHe is expected to be out for ${durationText}.\nDiagnosis: ${injuryDetails.type}.`, 'injury_report_player', playerToUpdate.id);
@@ -808,7 +1005,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const newLeagueTable = updateLeagueTableForMatch(state.leagueTable, finalResult);
             newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
             
-            const aiResultsToday = state.schedule.filter(m => m.date.toDateString() === finalResult.date.toDateString() && m.id !== finalResult.id && m.homeScore !== undefined);
+            const aiResultsToday = state.schedule.filter(m => new Date(m.date).toDateString() === new Date(finalResult.date).toDateString() && m.id !== finalResult.id && m.homeScore !== undefined);
 
             const season = getSeason(finalResult.date);
             const statsUpdatedPlayers = updatePlayerStatsFromMatchResult(updatedPlayers, finalResult, season, finalMatchState);

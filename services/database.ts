@@ -1,10 +1,12 @@
-import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics } from '../types';
+import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantAttributes, ScoutAttributes, PhysioAttributes, Competition } from '../types';
 
 const FIRST_NAMES = ['John', 'Paul', 'Mike', 'Leo', 'Chris', 'David', 'Alex', 'Ben', 'Sam', 'Tom', 'Dan', 'Matt'];
 const LAST_NAMES = ['Smith', 'Jones', 'Williams', 'Brown', 'Davis', 'Miller', 'Wilson', 'Moore', 'Taylor', 'Martin'];
+const STAFF_FIRST_NAMES = ['Peter', 'Richard', 'Gary', 'Steve', 'Mark', 'Alan', 'Neil', 'Brian'];
+const STAFF_LAST_NAMES = ['Taylor', 'Wright', 'Thompson', 'Roberts', 'Walker', 'Harris', 'Clarke', 'King'];
 const COUNTRIES = ['England', 'Spain', 'Germany', 'Italy', 'France', 'Brazil', 'Argentina'];
 const CLUB_NAMES = ['United', 'Rovers', 'City', 'Wanderers', 'Athletic', 'FC', 'Albion', 'Town'];
-const CITIES = ['Northwood', 'Southglen', 'Easton', 'Westfield', 'Oakhaven', 'Riverdale', 'Mountview', 'Portsmith'];
+const CITIES = ['Northwood', 'Southglen', 'Easton', 'Westfield', 'Oakhaven', 'Riverdale', 'Mountview', 'Portsmith', 'Fairview', 'Lakeside', 'Bridgewater', 'Silverstone'];
 
 const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -123,7 +125,6 @@ const generatePlayerAttributes = (): PlayerAttributes => ({
     shooting: randInt(40, 90),
     tackling: randInt(40, 90),
     heading: randInt(40, 90),
-    // FIX: Initialize the 'crossing' attribute for generated players.
     crossing: randInt(40, 90),
     aggression: randInt(30, 90),
     creativity: randInt(30, 90),
@@ -136,7 +137,7 @@ const generatePlayerAttributes = (): PlayerAttributes => ({
     naturalFitness: randInt(30, 95),
 });
 
-const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubId' | 'contractExpires' | 'history' | 'morale' | 'satisfaction' | 'matchFitness' | 'injury' | 'suspension' | 'seasonYellowCards' | 'individualTrainingFocus' | 'scoutedAttributes'>): number => {
+const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubId' | 'contractExpires' | 'history' | 'morale' | 'satisfaction' | 'matchFitness' | 'injury' | 'suspension' | 'seasonYellowCards' | 'individualTrainingFocus' | 'scoutedAttributes' | 'scoutedPotentialRange'>): number => {
     const avgAttr = Object.values(player.attributes).reduce((a, b) => a + b, 0) / Object.values(player.attributes).length;
     let value = (avgAttr * 20000) + (player.potential * 15000);
     if (player.age < 22) value *= 1.5;
@@ -169,13 +170,128 @@ const defaultPositions442: { position: { x: number, y: number }, role: PlayerRol
     { position: { x: 60, y: 25 }, role: 'Striker' },
 ];
 
-export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'transferResult' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError'> => {
+const generateStaffAttributes = (role: StaffRole): StaffAttributes => {
+    switch (role) {
+        case StaffRole.Assistant:
+            return {
+                tacticalKnowledge: randInt(50, 95),
+                judgingPlayerAbility: randInt(50, 95),
+                manManagement: randInt(50, 95),
+            } as AssistantAttributes;
+        case StaffRole.Scout:
+            return {
+                judgingPlayerAbility: randInt(50, 95),
+                judgingPlayerPotential: randInt(50, 95),
+                adaptability: randInt(50, 95),
+            } as ScoutAttributes;
+        case StaffRole.Physio:
+            return {
+                physiotherapy: randInt(50, 95),
+                injuryPrevention: randInt(50, 95),
+            } as PhysioAttributes;
+    }
+};
+
+export const generateScheduleForCompetition = (clubsInCompetition: Club[], startDate: Date): Match[] => {
+    const schedule: Match[] = [];
+    let matchIdCounter = Date.now(); // Use timestamp to ensure unique IDs across seasons
+    let currentDate = new Date(startDate);
+    
+    const clubIds: (number | null)[] = clubsInCompetition.map(c => c.id);
+
+    if (clubIds.length % 2 !== 0) {
+        clubIds.push(null); // Add a 'bye' team if odd number
+    }
+    
+    const numTeams = clubIds.length;
+    const numRounds = numTeams - 1;
+
+    const rounds: { home: number; away: number }[][] = [];
+    for (let round = 0; round < numRounds; round++) {
+        const roundMatches: { home: number; away: number }[] = [];
+        for (let i = 0; i < numTeams / 2; i++) {
+            const home = clubIds[i];
+            const away = clubIds[numTeams - 1 - i];
+
+            if (home && away) {
+                roundMatches.push({ home, away });
+            }
+        }
+        rounds.push(roundMatches);
+
+        // Rotate teams, keeping the first one fixed
+        const lastTeam = clubIds.pop();
+        if (lastTeam !== undefined) {
+             clubIds.splice(1, 0, lastTeam);
+        }
+    }
+
+    // Create first half of the season
+    for (const roundMatches of rounds) {
+        for (const match of roundMatches) {
+             schedule.push({
+                id: matchIdCounter++,
+                homeTeamId: match.home,
+                awayTeamId: match.away,
+                date: new Date(currentDate),
+            });
+        }
+        currentDate.setDate(currentDate.getDate() + 7);
+    }
+
+    // Create second half of the season (reverse fixtures)
+     for (const roundMatches of rounds) {
+        for (const match of roundMatches) {
+             schedule.push({
+                id: matchIdCounter++,
+                homeTeamId: match.away, // Reversed
+                awayTeamId: match.home, // Reversed
+                date: new Date(currentDate),
+            });
+        }
+        currentDate.setDate(currentDate.getDate() + 7);
+    }
+    
+    schedule.sort((a,b) => a.date.getTime() - b.date.getTime());
+    return schedule;
+};
+
+
+export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'transferResult'| 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData'> => {
     const clubs: Record<number, Club> = {};
     const players: Record<number, Player> = {};
+    const staff: Record<number, Staff> = {};
+    const competitions: Record<number, Competition> = {};
     const leagueTable: LeagueEntry[] = [];
     let playerIdCounter = 1;
-    const NUM_CLUBS = 10;
+    let staffIdCounter = 1;
+    const NUM_CLUBS = 20;
     const PLAYERS_PER_CLUB = 22;
+    const NUM_STAFF = 80;
+
+    // Create Competitions
+    competitions[1] = { id: 1, name: 'Premier Division', level: 1 };
+    competitions[2] = { id: 2, name: 'Championship', level: 2 };
+
+    // Generate Staff Pool
+    for (let i = 0; i < NUM_STAFF; i++) {
+        const role = pickRandom([StaffRole.Assistant, StaffRole.Scout, StaffRole.Physio]);
+        const contractExpires = new Date();
+        contractExpires.setFullYear(contractExpires.getFullYear() + randInt(1, 4));
+        const newStaff: Staff = {
+            id: staffIdCounter,
+            clubId: null,
+            name: `${pickRandom(STAFF_FIRST_NAMES)} ${pickRandom(STAFF_LAST_NAMES)}`,
+            age: randInt(30, 65),
+            nationality: pickRandom(COUNTRIES),
+            role,
+            wage: randInt(500, 3000),
+            contractExpires,
+            attributes: generateStaffAttributes(role),
+        };
+        staff[staffIdCounter] = newStaff;
+        staffIdCounter++;
+    }
 
     for (let i = 1; i <= NUM_CLUBS; i++) {
         const initialTactics: Tactics = {
@@ -183,18 +299,49 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
             lineup: Array(11).fill(null),
             bench: Array(7).fill(null),
         };
+        const competitionId = i <= 10 ? 1 : 2; // First 10 clubs in Premier Division
+        const reputation = competitionId === 1 ? randInt(70, 90) : randInt(50, 69);
         clubs[i] = {
             id: i,
             name: `${pickRandom(CITIES)} ${pickRandom(CLUB_NAMES)}`,
             country: pickRandom(COUNTRIES),
-            reputation: randInt(50, 90),
+            reputation,
             balance: randInt(5_000_000, 20_000_000),
             tactics: initialTactics,
             trainingFocus: 'Balanced',
+            staffIds: { assistant: null, physios: [], scouts: [] },
+            competitionId,
         };
-        leagueTable.push({
-            clubId: i, played: 0, wins: 0, draws: 0, losses: 0, 
-            goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0,
+
+        if (competitionId === 1) {
+            leagueTable.push({
+                clubId: i, played: 0, wins: 0, draws: 0, losses: 0, 
+                goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0,
+            });
+        }
+    }
+
+    // Assign staff to AI clubs
+    const availableStaff = () => Object.values(staff).filter(s => s.clubId === null);
+    for (let clubId = 1; clubId <= NUM_CLUBS; clubId++) {
+        const club = clubs[clubId];
+        // Hire 1 assistant
+        const assistant = availableStaff().find(s => s.role === StaffRole.Assistant);
+        if (assistant) {
+            club.staffIds.assistant = assistant.id;
+            assistant.clubId = clubId;
+        }
+        // Hire 2 scouts
+        const scouts = availableStaff().filter(s => s.role === StaffRole.Scout).slice(0, 2);
+        scouts.forEach(s => {
+            club.staffIds.scouts.push(s.id);
+            s.clubId = clubId;
+        });
+        // Hire 2 physios
+        const physios = availableStaff().filter(s => s.role === StaffRole.Physio).slice(0, 2);
+        physios.forEach(p => {
+            club.staffIds.physios.push(p.id);
+            p.clubId = clubId;
         });
     }
 
@@ -242,6 +389,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
                 seasonYellowCards: 0,
                 history: [],
                 scoutedAttributes: {},
+                scoutedPotentialRange: null,
                 individualTrainingFocus: null,
             };
             players[playerIdCounter] = player;
@@ -282,66 +430,9 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'tra
         clubs[clubId].tactics.bench = bench;
     }
 
-    const schedule: Match[] = [];
-    const clubIds: (number | null)[] = Object.keys(clubs).map(Number);
-    let matchIdCounter = 1;
-    let startDate = new Date(2024, 7, 10); // Season starts in August
-
-    if (clubIds.length % 2 !== 0) {
-        clubIds.push(null); // Add a 'bye' team if odd number
-    }
+    const clubsInPremierDivision = Object.values(clubs).filter(c => c.competitionId === 1);
+    const startDate = new Date(2024, 7, 10); // Season starts in August
+    const schedule = generateScheduleForCompetition(clubsInPremierDivision, startDate);
     
-    const numTeams = clubIds.length;
-    const numRounds = numTeams - 1;
-
-    const rounds: { home: number; away: number }[][] = [];
-    for (let round = 0; round < numRounds; round++) {
-        const roundMatches: { home: number; away: number }[] = [];
-        for (let i = 0; i < numTeams / 2; i++) {
-            const home = clubIds[i];
-            const away = clubIds[numTeams - 1 - i];
-
-            if (home && away) {
-                roundMatches.push({ home, away });
-            }
-        }
-        rounds.push(roundMatches);
-
-        // Rotate teams, keeping the first one fixed
-        const lastTeam = clubIds.pop();
-        if (lastTeam !== undefined) {
-             clubIds.splice(1, 0, lastTeam);
-        }
-    }
-
-    // Create first half of the season
-    for (const roundMatches of rounds) {
-        for (const match of roundMatches) {
-             schedule.push({
-                id: matchIdCounter++,
-                homeTeamId: match.home,
-                awayTeamId: match.away,
-                date: new Date(startDate),
-            });
-        }
-        startDate.setDate(startDate.getDate() + 7);
-    }
-
-    // Create second half of the season (reverse fixtures)
-     for (const roundMatches of rounds) {
-        for (const match of roundMatches) {
-             schedule.push({
-                id: matchIdCounter++,
-                homeTeamId: match.away, // Reversed
-                awayTeamId: match.home, // Reversed
-                date: new Date(startDate),
-            });
-        }
-        startDate.setDate(startDate.getDate() + 7);
-    }
-    
-    schedule.sort((a,b) => a.date.getTime() - b.date.getTime());
-
-    // FIX: Removed matchStartError from return as it is omitted in the function's return type and handled by initialState in the reducer.
-    return { clubs, players, schedule, leagueTable, scoutingAssignments: [], nextScoutAssignmentId: 1 };
+    return { clubs, players, staff, competitions, schedule, leagueTable, scoutingAssignments: [], nextScoutAssignmentId: 1 };
 };

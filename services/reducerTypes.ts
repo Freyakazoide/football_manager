@@ -1,7 +1,7 @@
 import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment } from '../types';
 
 export type Action =
-    | { type: 'INITIALIZE_GAME'; payload: Omit<GameState, 'playerClubId' | 'transferResult'| 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError'> }
+    | { type: 'INITIALIZE_GAME'; payload: Omit<GameState, 'playerClubId' | 'transferResult'| 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData'> }
     | { type: 'SELECT_PLAYER_CLUB'; payload: number }
     | { type: 'ADVANCE_DAY' }
     | { type: 'UPDATE_TACTICS'; payload: Tactics }
@@ -27,4 +27,8 @@ export type Action =
     | { type: 'RENEW_CONTRACT'; payload: { playerId: number; newWage: number; newExpiryDate: Date } }
     | { type: 'PLAYER_INTERACTION'; payload: { playerId: number; interactionType: 'praise' | 'criticize' | 'promise' } }
     | { type: 'UPDATE_TRAINING_SETTINGS'; payload: { teamFocus: TeamTrainingFocus, individualFocuses: Record<number, IndividualTrainingFocus> } }
-    | { type: 'CREATE_SCOUTING_ASSIGNMENT'; payload: Omit<ScoutingAssignment, 'id' | 'isComplete' | 'reportPlayerIds'> };
+    | { type: 'CREATE_SCOUTING_ASSIGNMENT'; payload: Omit<ScoutingAssignment, 'id' | 'isComplete' | 'reportPlayerIds'> }
+    | { type: 'HIRE_STAFF'; payload: { staffId: number } }
+    | { type: 'FIRE_STAFF'; payload: { staffId: number } }
+    // Season Logic
+    | { type: 'START_NEW_SEASON' };

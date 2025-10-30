@@ -26,17 +26,18 @@ const STAT_CATEGORIES: { key: StatCategory; label: string }[] = [
 
 const PlayerStatsView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
     const [stat, setStat] = useState<StatCategory>('goals');
+    const playerClub = gameState.clubs[gameState.playerClubId!];
 
     const playersWithStats = useMemo((): PlayerWithSeasonStats[] => {
         const season = getSeason(gameState.currentDate);
-        // FIX: Cast Object.values to Player[] to ensure correct type inference for `player`.
         return (Object.values(gameState.players) as Player[])
+            .filter(p => gameState.clubs[p.clubId]?.competitionId === playerClub.competitionId)
             .map(player => {
                 const seasonStats = player.history.find(h => h.season === season);
                 return { player, seasonStats };
             })
             .filter((item): item is PlayerWithSeasonStats => !!item.seasonStats && item.seasonStats.apps > 0);
-    }, [gameState.players, gameState.currentDate]);
+    }, [gameState.players, gameState.currentDate, gameState.clubs, playerClub.competitionId]);
 
     const sortedPlayers = useMemo(() => {
         return [...playersWithStats].sort((a, b) => {
@@ -48,7 +49,7 @@ const PlayerStatsView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
             if (stat === 'yellowCards') {
                 return b.player.seasonYellowCards - a.player.seasonYellowCards;
             }
-            return b.seasonStats[stat] - a.seasonStats[stat];
+            return b.seasonStats[stat as keyof PlayerSeasonStats] - a.seasonStats[stat as keyof PlayerSeasonStats];
         }).slice(0, 20);
     }, [playersWithStats, stat]);
 
@@ -59,7 +60,7 @@ const PlayerStatsView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
         if (stat === 'yellowCards') {
             return item.player.seasonYellowCards;
         }
-        return item.seasonStats[stat];
+        return item.seasonStats[stat as keyof PlayerSeasonStats];
     };
 
     return (
@@ -100,7 +101,6 @@ const PlayerStatsView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
 
 const InjuryListView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
     const injuredPlayers = useMemo(() => {
-        // FIX: Cast Object.values to Player[] to ensure correct type inference for `p`.
         return (Object.values(gameState.players) as Player[]).filter(p => p.injury);
     }, [gameState.players]);
 
@@ -138,6 +138,16 @@ const InjuryListView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
 
 const CompetitionView: React.FC<CompetitionViewProps> = ({ gameState, onClubClick }) => {
     const [activeTab, setActiveTab] = useState<'table' | 'stats' | 'injuries'>('table');
+    
+    if (!gameState.playerClubId) return null;
+    const playerClub = gameState.clubs[gameState.playerClubId];
+    const competition = gameState.competitions[playerClub.competitionId];
+
+    const competitionLeagueTable = useMemo(() => {
+        return gameState.leagueTable
+            .filter(entry => gameState.clubs[entry.clubId]?.competitionId === playerClub.competitionId)
+            .sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
+    }, [gameState.leagueTable, gameState.clubs, playerClub.competitionId]);
 
     const renderLeagueTable = () => (
         <div className="overflow-x-auto">
@@ -157,7 +167,7 @@ const CompetitionView: React.FC<CompetitionViewProps> = ({ gameState, onClubClic
                     </tr>
                 </thead>
                 <tbody>
-                    {gameState.leagueTable.map((entry, index) => {
+                    {competitionLeagueTable.map((entry, index) => {
                         const club = gameState.clubs[entry.clubId];
                         const isPlayerClub = entry.clubId === gameState.playerClubId;
                         return (
@@ -190,6 +200,7 @@ const CompetitionView: React.FC<CompetitionViewProps> = ({ gameState, onClubClic
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
+            <h2 className="text-2xl font-bold text-white mb-1">{competition.name}</h2>
             <div className="flex border-b border-gray-700 mb-4">
                 <button onClick={() => setActiveTab('table')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'table' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
                     League Table

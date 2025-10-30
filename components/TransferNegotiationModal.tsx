@@ -63,7 +63,8 @@ const AgentNegotiation: React.FC<{
     negotiation: TransferNegotiation;
     player: Player;
     dispatch: React.Dispatch<Action>;
-}> = ({ negotiation, player, dispatch }) => {
+    onClose: () => void;
+}> = ({ negotiation, player, dispatch, onClose }) => {
     const [wage, setWage] = useState(player.wage * 1.1);
     const [signingBonus, setSigningBonus] = useState(player.marketValue * 0.05);
     const [goalBonus, setGoalBonus] = useState(0);
@@ -121,6 +122,17 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
     const sellingClub = gameState.clubs[negotiation.sellingClubId];
     const buyingClub = gameState.clubs[negotiation.buyingClubId];
 
+    useEffect(() => {
+        // Automatically close the modal when the negotiation is finished.
+        if (['completed', 'cancelled_player', 'cancelled_ai'].includes(negotiation.status)) {
+            const timer = setTimeout(() => {
+                onClose();
+            }, 500); // Small delay to prevent abrupt closing
+            return () => clearTimeout(timer);
+        }
+    }, [negotiation.status, onClose]);
+
+
     if (!player || !sellingClub || !buyingClub) return null;
 
     const handleCancel = () => {
@@ -150,7 +162,7 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
                     {negotiation.stage === 'agent' && (
                         <div>
                             <p className="text-sm bg-green-900/50 p-2 rounded mb-4">Fee of <span className="font-bold">{formatCurrency(negotiation.agreedFee)}</span> agreed with {sellingClub.name}.</p>
-                            <AgentNegotiation negotiation={negotiation} player={player} dispatch={dispatch} />
+                            <AgentNegotiation negotiation={negotiation} player={player} dispatch={dispatch} onClose={onClose} />
                         </div>
                     )}
                      {isWaitingForResponse && (

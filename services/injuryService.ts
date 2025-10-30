@@ -1,3 +1,4 @@
+
 import { Player } from '../types';
 
 const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -5,8 +6,9 @@ const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.lengt
 
 /**
  * Generates a realistic injury with type and duration based on real-world football data.
+ * The final duration is modified elsewhere based on the club's medical staff.
  * @param currentDate The current date of the match.
- * @param player The player who got injured (not currently used for type calculation, but could be in future).
+ * @param player The player who got injured.
  * @returns An object with the injury type and the expected return date.
  */
 export const generateInjury = (currentDate: Date, player: Player) => {

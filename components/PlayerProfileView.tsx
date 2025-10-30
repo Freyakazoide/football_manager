@@ -10,7 +10,7 @@ interface PlayerProfileViewProps {
     onStartNegotiation: (playerId: number) => void;
 }
 
-const AttributeBar: React.FC<{ label: string, value: number, isScouted: boolean }> = ({ label, value, isScouted }) => {
+const AttributeBar: React.FC<{ label: string, value: number, isScouted: boolean, change: number }> = ({ label, value, isScouted, change }) => {
     const getDisplayValue = () => {
         if (isScouted) return value;
         const lower = Math.max(20, Math.floor(value / 10) * 10 - 5);
@@ -30,7 +30,11 @@ const AttributeBar: React.FC<{ label: string, value: number, isScouted: boolean 
     };
     return (
         <div className="grid grid-cols-3 items-center gap-2 text-sm">
-            <span className="text-gray-400 capitalize">{label.replace(/([A-Z])/g, ' $1')}</span>
+            <span className="text-gray-400 capitalize flex items-center">
+                {change > 0 && <span className="text-green-400 mr-1">▲</span>}
+                {change < 0 && <span className="text-red-400 mr-1">▼</span>}
+                {label.replace(/([A-Z])/g, ' $1')}
+            </span>
             <div className="col-span-2 bg-gray-600 rounded-full h-4 relative">
                 <div className={`${getColor(value)} h-4 rounded-full ${!isScouted ? 'opacity-50' : ''}`} style={{ width: getBarWidth() }}></div>
                  <div className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
@@ -132,17 +136,28 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     const isTransferTarget = player.clubId !== gameState.playerClubId;
     const areAttributesFullyScouted = Object.keys(player.scoutedAttributes).length > 0 || !isTransferTarget;
 
-    const interactionCooldownDays = 7;
-    let daysSinceInteraction = 999;
-    let canInteract = true;
+    const getInteractionCooldown = (topic: 'praise' | 'criticize' | 'promise'): { onCooldown: boolean, remainingDays: number } => {
+        const COOLDOWN_DAYS = 30;
+        const lastInteraction = player.interactions
+            .filter(i => i.topic === topic)
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
-    if (player.lastInteractionDate) {
-        const diffTime = Math.abs(gameState.currentDate.getTime() - new Date(player.lastInteractionDate).getTime());
-        daysSinceInteraction = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        canInteract = daysSinceInteraction >= interactionCooldownDays;
-    }
+        if (!lastInteraction) {
+            return { onCooldown: false, remainingDays: 0 };
+        }
 
-    const cooldownRemaining = interactionCooldownDays - daysSinceInteraction;
+        const diffTime = gameState.currentDate.getTime() - new Date(lastInteraction.date).getTime();
+        const daysSince = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        const onCooldown = daysSince < COOLDOWN_DAYS;
+        const remainingDays = onCooldown ? COOLDOWN_DAYS - daysSince : 0;
+        
+        return { onCooldown, remainingDays };
+    };
+    
+    const praiseCooldown = getInteractionCooldown('praise');
+    const criticizeCooldown = getInteractionCooldown('criticize');
+    const promiseCooldown = getInteractionCooldown('promise');
     
     const handleRenewContract = () => {
         const newExpiryDate = new Date(gameState.currentDate);
@@ -158,6 +173,10 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
         { title: 'Mental', attrs: ['aggression', 'creativity', 'positioning', 'teamwork', 'workRate'] },
         { title: 'Physical', attrs: ['pace', 'stamina', 'strength', 'naturalFitness'] },
     ];
+    
+    const thirtyDaysAgo = new Date(gameState.currentDate);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentChanges = player.attributeChanges.filter(c => new Date(c.date) > thirtyDaysAgo);
 
     const renderAttributes = () => (
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -166,7 +185,10 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                     <div key={group.title}>
                         <h3 className="text-lg font-semibold text-green-400 mb-3">{group.title}</h3>
                         <div className="space-y-2">
-                            {group.attrs.map(attr => <AttributeBar key={attr} label={attr} value={player.attributes[attr]} isScouted={areAttributesFullyScouted} />)}
+                            {group.attrs.map(attr => {
+                                const change = recentChanges.find(c => c.attr === attr)?.change || 0;
+                                return <AttributeBar key={attr} label={attr} value={player.attributes[attr]} isScouted={areAttributesFullyScouted} change={change} />
+                            })}
                         </div>
                     </div>
                 ))}
@@ -259,28 +281,21 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
 
                         <div className="bg-gray-700 p-4 rounded-lg">
                             <h3 className="text-lg font-semibold text-green-400 mb-3">Player Interaction</h3>
-                             {!canInteract ? (
-                                <div className="text-center text-sm text-gray-400 p-4 bg-gray-800 rounded-md">
-                                    You have recently interacted with this player.
-                                    <p>You can interact again in <span className="font-bold text-white">{cooldownRemaining}</span> day(s).</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 gap-2">
-                                    <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'praise' } })} className="bg-gray-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm">
-                                        Praise Player
-                                    </button>
-                                    <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'criticize' } })} className="bg-gray-600 hover:bg-orange-500 text-white font-bold py-2 rounded text-sm">
-                                        Criticize Player
-                                    </button>
-                                    <button 
-                                        onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'promise' } })}
-                                        disabled={!!player.promise}
-                                        className="bg-gray-600 hover:bg-yellow-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
-                                    >
-                                        {player.promise ? 'Promise Active' : 'Promise Playing Time'}
-                                    </button>
-                                </div>
-                            )}
+                             <div className="grid grid-cols-1 gap-2">
+                                <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'praise' } })} disabled={praiseCooldown.onCooldown} className="bg-gray-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                    {praiseCooldown.onCooldown ? `Praise (Wait ${praiseCooldown.remainingDays}d)` : 'Praise Player'}
+                                </button>
+                                <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'criticize' } })} disabled={criticizeCooldown.onCooldown} className="bg-gray-600 hover:bg-orange-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                    {criticizeCooldown.onCooldown ? `Criticize (Wait ${criticizeCooldown.remainingDays}d)` : 'Criticize Player'}
+                                </button>
+                                <button 
+                                    onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'promise' } })}
+                                    disabled={!!player.promise || promiseCooldown.onCooldown}
+                                    className="bg-gray-600 hover:bg-yellow-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
+                                >
+                                    {player.promise ? 'Promise Active' : promiseCooldown.onCooldown ? `Promise (Wait ${promiseCooldown.remainingDays}d)` : 'Promise Playing Time'}
+                                </button>
+                            </div>
                         </div>
                     </>
                 )}

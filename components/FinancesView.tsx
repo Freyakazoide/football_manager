@@ -1,21 +1,35 @@
 
-
-
 import React from 'react';
-import { GameState, Player } from '../types';
+// FIX: Import StaffDepartment to correctly type department objects.
+import { GameState, Player, DepartmentType, Staff, StaffDepartment } from '../types';
 
 interface FinancesViewProps {
     gameState: GameState;
+}
+
+const getDepartmentMaintenanceCost = (level: number) => {
+    return [0, 1000, 3000, 7500, 15000, 25000][level] || 0;
 }
 
 const FinancesView: React.FC<FinancesViewProps> = ({ gameState }) => {
     if (!gameState.playerClubId) return null;
 
     const club = gameState.clubs[gameState.playerClubId];
-    // FIX: Cast the result of Object.values to Player[] to ensure correct type inference.
-    // TypeScript was incorrectly inferring it as `unknown[]`, causing downstream errors.
     const clubPlayers = (Object.values(gameState.players) as Player[]).filter(p => p.clubId === club.id);
-    const totalWeeklyWage = clubPlayers.reduce((sum, p) => sum + p.wage, 0);
+    const totalWeeklyPlayerWage = clubPlayers.reduce((sum, p) => sum + p.wage, 0);
+    
+    // FIX: Cast Object.values to StaffDepartment[] once to correctly infer types for subsequent operations.
+    const departments = (Object.values(club.departments) as StaffDepartment[]);
+
+    const staffChiefs = departments
+        .map(d => d.chiefId)
+        .filter((id): id is number => id !== null)
+        .map(id => gameState.staff[id]);
+        
+    const totalWeeklyStaffWage = staffChiefs.reduce((sum, s) => sum + s.wage, 0);
+
+    const totalMonthlyMaintenance = departments
+        .reduce((sum, d) => sum + getDepartmentMaintenanceCost(d.level), 0);
 
     const formatCurrency = (value: number) => {
         return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
@@ -23,25 +37,50 @@ const FinancesView: React.FC<FinancesViewProps> = ({ gameState }) => {
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-6">Finances</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gray-700 p-4 rounded-lg">
+            <h2 className="text-2xl font-bold text-white mb-6">Club Finances</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                 <div className="bg-gray-700 p-4 rounded-lg">
                     <h3 className="text-gray-400 text-sm">Total Balance</h3>
                     <p className={`text-3xl font-bold ${club.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {formatCurrency(club.balance)}
                     </p>
                 </div>
-                <div className="bg-gray-700 p-4 rounded-lg">
-                    <h3 className="text-gray-400 text-sm">Weekly Wage Bill</h3>
-                    <p className="text-3xl font-bold text-orange-400">
-                        {formatCurrency(totalWeeklyWage)}
-                    </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Player Finances */}
+                <div className="bg-gray-900/50 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-green-400 mb-3">Player Wages</h3>
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center text-lg">
+                            <span>Weekly Total:</span>
+                            <span className="font-bold text-orange-400">{formatCurrency(totalWeeklyPlayerWage)}</span>
+                        </div>
+                         <div className="flex justify-between items-center text-lg">
+                            <span>Monthly (est.):</span>
+                            <span className="font-bold text-red-400">{formatCurrency(totalWeeklyPlayerWage * 4)}</span>
+                        </div>
+                    </div>
                 </div>
-                 <div className="bg-gray-700 p-4 rounded-lg md:col-span-2">
-                    <h3 className="text-gray-400 text-sm">Monthly Wage Bill (approx.)</h3>
-                    <p className="text-3xl font-bold text-red-400">
-                        {formatCurrency(totalWeeklyWage * 4)}
-                    </p>
+
+                 {/* Staff Finances */}
+                <div className="bg-gray-900/50 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-green-400 mb-3">Staff & Departments</h3>
+                     <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span>Chiefs Weekly Salary:</span>
+                            <span className="font-bold text-orange-400">{formatCurrency(totalWeeklyStaffWage)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Dept. Monthly Cost:</span>
+                            <span className="font-bold text-orange-400">{formatCurrency(totalMonthlyMaintenance)}</span>
+                        </div>
+                         <div className="flex justify-between items-center text-lg border-t border-gray-700 pt-2 mt-2">
+                            <span>Total Monthly (est.):</span>
+                            <span className="font-bold text-red-400">{formatCurrency(totalWeeklyStaffWage * 4 + totalMonthlyMaintenance)}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

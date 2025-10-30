@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { GameState, Player, PlayerAttributes, ScoutingFilters, Staff, StaffRole } from '../types';
 import { Action } from '../services/reducerTypes';
@@ -13,13 +14,9 @@ const ScoutingView: React.FC<ScoutingViewProps> = ({ gameState, dispatch, onPlay
     const [activeTab, setActiveTab] = useState<'new' | 'active' | 'reports'>('new');
     const [filters, setFilters] = useState<ScoutingFilters>({});
     const [description, setDescription] = useState('');
-    const [selectedScoutId, setSelectedScoutId] = useState<number | null>(null);
-
-    const playerClubScouts = useMemo(() => {
-        const club = gameState.clubs[gameState.playerClubId!];
-        if (!club) return [];
-        return club.staffIds.scouts.map(id => gameState.staff[id]);
-    }, [gameState.clubs, gameState.playerClubId, gameState.staff]);
+    
+    const headOfScoutingId = gameState.clubs[gameState.playerClubId!]?.departments.Scouting.chiefId;
+    const headOfScouting = headOfScoutingId ? gameState.staff[headOfScoutingId] : null;
 
     const handleFilterChange = (key: keyof ScoutingFilters, value: any) => {
         setFilters(prev => ({ ...prev, [key]: value }));
@@ -38,14 +35,31 @@ const ScoutingView: React.FC<ScoutingViewProps> = ({ gameState, dispatch, onPlay
             setFilters(prev => ({ ...prev, attributes: newAttributes }));
         }
     };
+    
+    const applyPreset = (preset: 'prospects' | 'stars' | 'bargains') => {
+        switch (preset) {
+            case 'prospects':
+                setDescription('Young Prospects');
+                setFilters({ maxAge: 21, minPotential: 75 });
+                break;
+            case 'stars':
+                setDescription('First Team Ready');
+                setFilters({ minAge: 23, attributes: { shooting: 75, tackling: 75, passing: 75 } });
+                break;
+            case 'bargains':
+                 setDescription('Contract Bargains');
+                setFilters({ contractExpiresInYears: 1 });
+                break;
+        }
+    };
 
     const handleCreateAssignment = () => {
         if (!description) {
             alert("Please provide a description for the assignment.");
             return;
         }
-        if (!selectedScoutId) {
-            alert("Please select a scout for this assignment.");
+        if (!headOfScouting) {
+            alert("You must hire a Head of Scouting to start an assignment.");
             return;
         }
         const completionDate = new Date(gameState.currentDate);
@@ -53,41 +67,33 @@ const ScoutingView: React.FC<ScoutingViewProps> = ({ gameState, dispatch, onPlay
 
         dispatch({
             type: 'CREATE_SCOUTING_ASSIGNMENT',
-            payload: { description, filters, completionDate, scoutId: selectedScoutId }
+            payload: { description, filters, completionDate, scoutId: headOfScouting.id }
         });
         
         setDescription('');
         setFilters({});
-        setSelectedScoutId(null);
         setActiveTab('active');
     };
     
     const renderNewAssignment = () => (
         <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                    <label className="block text-gray-400 text-sm font-bold mb-2">Assignment Description</label>
-                    <input
-                        type="text"
-                        placeholder="e.g., 'Young Strikers for the Future'"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        className="w-full bg-gray-700 text-white p-2 rounded"
-                    />
+            <div className="bg-gray-700/30 p-3 rounded-lg">
+                <h4 className="font-bold mb-2">Quick Tasks</h4>
+                <div className="flex flex-wrap gap-2">
+                    <button onClick={() => applyPreset('prospects')} className="px-3 py-1 text-sm rounded-full bg-blue-600 hover:bg-blue-700">Find Young Prospects</button>
+                    <button onClick={() => applyPreset('stars')} className="px-3 py-1 text-sm rounded-full bg-yellow-600 hover:bg-yellow-700 text-black">Find First Team Stars</button>
+                    <button onClick={() => applyPreset('bargains')} className="px-3 py-1 text-sm rounded-full bg-green-600 hover:bg-green-700">Find Contract Bargains</button>
                 </div>
-                <div>
-                    <label className="block text-gray-400 text-sm font-bold mb-2">Assign Scout</label>
-                    <select
-                        value={selectedScoutId || ''}
-                        onChange={e => setSelectedScoutId(Number(e.target.value))}
-                        className="w-full bg-gray-700 text-white p-2 rounded"
-                    >
-                        <option value="">Select a Scout...</option>
-                        {playerClubScouts.map(scout => (
-                            <option key={scout.id} value={scout.id}>{scout.name}</option>
-                        ))}
-                    </select>
-                </div>
+            </div>
+             <div>
+                <label className="block text-gray-400 text-sm font-bold mb-2">Assignment Description</label>
+                <input
+                    type="text"
+                    placeholder="e.g., 'Young Strikers for the Future'"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full bg-gray-700 text-white p-2 rounded"
+                />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -142,8 +148,8 @@ const ScoutingView: React.FC<ScoutingViewProps> = ({ gameState, dispatch, onPlay
                     ))}
                  </div>
             </div>
-            <button onClick={handleCreateAssignment} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded mt-4">
-                Send Scout (14 days)
+            <button onClick={handleCreateAssignment} disabled={!headOfScouting} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded mt-4 disabled:bg-gray-600 disabled:cursor-not-allowed">
+                {headOfScouting ? 'Send Scout (14 days)' : 'Hire Head of Scouting to start'}
             </button>
         </div>
     );

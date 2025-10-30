@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { GameState, Player, TeamTrainingFocus, IndividualTrainingFocus, PlayerAttributes, PlayerRole } from '../types';
+import { GameState, Player, TeamTrainingFocus, IndividualTrainingFocus, PlayerAttributes, PlayerRole, DepartmentType } from '../types';
 import { Action } from '../services/reducerTypes';
 import { ALL_ROLES } from '../services/database';
 
@@ -19,8 +20,10 @@ const TrainingView: React.FC<TrainingViewProps> = ({ gameState, dispatch }) => {
     if (!playerClubId) return null;
 
     const club = gameState.clubs[playerClubId];
+    const headOfPerformanceId = club.departments[DepartmentType.Performance].chiefId;
+    const headOfPerformance = headOfPerformanceId ? gameState.staff[headOfPerformanceId] : null;
+
     const clubPlayers = useMemo(() =>
-        // FIX: Cast Object.values to Player[] to correctly infer player type.
         (Object.values(gameState.players) as Player[]).filter(p => p.clubId === playerClubId)
     , [gameState.players, playerClubId]);
 
@@ -66,7 +69,10 @@ const TrainingView: React.FC<TrainingViewProps> = ({ gameState, dispatch }) => {
 
             <div className="bg-gray-900/50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-green-400 mb-3">Team Training Focus</h3>
-                <p className="text-sm text-gray-400 mb-3">Set the general training focus for the entire squad for the upcoming week. This influences the development of all players.</p>
+                <div className="flex justify-between items-center">
+                    <p className="text-sm text-gray-400 mb-3">Set the general training focus for the entire squad for the upcoming week. This influences the development of all players.</p>
+                     <p className="text-sm text-gray-400">Led by: <span className="font-semibold text-white">{headOfPerformance?.name || 'N/A'}</span></p>
+                </div>
                 <select
                     value={teamFocus}
                     onChange={e => setTeamFocus(e.target.value as TeamTrainingFocus)}

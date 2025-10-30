@@ -1,5 +1,5 @@
 
-import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantAttributes, ScoutAttributes, PhysioAttributes, Competition } from '../types';
+import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantManagerAttributes, HeadOfScoutingAttributes, HeadOfPhysiotherapyAttributes, HeadOfPerformanceAttributes, Competition, DepartmentType } from '../types';
 
 const FIRST_NAMES = ['John', 'Paul', 'Mike', 'Leo', 'Chris', 'David', 'Alex', 'Ben', 'Sam', 'Tom', 'Dan', 'Matt'];
 const LAST_NAMES = ['Smith', 'Jones', 'Williams', 'Brown', 'Davis', 'Miller', 'Wilson', 'Moore', 'Taylor', 'Martin'];
@@ -118,8 +118,6 @@ export const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' 
     return ROLE_DEFINITIONS[role]?.category || 'MID';
 };
 
-// --- END NEW LOGIC ---
-
 const generatePlayerAttributes = (): PlayerAttributes => ({
     passing: randInt(40, 90),
     dribbling: randInt(40, 90),
@@ -138,7 +136,7 @@ const generatePlayerAttributes = (): PlayerAttributes => ({
     naturalFitness: randInt(30, 95),
 });
 
-const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubId' | 'contractExpires' | 'history' | 'morale' | 'satisfaction' | 'matchFitness' | 'injury' | 'suspension' | 'seasonYellowCards' | 'individualTrainingFocus' | 'scoutedAttributes' | 'scoutedPotentialRange'>): number => {
+const calculateMarketValue = (player: Omit<Player, 'marketValue' | 'id' | 'clubId' | 'contractExpires' | 'history' | 'morale' | 'satisfaction' | 'matchFitness' | 'injury' | 'suspension' | 'seasonYellowCards' | 'individualTrainingFocus' | 'scoutedAttributes' | 'scoutedPotentialRange' | 'lastRenewalDate' | 'interactions' | 'attributeChanges'>): number => {
     const avgAttr = Object.values(player.attributes).reduce((a, b) => a + b, 0) / Object.values(player.attributes).length;
     let value = (avgAttr * 20000) + (player.potential * 15000);
     if (player.age < 22) value *= 1.5;
@@ -173,23 +171,29 @@ const defaultPositions442: { position: { x: number, y: number }, role: PlayerRol
 
 const generateStaffAttributes = (role: StaffRole): StaffAttributes => {
     switch (role) {
-        case StaffRole.Assistant:
+        case StaffRole.AssistantManager:
             return {
                 tacticalKnowledge: randInt(50, 95),
                 judgingPlayerAbility: randInt(50, 95),
                 manManagement: randInt(50, 95),
-            } as AssistantAttributes;
-        case StaffRole.Scout:
+            } as AssistantManagerAttributes;
+        case StaffRole.HeadOfScouting:
             return {
                 judgingPlayerAbility: randInt(50, 95),
                 judgingPlayerPotential: randInt(50, 95),
-                adaptability: randInt(50, 95),
-            } as ScoutAttributes;
-        case StaffRole.Physio:
+                reach: randInt(1, 20),
+            } as HeadOfScoutingAttributes;
+        case StaffRole.HeadOfPhysiotherapy:
             return {
                 physiotherapy: randInt(50, 95),
                 injuryPrevention: randInt(50, 95),
-            } as PhysioAttributes;
+                sportsScience: randInt(50, 95),
+            } as HeadOfPhysiotherapyAttributes;
+        case StaffRole.HeadOfPerformance:
+            return {
+                fitnessCoaching: randInt(50, 95),
+                loadManagement: randInt(50, 95),
+            } as HeadOfPerformanceAttributes;
     }
 };
 
@@ -258,8 +262,6 @@ export const generateScheduleForCompetition = (clubsInCompetition: Club[], start
 };
 
 
-// FIX: Update function signature to match the INITIALIZE_GAME payload type in the reducer.
-// This omits properties that are handled by the initial state, resolving a type error.
 export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData' | 'transferNegotiations' | 'nextNegotiationId'> => {
     const clubs: Record<number, Club> = {};
     const players: Record<number, Player> = {};
@@ -270,31 +272,34 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
     let staffIdCounter = 1;
     const NUM_CLUBS = 20;
     const PLAYERS_PER_CLUB = 22;
-    const NUM_STAFF = 80;
+    const NUM_STAFF_PER_ROLE = 20;
 
     // Create Competitions
     competitions[1] = { id: 1, name: 'Premier Division', level: 1 };
     competitions[2] = { id: 2, name: 'Championship', level: 2 };
 
     // Generate Staff Pool
-    for (let i = 0; i < NUM_STAFF; i++) {
-        const role = pickRandom([StaffRole.Assistant, StaffRole.Scout, StaffRole.Physio]);
-        const contractExpires = new Date();
-        contractExpires.setFullYear(contractExpires.getFullYear() + randInt(1, 4));
-        const newStaff: Staff = {
-            id: staffIdCounter,
-            clubId: null,
-            name: `${pickRandom(STAFF_FIRST_NAMES)} ${pickRandom(STAFF_LAST_NAMES)}`,
-            age: randInt(30, 65),
-            nationality: pickRandom(COUNTRIES),
-            role,
-            wage: randInt(500, 3000),
-            contractExpires,
-            attributes: generateStaffAttributes(role),
-        };
-        staff[staffIdCounter] = newStaff;
-        staffIdCounter++;
+    const staffRolesToGenerate = [StaffRole.AssistantManager, StaffRole.HeadOfPerformance, StaffRole.HeadOfPhysiotherapy, StaffRole.HeadOfScouting];
+    for (const role of staffRolesToGenerate) {
+        for (let i = 0; i < NUM_STAFF_PER_ROLE; i++) {
+            const contractExpires = new Date();
+            contractExpires.setFullYear(contractExpires.getFullYear() + randInt(1, 4));
+            const newStaff: Staff = {
+                id: staffIdCounter,
+                clubId: null,
+                name: `${pickRandom(STAFF_FIRST_NAMES)} ${pickRandom(STAFF_LAST_NAMES)}`,
+                age: randInt(30, 65),
+                nationality: pickRandom(COUNTRIES),
+                role,
+                wage: randInt(1000, 5000),
+                contractExpires,
+                attributes: generateStaffAttributes(role),
+            };
+            staff[staffIdCounter] = newStaff;
+            staffIdCounter++;
+        }
     }
+
 
     for (let i = 1; i <= NUM_CLUBS; i++) {
         const initialTactics: Tactics = {
@@ -312,7 +317,13 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             balance: randInt(5_000_000, 20_000_000),
             tactics: initialTactics,
             trainingFocus: 'Balanced',
-            staffIds: { assistant: null, physios: [], scouts: [] },
+            departments: {
+                [DepartmentType.Coaching]: { level: 1, chiefId: null },
+                [DepartmentType.Medical]: { level: 1, chiefId: null },
+                [DepartmentType.Scouting]: { level: 1, chiefId: null },
+                [DepartmentType.Performance]: { level: 1, chiefId: null },
+            },
+            staffWageBudget: 25000,
             competitionId,
         };
 
@@ -324,28 +335,21 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
         }
     }
 
-    // Assign staff to AI clubs
-    const availableStaff = () => Object.values(staff).filter(s => s.clubId === null);
+    // Assign staff chiefs to AI clubs
+    const availableStaff = (role: StaffRole) => Object.values(staff).find(s => s.role === role && s.clubId === null);
     for (let clubId = 1; clubId <= NUM_CLUBS; clubId++) {
         const club = clubs[clubId];
-        // Hire 1 assistant
-        const assistant = availableStaff().find(s => s.role === StaffRole.Assistant);
-        if (assistant) {
-            club.staffIds.assistant = assistant.id;
-            assistant.clubId = clubId;
-        }
-        // Hire 2 scouts
-        const scouts = availableStaff().filter(s => s.role === StaffRole.Scout).slice(0, 2);
-        scouts.forEach(s => {
-            club.staffIds.scouts.push(s.id);
-            s.clubId = clubId;
-        });
-        // Hire 2 physios
-        const physios = availableStaff().filter(s => s.role === StaffRole.Physio).slice(0, 2);
-        physios.forEach(p => {
-            club.staffIds.physios.push(p.id);
-            p.clubId = clubId;
-        });
+        const hireStaff = (role: StaffRole, department: DepartmentType) => {
+            const staffToHire = availableStaff(role);
+            if (staffToHire) {
+                club.departments[department].chiefId = staffToHire.id;
+                staffToHire.clubId = clubId;
+            }
+        };
+        hireStaff(StaffRole.AssistantManager, DepartmentType.Coaching);
+        hireStaff(StaffRole.HeadOfPhysiotherapy, DepartmentType.Medical);
+        hireStaff(StaffRole.HeadOfScouting, DepartmentType.Scouting);
+        hireStaff(StaffRole.HeadOfPerformance, DepartmentType.Performance);
     }
 
     const GK_ROLES: PlayerRole[] = ['Goalkeeper', 'Sweeper Keeper'];
@@ -394,6 +398,8 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
                 scoutedAttributes: {},
                 scoutedPotentialRange: null,
                 individualTrainingFocus: null,
+                interactions: [],
+                attributeChanges: [],
             };
             players[playerIdCounter] = player;
             clubPlayers.push(player);

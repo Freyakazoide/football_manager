@@ -1,4 +1,4 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment } from '../types';
 import { getRoleCategory, ALL_ROLES } from './database';
 import { generateInjury } from './injuryService';
 
@@ -214,17 +214,21 @@ const getTrainingFocusAttributes = (focus: TeamTrainingFocus): (keyof PlayerAttr
     }
 };
 
-export const processPlayerDevelopment = (players: Record<number, Player>, clubs: Record<number, Club>): Record<number, Player> => {
+export const processPlayerDevelopment = (players: Record<number, Player>, clubs: Record<number, Club>, staff: Record<number, Staff>, currentDate: Date): Record<number, Player> => {
     const newPlayersState: Record<number, Player> = {}; // The new state to return
 
     for (const pId in players) {
         const player = { // Create a shallow clone of the player
             ...players[pId],
             attributes: { ...players[pId].attributes }, // Deep clone attributes
-            positionalFamiliarity: { ...players[pId].positionalFamiliarity } // Deep clone familiarity
+            positionalFamiliarity: { ...players[pId].positionalFamiliarity },
+            attributeChanges: [...players[pId].attributeChanges],
         };
 
         const club = clubs[player.clubId];
+        const performanceChiefId = club.departments[DepartmentType.Performance].chiefId;
+        const performanceChief = performanceChiefId ? staff[performanceChiefId] as Staff & { attributes: HeadOfPerformanceAttributes } : null;
+        
         const teamFocus = club.trainingFocus;
         const individualFocus = player.individualTrainingFocus;
 
@@ -244,6 +248,11 @@ export const processPlayerDevelopment = (players: Record<number, Player>, clubs:
                 let attrToImprove = attrs[Math.floor(Math.random() * attrs.length)];
 
                 let improvementChance = 1.0;
+                
+                // Boost chance based on Head of Performance
+                if (performanceChief) {
+                    improvementChance *= (1 + (performanceChief.attributes.fitnessCoaching / 200)); // Max 50% boost
+                }
 
                 // Boost chance based on team focus
                 const focusAttrs = getTrainingFocusAttributes(teamFocus);
@@ -258,6 +267,7 @@ export const processPlayerDevelopment = (players: Record<number, Player>, clubs:
 
                 if (Math.random() < improvementChance && player.attributes[attrToImprove] < 99) {
                     player.attributes[attrToImprove] += 1;
+                    player.attributeChanges.push({ date: new Date(currentDate), attr: attrToImprove, change: 1 });
                 }
             }
         }
@@ -270,6 +280,7 @@ export const processPlayerDevelopment = (players: Record<number, Player>, clubs:
                 const attrToDecline = physicalAttrs[Math.floor(Math.random() * physicalAttrs.length)];
                 if (player.attributes[attrToDecline] > 30) {
                     player.attributes[attrToDecline] -= 1;
+                    player.attributeChanges.push({ date: new Date(currentDate), attr: attrToDecline, change: -1 });
                 }
             }
         }
@@ -341,6 +352,8 @@ export const generateRegens = (clubs: Record<number, Club>, retiredPlayerCount: 
             suspension: null,
             seasonYellowCards: 0,
             individualTrainingFocus: null,
+            interactions: [],
+            attributeChanges: [],
         };
         newPlayer.marketValue = recalculateMarketValue(newPlayer);
         newPlayers.push(newPlayer);
@@ -348,19 +361,29 @@ export const generateRegens = (clubs: Record<number, Club>, retiredPlayerCount: 
     return newPlayers;
 };
 
+const getDepartmentMaintenanceCost = (level: number) => {
+    return [0, 1000, 3000, 7500, 15000, 25000][level] || 0;
+}
+
 export const processWages = (clubs: Record<number, Club>, players: Record<number, Player>, staff: Record<number, Staff>): Record<number, Club> => {
     const newClubs = { ...clubs };
     for (const club of Object.values(newClubs)) {
-        // FIX: Cast Object.values result to prevent type errors on an array of 'unknown'.
+        // Player wages (weekly * 4)
         const clubPlayers = (Object.values(players) as Player[]).filter(p => p.clubId === club.id);
-        const playerWages = clubPlayers.reduce((sum, p) => sum + p.wage, 0);
+        const playerWages = clubPlayers.reduce((sum, p) => sum + p.wage, 0) * 4;
 
-        // FIX: Cast Object.values result to prevent type errors on an array of 'unknown'.
-        const clubStaff = (Object.values(staff) as Staff[]).filter(s => s.clubId === club.id);
-        const staffWages = clubStaff.reduce((sum, s) => sum + s.wage, 0);
+        // FIX: Cast Object.values to StaffDepartment[] once to correctly infer types for subsequent operations.
+        const departments = (Object.values(club.departments) as StaffDepartment[]);
 
-        const totalWages = playerWages + staffWages;
-        club.balance -= totalWages * 4; // Monthly wage bill
+        // Staff chief wages (weekly * 4)
+        const staffChiefs = departments.map(d => d.chiefId).filter(Boolean) as number[];
+        const staffWages = staffChiefs.reduce((sum, id) => sum + staff[id].wage, 0) * 4;
+
+        // Department maintenance costs (monthly)
+        const maintenanceCost = departments.reduce((sum, d) => sum + getDepartmentMaintenanceCost(d.level), 0);
+        
+        const totalMonthlyBill = playerWages + staffWages + maintenanceCost;
+        club.balance -= totalMonthlyBill;
     }
     return newClubs;
 };

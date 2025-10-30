@@ -1,4 +1,4 @@
-import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction, AssistantAttributes, Staff, StaffRole } from '../types';
+import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction, AssistantManagerAttributes, Staff, StaffRole } from '../types';
 import { ROLE_DEFINITIONS } from './database';
 import { FORMATION_PRESETS } from './formations';
 
@@ -24,7 +24,11 @@ export const createDefaultInstructions = (): PlayerInstructions => ({
     marking: MarkingInstruction.Normal,
 });
 
-export const suggestBestXI = (lineupSlots: (Omit<LineupPlayer, 'playerId' | 'instructions'> | null)[], availablePlayers: Player[], assistantAttrs?: AssistantAttributes): (LineupPlayer | null)[] => {
+export const suggestSquadSelection = (
+    lineupSlots: (Omit<LineupPlayer, 'playerId' | 'instructions'> | null)[], 
+    availablePlayers: Player[], 
+    assistantAttrs?: AssistantManagerAttributes
+): { lineup: (LineupPlayer | null)[], bench: (number | null)[] } => {
     const filledLineup: (LineupPlayer | null)[] = Array(11).fill(null);
     let playersPool = [...availablePlayers];
 
@@ -62,7 +66,18 @@ export const suggestBestXI = (lineupSlots: (Omit<LineupPlayer, 'playerId' | 'ins
         }
     });
 
-    return filledLineup;
+    // Select bench from the remaining players
+    const bench: (number | null)[] = playersPool
+        .sort((a, b) => getOverallRating(b) - getOverallRating(a))
+        .slice(0, 7)
+        .map(p => p.id);
+
+    // Pad bench to 7 players if not enough available
+    while(bench.length < 7) {
+        bench.push(null);
+    }
+
+    return { lineup: filledLineup, bench };
 };
 
 
@@ -71,7 +86,7 @@ export const generateAITactics = (clubPlayers: Player[], clubStaff: Staff[]): Ta
     let bestFormation = FORMATION_PRESETS[0];
     let bestFormationScore = 0;
 
-    const assistant = clubStaff.find(s => s.role === StaffRole.Assistant) as Staff & { attributes: AssistantAttributes } | undefined;
+    const assistant = clubStaff.find(s => s.role === StaffRole.AssistantManager) as Staff & { attributes: AssistantManagerAttributes } | undefined;
 
     const getPlayerScoreForRole = (player: Player, role: PlayerRole): number => {
         const familiarity = player.positionalFamiliarity[role] || 20;
@@ -112,11 +127,7 @@ export const generateAITactics = (clubPlayers: Player[], clubStaff: Staff[]): Ta
 
     // --- Generate Best XI for the chosen formation ---
     const lineupSlots = bestFormation.positions.map(p => ({ position: { x: p.x, y: p.y }, role: p.role }));
-    const lineup = suggestBestXI(lineupSlots, clubPlayers, assistant?.attributes);
-
-    const lineupPlayers = lineup.map(lp => lp ? clubPlayers.find(p => p.id === lp.playerId) : null).filter(Boolean) as Player[];
-    const lineupIds = new Set(lineupPlayers.map(p => p.id));
-    const benchPlayers = clubPlayers.filter(p => !lineupIds.has(p.id)).sort((a, b) => getOverallRating(b) - getOverallRating(a)).slice(0, 7);
+    const { lineup, bench } = suggestSquadSelection(lineupSlots, clubPlayers, assistant?.attributes);
     
     // --- New Dynamic Instruction Logic ---
     lineup.forEach(lp => {
@@ -166,6 +177,6 @@ export const generateAITactics = (clubPlayers: Player[], clubStaff: Staff[]): Ta
     return {
         mentality: 'Balanced', // This could also be randomized or based on team strength comparison in the future
         lineup,
-        bench: benchPlayers.map(p => p.id),
+        bench,
     };
 };

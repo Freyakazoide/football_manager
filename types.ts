@@ -1,4 +1,3 @@
-
 // Enums
 export enum View {
     SQUAD = 'Squad',
@@ -39,31 +38,46 @@ export enum TacklingInstruction { Normal = 'Normal', Cautious = 'Cautious', Hard
 export enum PressingInstruction { Normal = 'Normal', Urgent = 'Urgent', DropOff = 'Drop Off' }
 export enum MarkingInstruction { Normal = 'Normal', Zonal = 'Zonal', ManMarking = 'Man Marking' }
 
-// Staff Types
-export enum StaffRole {
-    Assistant = 'Assistant Manager',
-    Scout = 'Scout',
-    Physio = 'Physiotherapist',
+// --- NEW STAFF SYSTEM ---
+
+export enum DepartmentType {
+    Coaching = 'Coaching',
+    Medical = 'Medical',
+    Scouting = 'Scouting',
+    Performance = 'Performance',
 }
 
-export interface AssistantAttributes {
+export enum StaffRole {
+    AssistantManager = 'Assistant Manager',
+    HeadOfPhysiotherapy = 'Head of Physiotherapy',
+    HeadOfScouting = 'Head of Scouting',
+    HeadOfPerformance = 'Head of Performance',
+}
+
+export interface AssistantManagerAttributes {
     tacticalKnowledge: number;
     judgingPlayerAbility: number;
     manManagement: number;
 }
 
-export interface ScoutAttributes {
-    judgingPlayerAbility: number;
-    judgingPlayerPotential: number;
-    adaptability: number;
-}
-
-export interface PhysioAttributes {
+export interface HeadOfPhysiotherapyAttributes {
     physiotherapy: number;
     injuryPrevention: number;
+    sportsScience: number;
 }
 
-export type StaffAttributes = AssistantAttributes | ScoutAttributes | PhysioAttributes;
+export interface HeadOfScoutingAttributes {
+    judgingPlayerAbility: number;
+    judgingPlayerPotential: number;
+    reach: number;
+}
+
+export interface HeadOfPerformanceAttributes {
+    fitnessCoaching: number;
+    loadManagement: number;
+}
+
+export type StaffAttributes = AssistantManagerAttributes | HeadOfPhysiotherapyAttributes | HeadOfScoutingAttributes | HeadOfPerformanceAttributes;
 
 export interface Staff {
     id: number;
@@ -77,6 +91,12 @@ export interface Staff {
     attributes: StaffAttributes;
 }
 
+export interface StaffDepartment {
+    level: number; // 1-5
+    chiefId: number | null;
+}
+
+// --- END NEW STAFF SYSTEM ---
 
 // Interfaces & Types
 export interface PlayerAttributes {
@@ -108,7 +128,6 @@ export interface PlayerSeasonStats {
 
 export type IndividualTrainingFocus = { type: 'attribute', attribute: keyof PlayerAttributes } | { type: 'role', role: PlayerRole } | null;
 
-
 export interface Player {
     id: number;
     clubId: number;
@@ -122,7 +141,7 @@ export interface Player {
     marketValue: number;
     potential: number;
     attributes: PlayerAttributes;
-    scoutedAttributes: Partial<PlayerAttributes>; // Revealed attributes
+    scoutedAttributes: Partial<PlayerAttributes>;
     scoutedPotentialRange: [number, number] | null;
     history: PlayerSeasonStats[];
     morale: number; // 0-100
@@ -132,8 +151,12 @@ export interface Player {
     suspension: { returnDate: Date } | null;
     seasonYellowCards: number;
     promise?: { type: 'playing_time', deadline: Date } | null;
-    lastInteractionDate?: Date | null;
     individualTrainingFocus: IndividualTrainingFocus;
+
+    // --- NEW/UPDATED Player properties ---
+    lastRenewalDate?: Date; // Cooldown for new negotiations
+    interactions: { topic: string, date: Date }[]; // For interaction cooldowns
+    attributeChanges: { date: Date, attr: keyof PlayerAttributes, change: number }[]; // For training feedback
 }
 
 export interface LineupPlayer {
@@ -159,13 +182,13 @@ export interface Club {
     balance: number;
     tactics: Tactics;
     trainingFocus: TeamTrainingFocus;
-    staffIds: {
-        assistant: number | null;
-        physios: number[];
-        scouts: number[];
-    };
+    // --- UPDATED Staff structure ---
+    departments: Record<DepartmentType, StaffDepartment>;
+    staffWageBudget: number;
+    // --- REMOVED old staffIds ---
     competitionId: number;
 }
+
 
 export interface Competition {
     id: number;
@@ -218,7 +241,7 @@ export interface NewsItem {
     date: Date;
     headline: string;
     content: string;
-    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready';
+    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report';
     relatedEntityId?: number;
     isRead: boolean;
     matchStatsSummary?: Match;
@@ -286,6 +309,7 @@ export type ScoutingFilters = {
     minPotential?: number;
     attributes?: Partial<Record<keyof PlayerAttributes, number>>;
     name?: string;
+    contractExpiresInYears?: number; // For bargain hunter
 };
 
 export interface ScoutingAssignment {

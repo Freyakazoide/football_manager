@@ -1,11 +1,20 @@
+
 import React, { useState, useMemo } from 'react';
-import { GameState, Staff, StaffRole, AssistantAttributes, ScoutAttributes, PhysioAttributes } from '../types';
+import { GameState, Staff, StaffRole, DepartmentType, StaffAttributes } from '../types';
 import { Action } from '../services/reducerTypes';
 
 interface StaffViewProps {
     gameState: GameState;
     dispatch: React.Dispatch<Action>;
 }
+
+const getDepartmentMaintenanceCost = (level: number) => {
+    return [0, 1000, 3000, 7500, 15000, 25000][level] || 0;
+};
+
+const getDepartmentUpgradeCost = (level: number) => {
+    return [0, 25000, 75000, 200000, 500000, Infinity][level] || Infinity;
+};
 
 const StaffAttribute: React.FC<{ label: string; value: number }> = ({ label, value }) => {
     const getColor = (val: number) => {
@@ -21,29 +30,105 @@ const StaffAttribute: React.FC<{ label: string; value: number }> = ({ label, val
     );
 };
 
-const StaffCard: React.FC<{ staff: Staff; onAction: () => void; actionLabel: string; isHired: boolean }> = ({ staff, onAction, actionLabel, isHired }) => (
-    <div className="bg-gray-700/50 rounded-lg p-4 flex flex-col">
-        <div className="flex-1">
-            <h4 className="font-bold text-lg text-white">{staff.name}</h4>
-            <p className="text-sm text-gray-400">{staff.role} | {staff.age} y/o</p>
-            <p className="text-xs text-gray-500 mb-3">{staff.nationality}</p>
+const DepartmentCard: React.FC<{
+    departmentType: DepartmentType;
+    gameState: GameState;
+    dispatch: React.Dispatch<Action>;
+}> = ({ departmentType, gameState, dispatch }) => {
+    const club = gameState.clubs[gameState.playerClubId!];
+    const department = club.departments[departmentType];
+    const chief = department.chiefId ? gameState.staff[department.chiefId] : null;
 
-            <div className="space-y-1 mb-3">
-                {Object.entries(staff.attributes).map(([key, value]) => (
-                    <StaffAttribute key={key} label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} value={value} />
-                ))}
+    const handleUpgrade = () => {
+        if (confirm(`Upgrade ${departmentType} department to Level ${department.level + 1} for ${getDepartmentUpgradeCost(department.level).toLocaleString()}`)) {
+             dispatch({ type: 'UPGRADE_DEPARTMENT', payload: { department: departmentType } });
+        }
+    };
+
+    const handleFire = () => {
+         if (chief && confirm(`Are you sure you want to terminate ${chief.name}'s contract?`)) {
+            dispatch({ type: 'FIRE_STAFF', payload: { staffId: chief.id } });
+        }
+    };
+    
+    return (
+        <div className="bg-gray-700/50 rounded-lg p-4 flex flex-col justify-between">
+            <div>
+                <h3 className="text-xl font-bold text-green-400">{departmentType}</h3>
+                <div className="text-sm text-gray-400 mb-3">Level {department.level}</div>
+
+                {chief ? (
+                    <div className="bg-gray-900/50 p-3 rounded-lg">
+                        <h4 className="font-semibold text-white">{chief.name}</h4>
+                        <p className="text-xs text-gray-500 mb-2">{chief.role}</p>
+                        <div className="space-y-1">
+                            {Object.entries(chief.attributes).map(([key, value]) => (
+                                <StaffAttribute key={key} label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} value={value as number} />
+                            ))}
+                        </div>
+                        <button onClick={handleFire} className="mt-3 w-full text-xs bg-red-800 hover:bg-red-700 py-1 rounded">Fire</button>
+                    </div>
+                ) : (
+                    <div className="text-center p-6 border-2 border-dashed border-gray-600 rounded-lg">
+                        <p className="text-gray-500">No Chief Hired</p>
+                    </div>
+                )}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-600">
+                <div className="text-xs text-gray-400 flex justify-between">
+                    <span>Maint. Cost:</span>
+                    <span>${getDepartmentMaintenanceCost(department.level)}/mo</span>
+                </div>
+                {department.level < 5 && (
+                    <button 
+                        onClick={handleUpgrade} 
+                        disabled={club.balance < getDepartmentUpgradeCost(department.level)}
+                        className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-sm disabled:bg-gray-600 disabled:cursor-not-allowed"
+                    >
+                        Upgrade to Lvl {department.level + 1} (${getDepartmentUpgradeCost(department.level).toLocaleString()})
+                    </button>
+                )}
             </div>
         </div>
-        <p className="text-xs text-yellow-400 font-mono mb-3">Wage: {staff.wage.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}/wk</p>
-        <button
-            onClick={onAction}
-            className={`w-full py-2 rounded font-bold text-sm ${isHired ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
-        >
-            {actionLabel}
-        </button>
-    </div>
-);
+    );
+};
 
+
+const StaffMarketCard: React.FC<{ staff: Staff; onHire: (staffId: number, department: DepartmentType) => void; hiredChiefs: Record<DepartmentType, number|null> }> = ({ staff, onHire, hiredChiefs }) => {
+    const roleToDepartmentMap: Record<StaffRole, DepartmentType> = {
+        [StaffRole.AssistantManager]: DepartmentType.Coaching,
+        [StaffRole.HeadOfPerformance]: DepartmentType.Performance,
+        [StaffRole.HeadOfPhysiotherapy]: DepartmentType.Medical,
+        [StaffRole.HeadOfScouting]: DepartmentType.Scouting,
+    };
+    const department = roleToDepartmentMap[staff.role];
+    const isPositionFilled = !!hiredChiefs[department];
+    
+    return (
+        <div className="bg-gray-700/50 rounded-lg p-4 flex flex-col">
+            <div className="flex-1">
+                <h4 className="font-bold text-lg text-white">{staff.name}</h4>
+                <p className="text-sm text-gray-400">{staff.role} | {staff.age} y/o</p>
+                <p className="text-xs text-gray-500 mb-3">{staff.nationality}</p>
+
+                <div className="space-y-1 mb-3">
+                    {Object.entries(staff.attributes).map(([key, value]) => (
+                        <StaffAttribute key={key} label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} value={value as number} />
+                    ))}
+                </div>
+            </div>
+            <p className="text-xs text-yellow-400 font-mono mb-3">Wage: {staff.wage.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}/wk</p>
+            <button
+                onClick={() => onHire(staff.id, department)}
+                disabled={isPositionFilled}
+                className="w-full py-2 rounded font-bold text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+            >
+                {isPositionFilled ? 'Position Filled' : 'Offer Contract'}
+            </button>
+        </div>
+    );
+}
 
 const StaffView: React.FC<StaffViewProps> = ({ gameState, dispatch }) => {
     const [activeTab, setActiveTab] = useState<'current' | 'search'>('current');
@@ -52,42 +137,35 @@ const StaffView: React.FC<StaffViewProps> = ({ gameState, dispatch }) => {
 
     const club = gameState.clubs[playerClubId];
 
-    const currentStaff = useMemo(() => {
-        const staffIds = [
-            club.staffIds.assistant,
-            ...club.staffIds.physios,
-            ...club.staffIds.scouts,
-        ].filter((id): id is number => id !== null);
-        return staffIds.map(id => gameState.staff[id]);
-    }, [club.staffIds, gameState.staff]);
-
     const unemployedStaff = useMemo(() => {
-        // FIX: Cast Object.values to Staff[] to correctly infer staff type.
         return (Object.values(gameState.staff) as Staff[]).filter(s => s.clubId === null);
     }, [gameState.staff]);
 
-    const handleHire = (staffId: number) => {
-        dispatch({ type: 'HIRE_STAFF', payload: { staffId } });
+    const handleHire = (staffId: number, department: DepartmentType) => {
+        dispatch({ type: 'HIRE_STAFF', payload: { staffId, department } });
+        setActiveTab('current');
     };
 
-    const handleFire = (staffId: number) => {
-        if (confirm('Are you sure you want to terminate this staff member\'s contract?')) {
-            dispatch({ type: 'FIRE_STAFF', payload: { staffId } });
-        }
-    };
+    const hiredChiefs = useMemo(() => ({
+        [DepartmentType.Coaching]: club.departments.Coaching.chiefId,
+        [DepartmentType.Medical]: club.departments.Medical.chiefId,
+        [DepartmentType.Scouting]: club.departments.Scouting.chiefId,
+        [DepartmentType.Performance]: club.departments.Performance.chiefId,
+    }), [club.departments]);
     
     const renderCurrentStaff = () => (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {currentStaff.map(staff => (
-                <StaffCard key={staff.id} staff={staff} onAction={() => handleFire(staff.id)} actionLabel="Terminate Contract" isHired />
-            ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <DepartmentCard departmentType={DepartmentType.Coaching} gameState={gameState} dispatch={dispatch} />
+            <DepartmentCard departmentType={DepartmentType.Performance} gameState={gameState} dispatch={dispatch} />
+            <DepartmentCard departmentType={DepartmentType.Medical} gameState={gameState} dispatch={dispatch} />
+            <DepartmentCard departmentType={DepartmentType.Scouting} gameState={gameState} dispatch={dispatch} />
         </div>
     );
     
     const renderStaffSearch = () => (
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {unemployedStaff.map(staff => (
-                <StaffCard key={staff.id} staff={staff} onAction={() => handleHire(staff.id)} actionLabel="Offer Contract" isHired={false} />
+                <StaffMarketCard key={staff.id} staff={staff} onHire={handleHire} hiredChiefs={hiredChiefs} />
             ))}
         </div>
     );
@@ -100,7 +178,7 @@ const StaffView: React.FC<StaffViewProps> = ({ gameState, dispatch }) => {
                     Your Staff
                 </button>
                  <button onClick={() => setActiveTab('search')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'search' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
-                    Staff Search
+                    Staff Market
                 </button>
             </div>
             

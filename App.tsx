@@ -3,7 +3,7 @@
 
 
 import React, { useState, useReducer, useEffect, useCallback, useRef } from 'react';
-import { GameState, View, Club, Player, Match, PlayerRole, TransferNegotiation } from './types';
+import { GameState, View, Club, Player, Match, PlayerRole, TransferNegotiation, Tactics, MatchDayInfo } from './types';
 import { gameReducer, initialState } from './services/gameReducer';
 import { generateInitialDatabase } from './services/database';
 import Navigation from './components/Navigation';
@@ -118,6 +118,7 @@ const App: React.FC = () => {
     const [viewingClub, setViewingClub] = useState<Club | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
     const [activeNegotiationId, setActiveNegotiationId] = useState<number | null>(null);
+    const [preMatchTacticChange, setPreMatchTacticChange] = useState(false);
 
     const currentViewInfo = viewHistory[historyIndex];
     const currentView = currentViewInfo.view;
@@ -182,8 +183,34 @@ const App: React.FC = () => {
     };
 
     const handleGoToTactics = () => {
+        setPreMatchTacticChange(true);
         handleNavigate(View.TACTICS);
         closeMatchDayModal();
+    };
+    
+    const handleConfirmLineupForMatch = (newTactics: Tactics) => {
+        dispatch({ type: 'UPDATE_TACTICS', payload: newTactics });
+        setPreMatchTacticChange(false);
+
+        const matchesToday = state.schedule.filter(m =>
+            new Date(m.date).toDateString() === state.currentDate.toDateString() && m.homeScore === undefined
+        );
+        const playerMatchToday = matchesToday.find(m => m.homeTeamId === state.playerClubId || m.awayTeamId === state.playerClubId);
+
+        if (playerMatchToday) {
+            const aiMatches = matchesToday.filter(m => m.id !== playerMatchToday.id);
+            dispatch({
+                type: 'REOPEN_MATCH_DAY_MODAL',
+                payload: {
+                    playerMatch: {
+                        match: playerMatchToday,
+                        homeTeam: state.clubs[playerMatchToday.homeTeamId],
+                        awayTeam: state.clubs[playerMatchToday.awayTeamId],
+                    },
+                    aiMatches,
+                }
+            });
+        }
     };
     
     const closeMatchResultsModal = () => {
@@ -217,7 +244,12 @@ const App: React.FC = () => {
             case View.TEAM:
                 return <TeamView gameState={state} />;
             case View.TACTICS:
-                return <TacticsView gameState={state} dispatch={dispatch} />;
+                return <TacticsView 
+                    gameState={state} 
+                    dispatch={dispatch} 
+                    isPreMatchTacticChange={preMatchTacticChange}
+                    onConfirmLineup={handleConfirmLineupForMatch}
+                />;
             case View.STAFF:
                 return <StaffView gameState={state} dispatch={dispatch} />;
             case View.BOARD:

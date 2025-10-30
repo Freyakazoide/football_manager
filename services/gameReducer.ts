@@ -539,6 +539,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
         case 'CLEAR_MATCH_DAY_FIXTURES': {
             return { ...state, matchDayFixtures: null };
         }
+        case 'REOPEN_MATCH_DAY_MODAL': {
+            return { ...state, matchDayFixtures: action.payload, matchStartError: null };
+        }
         case 'CLEAR_MATCH_RESULTS': {
             if (!state.matchDayResults) return state;
 

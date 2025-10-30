@@ -8,6 +8,8 @@ import PlayerInstructionModal from './PlayerInstructionModal';
 interface TacticsViewProps {
     gameState: GameState;
     dispatch: React.Dispatch<Action>;
+    isPreMatchTacticChange?: boolean;
+    onConfirmLineup?: (tactics: Tactics) => void;
 }
 
 const Pitch: React.FC<{
@@ -53,7 +55,7 @@ const Pitch: React.FC<{
 };
 
 
-const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch }) => {
+const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch, isPreMatchTacticChange, onConfirmLineup }) => {
     const playerClub = gameState.playerClubId ? gameState.clubs[gameState.playerClubId] : null;
     const [tactics, setTactics] = useState<Tactics>(playerClub!.tactics);
     const [isInstructionModalOpen, setIsInstructionModalOpen] = useState(false);
@@ -329,10 +331,15 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch }) => {
                         </div>
                     </div>
                 </div>
-
-                <button onClick={handleSaveChanges} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded mt-4">
-                    Save Changes
-                </button>
+                {isPreMatchTacticChange && onConfirmLineup ? (
+                    <button onClick={() => onConfirmLineup(tactics)} className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-4 rounded mt-4">
+                        Confirm Lineup for Match
+                    </button>
+                ) : (
+                    <button onClick={handleSaveChanges} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded mt-4">
+                        Save Changes
+                    </button>
+                )}
             </div>
         </div>
     );

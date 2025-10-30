@@ -1,4 +1,4 @@
-import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction, AssistantManagerAttributes, Staff, StaffRole } from '../types';
+import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction, AssistantManagerAttributes, Staff, StaffRole, Mentality } from '../types';
 import { ROLE_DEFINITIONS } from './database';
 import { FORMATION_PRESETS } from './formations';
 
@@ -81,7 +81,24 @@ export const suggestSquadSelection = (
 };
 
 
-export const generateAITactics = (clubPlayers: Player[], clubStaff: Staff[]): Tactics => {
+export const generateAITactics = (
+    clubPlayers: Player[],
+    clubStaff: Staff[],
+    ownRatings: { def: number, mid: number, fwd: number, gk: number },
+    opponentRatings: { def: number, mid: number, fwd: number, gk: number }
+): Tactics => {
+    // --- New Mentality Selection Logic ---
+    const ownOverall = (ownRatings.def + ownRatings.mid + ownRatings.fwd) / 3;
+    const opponentOverall = (opponentRatings.def + opponentRatings.mid + opponentRatings.fwd) / 3;
+    const strengthDiff = ownOverall - opponentOverall;
+
+    let mentality: Mentality = 'Balanced';
+    if (strengthDiff > 8) {
+        mentality = 'Offensive';
+    } else if (strengthDiff < -8) {
+        mentality = 'Defensive';
+    }
+    
     // --- New Formation Selection Logic ---
     let bestFormation = FORMATION_PRESETS[0];
     let bestFormationScore = 0;
@@ -151,10 +168,8 @@ export const generateAITactics = (clubPlayers: Player[], clubStaff: Staff[]): Ta
                 if (attributes.shooting > 80) instructions.shooting = ShootingInstruction.ShootMoreOften;
                 if (attributes.dribbling > 80 && attributes.pace > 80) instructions.dribbling = DribblingInstruction.DribbleMore;
                 if ((role === 'Deep-Lying Forward' || role === 'False Nine') && attributes.passing > 75) instructions.passing = PassingInstruction.Risky;
-                if ((role.includes('Wide') || role === 'Advanced Forward') && attributes.crossing > 75) instructions.crossing = CrossingInstruction.CrossMore;
                 break;
             case 'MID':
-                if (role.includes('Wide') && attributes.crossing > 75) instructions.crossing = CrossingInstruction.CrossMore;
                 if (attributes.dribbling > 80) instructions.dribbling = DribblingInstruction.DribbleMore;
                 if (attributes.creativity > 80 && role.includes('Playmaker')) instructions.passing = PassingInstruction.Risky;
                 if (attributes.shooting > 75 && (role === 'Box-To-Box Midfielder' || role === 'Mezzala' || role === 'Attacking Midfielder')) instructions.positioning = PositioningInstruction.GetForward;
@@ -165,17 +180,25 @@ export const generateAITactics = (clubPlayers: Player[], clubStaff: Staff[]): Ta
                 if (role === 'Defensive Midfielder' || role === 'Deep Lying Playmaker') instructions.positioning = PositioningInstruction.HoldPosition;
                 break;
             case 'DEF':
-                if ((role === 'Wing-Back' || role === 'Full-Back') && attributes.crossing > 70) instructions.crossing = CrossingInstruction.CrossMore;
                 if (role === 'Wing-Back' && attributes.workRate > 80) instructions.positioning = PositioningInstruction.GetForward;
                 if (role === 'Ball-Playing Defender' && attributes.passing > 75) instructions.passing = PassingInstruction.Risky;
                 if (role.includes('Central') || role === 'Libero') instructions.positioning = PositioningInstruction.HoldPosition;
                 break;
         }
+        
+        // Synergistic instructions
+        if (category === 'FWD' || category === 'MID' || category === 'DEF') {
+            if ((role.includes('Wing') || role.includes('Wide') || role.includes('Full-Back')) && attributes.crossing > 75) {
+                instructions.crossing = CrossingInstruction.CrossMore;
+                instructions.positioning = PositioningInstruction.GetForward; // Encourage them to get into crossing positions
+            }
+        }
+        
         lp.instructions = instructions;
     });
 
     return {
-        mentality: 'Balanced', // This could also be randomized or based on team strength comparison in the future
+        mentality,
         lineup,
         bench,
     };

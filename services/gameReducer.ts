@@ -1,6 +1,6 @@
 import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType } from '../types';
 import { Action } from './reducerTypes';
-import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens } from './simulationService';
+import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens, getUnitRatings } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
 import { generateNarrativeReport } from './newsGenerator';
 import { generateAITactics } from './aiTacticsService';
@@ -962,15 +962,18 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             // If AI is playing, generate dynamic tactics for them
             const opponent = homeTeam.id === playerClubId ? awayTeam : homeTeam;
+            const playerClubRatings = getUnitRatings(playerClubId, state.clubs, state.players);
+            const opponentRatings = getUnitRatings(opponent.id, state.clubs, state.players);
+
             const opponentPlayers = (Object.values(state.players) as Player[]).filter(p => p.clubId === opponent.id && !p.injury && !p.suspension);
             
             const opponentChiefs = Object.values(opponent.departments).map(d => d.chiefId).filter(Boolean) as number[];
             const opponentStaff = opponentChiefs.map(id => state.staff[id]);
-            const newAITactics = generateAITactics(opponentPlayers, opponentStaff);
+            const newAITactics = generateAITactics(opponentPlayers, opponentStaff, opponentRatings, playerClubRatings);
             
             tempClubs[opponent.id] = { ...tempClubs[opponent.id], tactics: newAITactics };
 
-            const liveMatch = createLiveMatchState(action.payload, tempClubs, state.players);
+            const liveMatch = createLiveMatchState(action.payload, tempClubs, state.players, playerClubId);
             return { ...state, clubs: tempClubs, matchDayFixtures: null, liveMatch, matchStartError: null };
         }
         case 'ADVANCE_MINUTE': {

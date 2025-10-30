@@ -287,6 +287,8 @@ export interface LiveMatchState {
     attackingTeamId: number;
     ballCarrierId: number | null;
     ballZone: number;
+    playerTeamId: number;
+    isKeyPassOpportunity: boolean;
     homePossessionMinutes: number;
     awayPossessionMinutes: number;
     initialHomeLineupIds: number[];

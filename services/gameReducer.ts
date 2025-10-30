@@ -41,6 +41,7 @@ const rehydratePlayers = (players: Record<number, Player>): Record<number, Playe
         if (player.injury?.returnDate) player.injury.returnDate = new Date(player.injury.returnDate);
         if (player.suspension?.returnDate) player.suspension.returnDate = new Date(player.suspension.returnDate);
         if (player.promise?.deadline) player.promise.deadline = new Date(player.promise.deadline);
+        if (player.lastRenewalDate) player.lastRenewalDate = new Date(player.lastRenewalDate);
         player.interactions.forEach(i => i.date = new Date(i.date));
         player.attributeChanges.forEach(c => c.date = new Date(c.date));
     }
@@ -436,51 +437,68 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             return newState;
         }
         case 'START_NEW_SEASON': {
-            let newState = { ...state };
+            const tempState = { ...state };
+
+            // 1. Award Prize Money (immutable)
+            const clubsWithPrizeMoney = awardPrizeMoney(tempState.clubs, tempState.leagueTable);
+
+            // 2. Process Promotions & Relegations (immutable)
+            const { promotedClubIds, relegatedClubIds } = tempState.seasonReviewData!;
+            const clubsAfterPromotion = Object.keys(clubsWithPrizeMoney).reduce((acc, clubIdStr) => {
+                const clubId = Number(clubIdStr);
+                const club = clubsWithPrizeMoney[clubId];
+                if (promotedClubIds.includes(clubId)) {
+                    acc[clubId] = { ...club, competitionId: 1 };
+                } else if (relegatedClubIds.includes(clubId)) {
+                    acc[clubId] = { ...club, competitionId: 2 };
+                } else {
+                    acc[clubId] = club;
+                }
+                return acc;
+            }, {} as Record<number, Club>);
             
-            // 1. Award Prize Money
-            newState.clubs = awardPrizeMoney(newState.clubs, newState.leagueTable);
-
-            // 2. Process Promotions & Relegations (already calculated in season review)
-            const { promotedClubIds, relegatedClubIds } = newState.seasonReviewData!;
-            promotedClubIds.forEach(id => { if(newState.clubs[id]) newState.clubs[id].competitionId = 1; });
-            relegatedClubIds.forEach(id => { if(newState.clubs[id]) newState.clubs[id].competitionId = 2; });
-
-            // 3. Process Aging and Retirements
-            const { players: agedPlayers, retiredPlayers } = processPlayerAging(newState.players);
-            newState.players = agedPlayers;
+            // 3. Process Aging and Retirements (immutable)
+            const { players: agedPlayers, retiredPlayers } = processPlayerAging(tempState.players);
             
             // 4. Generate Regens
-            const regens = generateRegens(newState.clubs, retiredPlayers.length, newState.players);
-            regens.forEach(regen => {
-                newState.players[regen.id] = regen;
-            });
+            const regens = generateRegens(clubsAfterPromotion, retiredPlayers.length, agedPlayers);
+            const playersWithRegens = regens.reduce((acc, regen) => {
+                acc[regen.id] = regen;
+                return acc;
+            }, { ...agedPlayers });
+
+            // 8. Reset season-specific player data (immutable)
+            const finalPlayersState = Object.values(playersWithRegens).reduce((acc, player) => {
+                acc[player.id] = { ...player, seasonYellowCards: 0 };
+                return acc;
+            }, {} as Record<number, Player>);
 
             // 5. Reset league table for the new season's top division
-            const newLeagueClubs = Object.values(newState.clubs).filter(c => c.competitionId === 1);
+            const newLeagueClubs = Object.values(clubsAfterPromotion).filter(c => c.competitionId === 1);
             const newLeagueTable: LeagueEntry[] = newLeagueClubs.map(c => ({
                 clubId: c.id, played: 0, wins: 0, draws: 0, losses: 0, 
                 goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0,
             }));
-            newState.leagueTable = newLeagueTable;
 
             // 6. Set date to next season's start
-            const newStartDate = new Date(newState.currentDate);
+            const newStartDate = new Date(tempState.currentDate);
             newStartDate.setFullYear(newStartDate.getFullYear() + 1);
             newStartDate.setMonth(7); // August
             newStartDate.setDate(10);
-            newState.currentDate = newStartDate;
 
             // 7. Generate new schedule
-            newState.schedule = generateScheduleForCompetition(newLeagueClubs, newState.currentDate);
-            
-            // 8. Reset season-specific player data
-            Object.values(newState.players).forEach(p => (p as Player).seasonYellowCards = 0);
+            const newSchedule = generateScheduleForCompetition(newLeagueClubs, newStartDate);
 
-            // 9. Clear season review data
-            newState.seasonReviewData = null;
-
-            return newState;
+            // 9. Return the final, assembled state
+            return {
+                ...tempState,
+                clubs: clubsAfterPromotion,
+                players: finalPlayersState,
+                leagueTable: newLeagueTable,
+                currentDate: newStartDate,
+                schedule: newSchedule,
+                seasonReviewData: null,
+            };
         }
         case 'CLEAR_MATCH_DAY_FIXTURES': {
             return { ...state, matchDayFixtures: null };
@@ -509,22 +527,6 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 item.id === action.payload.newsItemId ? { ...item, isRead: true } : item
             );
             return { ...state, news: newNews };
-        }
-        case 'RENEW_CONTRACT': {
-            const { playerId, newWage, newExpiryDate } = action.payload;
-            const player = state.players[playerId];
-            if (!player || player.clubId !== state.playerClubId) return state;
-            
-            const newPlayers = { ...state.players };
-            const updatedPlayer = { ...player };
-            updatedPlayer.wage = newWage;
-            updatedPlayer.contractExpires = newExpiryDate;
-            updatedPlayer.lastRenewalDate = new Date(state.currentDate);
-            updatedPlayer.satisfaction = Math.min(100, player.satisfaction + 20);
-            updatedPlayer.morale = Math.min(100, player.morale + 15);
-            newPlayers[playerId] = updatedPlayer;
-
-            return { ...state, players: rehydratePlayers(newPlayers) };
         }
         case 'PLAYER_INTERACTION': {
             const { playerId, interactionType } = action.payload;
@@ -685,7 +687,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             return { ...state, staff: newStaff, clubs: newClubs };
         }
-        // --- NEW TRANSFER NEGOTIATION ---
+        // --- NEW TRANSFER SYSTEM ---
         case 'START_TRANSFER_NEGOTIATION': {
             const { playerId } = action.payload;
             const player = state.players[playerId];
@@ -700,6 +702,30 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 clubOfferHistory: [],
                 agentOfferHistory: [],
                 agreedFee: 0
+            };
+            return {
+                ...state,
+                transferNegotiations: {
+                    ...state.transferNegotiations,
+                    [state.nextNegotiationId]: newNegotiation,
+                },
+                nextNegotiationId: state.nextNegotiationId + 1,
+            };
+        }
+        case 'START_RENEWAL_NEGOTIATION': {
+            const { playerId } = action.payload;
+            const player = state.players[playerId];
+            const newNegotiation: TransferNegotiation = {
+                id: state.nextNegotiationId,
+                playerId,
+                sellingClubId: player.clubId,
+                buyingClubId: state.playerClubId!,
+                stage: 'agent', // Start at agent stage
+                status: 'player_turn',
+                lastOfferBy: 'player',
+                clubOfferHistory: [],
+                agentOfferHistory: [],
+                agreedFee: 0 // No fee for renewals
             };
             return {
                 ...state,
@@ -763,13 +789,25 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const buyerClub = { ...state.clubs[negotiation.buyingClubId] };
             const sellerClub = { ...state.clubs[negotiation.sellingClubId] };
             const lastOffer = negotiation.agentOfferHistory[negotiation.agentOfferHistory.length - 1].offer;
+            const isRenewal = negotiation.sellingClubId === negotiation.buyingClubId;
 
-            // Finalize transfer
+            // Finalize transfer/renewal
             buyerClub.balance -= (negotiation.agreedFee + lastOffer.signingBonus);
-            sellerClub.balance += negotiation.agreedFee;
+            if (!isRenewal) {
+                sellerClub.balance += negotiation.agreedFee;
+            }
             player.clubId = negotiation.buyingClubId;
             player.wage = lastOffer.wage;
             player.scoutedAttributes = player.attributes;
+
+            if (isRenewal) {
+                const newExpiryDate = new Date(state.currentDate);
+                newExpiryDate.setFullYear(newExpiryDate.getFullYear() + lastOffer.durationYears);
+                player.contractExpires = newExpiryDate;
+                player.lastRenewalDate = new Date(state.currentDate);
+                player.satisfaction = Math.min(100, player.satisfaction + 20);
+                player.morale = Math.min(100, player.morale + 15);
+            }
 
             const newPlayers = { ...state.players, [player.id]: player };
             const newClubs = { ...state.clubs, [buyerClub.id]: buyerClub, [sellerClub.id]: sellerClub };
@@ -777,9 +815,14 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const newNegotiations = { ...state.transferNegotiations };
             newNegotiations[negotiationId] = { ...negotiation, status: 'completed' };
 
-            let newState = addNewsItem({ ...state }, `Transfer Confirmed: ${player.name} joins ${buyerClub.name}`, `${player.name} has completed a move from ${sellerClub.name} to ${buyerClub.name} for a fee of ${negotiation.agreedFee.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}.`, 'transfer_completed', player.id);
+            let newState = { ...state };
+            if (isRenewal) {
+                 newState = addNewsItem(newState, `Contract Extended: ${player.name}`, `${player.name} has signed a new contract with ${buyerClub.name}, keeping him at the club until ${player.contractExpires.toLocaleDateString()}.`, 'transfer_completed', player.id);
+            } else {
+                 newState = addNewsItem(newState, `Transfer Confirmed: ${player.name} joins ${buyerClub.name}`, `${player.name} has completed a move from ${sellerClub.name} to ${buyerClub.name} for a fee of ${negotiation.agreedFee.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}.`, 'transfer_completed', player.id);
+            }
             
-            return { ...newState, players: newPlayers, clubs: newClubs, transferNegotiations: newNegotiations };
+            return { ...newState, players: rehydratePlayers(newPlayers), clubs: newClubs, transferNegotiations: newNegotiations };
         }
         case 'CANCEL_NEGOTIATION': {
             const { negotiationId } = action.payload;
@@ -823,27 +866,44 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 const expectedWage = player.marketValue / 100;
                 const wageRatio = lastOffer.wage / expectedWage;
                 const acceptanceChance = Math.max(0.1, Math.min(0.95, (wageRatio - 0.9) * 2));
+                const isRenewal = currentNeg.sellingClubId === currentNeg.buyingClubId;
                 
                 if (Math.random() < acceptanceChance) {
-                    // Accept and complete transfer
+                    // Accept and complete transfer/renewal
                     const buyerClub = { ...state.clubs[negotiation.buyingClubId] };
                     const sellerClub = { ...state.clubs[negotiation.sellingClubId] };
                     const updatedPlayer = { ...player };
 
                     buyerClub.balance -= (currentNeg.agreedFee + lastOffer.signingBonus);
-                    sellerClub.balance += currentNeg.agreedFee;
+                    if (!isRenewal) {
+                         sellerClub.balance += currentNeg.agreedFee;
+                    }
                     updatedPlayer.clubId = negotiation.buyingClubId;
                     updatedPlayer.wage = lastOffer.wage;
                     updatedPlayer.scoutedAttributes = player.attributes;
+
+                     if (isRenewal) {
+                        const newExpiryDate = new Date(state.currentDate);
+                        newExpiryDate.setFullYear(newExpiryDate.getFullYear() + lastOffer.durationYears);
+                        updatedPlayer.contractExpires = newExpiryDate;
+                        updatedPlayer.lastRenewalDate = new Date(state.currentDate);
+                        updatedPlayer.satisfaction = Math.min(100, player.satisfaction + 20);
+                        updatedPlayer.morale = Math.min(100, player.morale + 15);
+                    }
                     
                     const newPlayers = { ...state.players, [player.id]: updatedPlayer };
                     const newClubs = { ...state.clubs, [buyerClub.id]: buyerClub, [sellerClub.id]: sellerClub };
                     currentNeg.status = 'completed';
                     
-                    let newState = addNewsItem({ ...state }, `Transfer Confirmed: ${player.name} joins ${buyerClub.name}`, `${player.name} has completed a move from ${sellerClub.name} to ${buyerClub.name} for a fee of ${currentNeg.agreedFee.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}.`, 'transfer_completed', player.id);
+                    let newState = { ...state };
+                    if (isRenewal) {
+                        newState = addNewsItem(newState, `Contract Extended: ${player.name}`, `${player.name} has signed a new contract with ${buyerClub.name}, keeping him at the club until ${updatedPlayer.contractExpires.toLocaleDateString()}.`, 'transfer_completed', player.id);
+                    } else {
+                        newState = addNewsItem(newState, `Transfer Confirmed: ${player.name} joins ${buyerClub.name}`, `${player.name} has completed a move from ${sellerClub.name} to ${buyerClub.name} for a fee of ${currentNeg.agreedFee.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}.`, 'transfer_completed', player.id);
+                    }
                     
                     newNegotiations[negotiationId] = currentNeg;
-                    return { ...newState, players: newPlayers, clubs: newClubs, transferNegotiations: newNegotiations };
+                    return { ...newState, players: rehydratePlayers(newPlayers), clubs: newClubs, transferNegotiations: newNegotiations };
 
                 } else {
                     // Counter agent offer
@@ -853,7 +913,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         wage: counterWage,
                         signingBonus: Math.max(lastOffer.signingBonus, player.marketValue * 0.05),
                         goalBonus: lastOffer.goalBonus,
-                        releaseClause: lastOffer.releaseClause
+                        releaseClause: lastOffer.releaseClause,
+                        durationYears: lastOffer.durationYears,
                     };
                     currentNeg.agentOfferHistory.push({ offer: counterOffer, by: 'ai' });
                     currentNeg.status = 'player_turn';

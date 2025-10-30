@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { GameState, Player, PlayerAttributes, PlayerRole } from '../types';
 import { Action } from '../services/reducerTypes';
 import { ROLE_TO_POSITION_MAP } from '../services/database';
@@ -129,9 +129,6 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     const club = gameState.clubs[player.clubId];
     
     const [activeTab, setActiveTab] = useState<'attributes' | 'history'>('attributes');
-    const [isRenewing, setIsRenewing] = useState(false);
-    const [newWage, setNewWage] = useState(player.wage);
-    const [newDuration, setNewDuration] = useState(3); // years
     
     const isTransferTarget = player.clubId !== gameState.playerClubId;
     const areAttributesFullyScouted = Object.keys(player.scoutedAttributes).length > 0 || !isTransferTarget;
@@ -159,12 +156,16 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     const criticizeCooldown = getInteractionCooldown('criticize');
     const promiseCooldown = getInteractionCooldown('promise');
     
-    const handleRenewContract = () => {
-        const newExpiryDate = new Date(gameState.currentDate);
-        newExpiryDate.setFullYear(newExpiryDate.getFullYear() + newDuration);
-        dispatch({ type: 'RENEW_CONTRACT', payload: { playerId: player.id, newWage, newExpiryDate } });
-        setIsRenewing(false);
+    const handleStartRenewal = () => {
+        dispatch({ type: 'START_RENEWAL_NEGOTIATION', payload: { playerId: player.id } });
     };
+
+    const isRenewalOnCooldown = useMemo(() => {
+        if (!player.lastRenewalDate) return false;
+        const sixMonthsAgo = new Date(gameState.currentDate);
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        return new Date(player.lastRenewalDate) > sixMonthsAgo;
+    }, [player.lastRenewalDate, gameState.currentDate]);
 
     const formatCurrency = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
 
@@ -241,42 +242,14 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                     <>
                         <div className="bg-gray-700 p-4 rounded-lg">
                             <h3 className="text-lg font-semibold text-green-400 mb-2">Contract Renewal</h3>
-                            {!isRenewing ? (
-                                <button onClick={() => setIsRenewing(true)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded">
-                                    Offer New Contract
-                                </button>
-                            ) : (
-                                <div>
-                                    <label className="text-xs text-gray-400">New Weekly Wage</label>
-                                    <input
-                                        type="number"
-                                        step="100"
-                                        value={newWage}
-                                        onChange={(e) => setNewWage(Number(e.target.value))}
-                                        className="w-full bg-gray-800 p-2 rounded mb-2"
-                                    />
-                                    <label className="text-xs text-gray-400">Contract Duration (years)</label>
-                                    <select
-                                        value={newDuration}
-                                        onChange={(e) => setNewDuration(Number(e.target.value))}
-                                        className="w-full bg-gray-800 p-2 rounded mb-4"
-                                    >
-                                        <option value={1}>1 Year</option>
-                                        <option value={2}>2 Years</option>
-                                        <option value={3}>3 Years</option>
-                                        <option value={4}>4 Years</option>
-                                        <option value={5}>5 Years</option>
-                                    </select>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => setIsRenewing(false)} className="w-1/2 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 rounded">
-                                            Cancel
-                                        </button>
-                                        <button onClick={handleRenewContract} className="w-1/2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded">
-                                            Confirm Offer
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+                             <button 
+                                onClick={handleStartRenewal} 
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded disabled:bg-gray-600 disabled:cursor-not-allowed"
+                                disabled={isRenewalOnCooldown}
+                                title={isRenewalOnCooldown ? "You recently signed a contract with this player." : "Negotiate a new contract"}
+                            >
+                                {isRenewalOnCooldown ? 'Renewal Cooldown' : 'Offer New Contract'}
+                            </button>
                         </div>
 
                         <div className="bg-gray-700 p-4 rounded-lg">

@@ -63,15 +63,15 @@ const AgentNegotiation: React.FC<{
     negotiation: TransferNegotiation;
     player: Player;
     dispatch: React.Dispatch<Action>;
-    onClose: () => void;
-}> = ({ negotiation, player, dispatch, onClose }) => {
-    const [wage, setWage] = useState(player.wage * 1.1);
-    const [signingBonus, setSigningBonus] = useState(player.marketValue * 0.05);
+}> = ({ negotiation, player, dispatch }) => {
+    const [wage, setWage] = useState(Math.round(player.wage * 1.1));
+    const [signingBonus, setSigningBonus] = useState(Math.round(player.marketValue * 0.05));
     const [goalBonus, setGoalBonus] = useState(0);
     const [releaseClause, setReleaseClause] = useState(0);
+    const [duration, setDuration] = useState(3);
 
     const handleSubmitOffer = () => {
-        dispatch({ type: 'SUBMIT_AGENT_OFFER', payload: { negotiationId: negotiation.id, offer: { wage, signingBonus, goalBonus, releaseClause: releaseClause > 0 ? releaseClause : undefined } } });
+        dispatch({ type: 'SUBMIT_AGENT_OFFER', payload: { negotiationId: negotiation.id, offer: { wage, signingBonus, goalBonus, releaseClause: releaseClause > 0 ? releaseClause : undefined, durationYears: duration } } });
     };
 
     const handleAcceptCounter = () => {
@@ -87,6 +87,7 @@ const AgentNegotiation: React.FC<{
                     <h4 className="font-bold text-yellow-300">Agent Demands!</h4>
                     <p>Wage: <span className="font-mono">{formatCurrency(lastAiOffer.wage)}/wk</span></p>
                     <p>Signing Bonus: <span className="font-mono">{formatCurrency(lastAiOffer.signingBonus)}</span></p>
+                    <p>Duration: <span className="font-mono">{lastAiOffer.durationYears} Years</span></p>
                     <button onClick={handleAcceptCounter} className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded">
                         Accept Terms
                     </button>
@@ -109,6 +110,16 @@ const AgentNegotiation: React.FC<{
                     <label className="block text-sm font-bold text-gray-300 mb-1">Release Clause (Optional)</label>
                     <input type="number" step="10000" value={releaseClause} onChange={e => setReleaseClause(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
                 </div>
+                <div>
+                    <label className="block text-sm font-bold text-gray-300 mb-1">Contract Duration (Years)</label>
+                    <select value={duration} onChange={e => setDuration(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded">
+                        <option value={1}>1</option>
+                        <option value={2}>2</option>
+                        <option value={3}>3</option>
+                        <option value={4}>4</option>
+                        <option value={5}>5</option>
+                    </select>
+                </div>
             </div>
             <button onClick={handleSubmitOffer} className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded">
                 Propose Contract
@@ -121,6 +132,7 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
     const player = gameState.players[negotiation.playerId];
     const sellingClub = gameState.clubs[negotiation.sellingClubId];
     const buyingClub = gameState.clubs[negotiation.buyingClubId];
+    const isRenewal = negotiation.sellingClubId === negotiation.buyingClubId;
 
     useEffect(() => {
         // Automatically close the modal when the negotiation is finished.
@@ -148,8 +160,8 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
                 <div className="p-4 border-b border-gray-700">
                     <div className="flex justify-between items-start">
                         <div>
-                            <h2 className="text-2xl font-bold">Transfer Negotiation</h2>
-                            <p className="text-gray-400">For <span className="font-semibold text-white">{player.name}</span> from {sellingClub.name}</p>
+                            <h2 className="text-2xl font-bold">{isRenewal ? 'Contract Renewal' : 'Transfer Negotiation'}</h2>
+                            <p className="text-gray-400">For <span className="font-semibold text-white">{player.name}</span> {isRenewal ? `with ${sellingClub.name}` : `from ${sellingClub.name}`}</p>
                         </div>
                         <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl font-bold">&times;</button>
                     </div>
@@ -161,8 +173,8 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
                     )}
                     {negotiation.stage === 'agent' && (
                         <div>
-                            <p className="text-sm bg-green-900/50 p-2 rounded mb-4">Fee of <span className="font-bold">{formatCurrency(negotiation.agreedFee)}</span> agreed with {sellingClub.name}.</p>
-                            <AgentNegotiation negotiation={negotiation} player={player} dispatch={dispatch} onClose={onClose} />
+                            {!isRenewal && <p className="text-sm bg-green-900/50 p-2 rounded mb-4">Fee of <span className="font-bold">{formatCurrency(negotiation.agreedFee)}</span> agreed with {sellingClub.name}.</p>}
+                            <AgentNegotiation negotiation={negotiation} player={player} dispatch={dispatch} />
                         </div>
                     )}
                      {isWaitingForResponse && (

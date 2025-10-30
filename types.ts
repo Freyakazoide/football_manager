@@ -349,6 +349,7 @@ export interface ContractOffer {
     wage: number;
     signingBonus: number;
     goalBonus: number;
+    durationYears: number;
     releaseClause?: number;
 }
 

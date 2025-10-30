@@ -295,19 +295,22 @@ export const processPlayerAging = (players: Record<number, Player>) => {
     const retiredPlayers: Player[] = [];
 
     for (const pId in players) {
-        const player = players[pId];
-        player.age += 1;
-        player.marketValue = recalculateMarketValue(player);
+        const originalPlayer = players[pId];
+        const updatedPlayer = {
+            ...originalPlayer,
+            age: originalPlayer.age + 1,
+        };
+        updatedPlayer.marketValue = recalculateMarketValue(updatedPlayer);
 
         // Retirement logic
-        if (player.age > 33) {
-            const retirementChance = (player.age - 33) * 5 + (50 - player.attributes.naturalFitness) / 2;
+        if (updatedPlayer.age > 33) {
+            const retirementChance = (updatedPlayer.age - 33) * 5 + (50 - updatedPlayer.attributes.naturalFitness) / 2;
             if (Math.random() * 100 < retirementChance) {
-                retiredPlayers.push(player);
+                retiredPlayers.push(updatedPlayer);
                 continue; // Skip adding to newPlayers
             }
         }
-        newPlayers[pId] = player;
+        newPlayers[pId] = updatedPlayer;
     }
     return { players: newPlayers, retiredPlayers };
 };
@@ -366,8 +369,7 @@ const getDepartmentMaintenanceCost = (level: number) => {
 }
 
 export const processWages = (clubs: Record<number, Club>, players: Record<number, Player>, staff: Record<number, Staff>): Record<number, Club> => {
-    const newClubs = { ...clubs };
-    for (const club of Object.values(newClubs)) {
+    return Object.values(clubs).reduce((acc, club) => {
         // Player wages (weekly * 4)
         const clubPlayers = (Object.values(players) as Player[]).filter(p => p.clubId === club.id);
         const playerWages = clubPlayers.reduce((sum, p) => sum + p.wage, 0) * 4;
@@ -383,23 +385,39 @@ export const processWages = (clubs: Record<number, Club>, players: Record<number
         const maintenanceCost = departments.reduce((sum, d) => sum + getDepartmentMaintenanceCost(d.level), 0);
         
         const totalMonthlyBill = playerWages + staffWages + maintenanceCost;
-        club.balance -= totalMonthlyBill;
-    }
-    return newClubs;
+        
+        acc[club.id] = {
+            ...club,
+            balance: club.balance - totalMonthlyBill,
+        };
+        return acc;
+    }, {} as Record<number, Club>);
 };
 
 export const awardPrizeMoney = (clubs: Record<number, Club>, leagueTable: LeagueEntry[]): Record<number, Club> => {
-    const newClubs = { ...clubs };
     const prizePool = 50_000_000;
-    const numTeams = leagueTable.length;
-    leagueTable.forEach((entry, index) => {
-        const club = newClubs[entry.clubId];
-        if (club) {
-            const prizeMoney = prizePool / (index + 1);
-            club.balance += Math.round(prizeMoney);
+    
+    const prizeMoneyByClubId = leagueTable.reduce((acc, entry, index) => {
+        const prizeMoney = prizePool / (index + 1);
+        acc[entry.clubId] = Math.round(prizeMoney);
+        return acc;
+    }, {} as Record<number, number>);
+
+    return Object.keys(clubs).reduce((acc, clubIdStr) => {
+        const clubId = Number(clubIdStr);
+        const club = clubs[clubId];
+        const prize = prizeMoneyByClubId[clubId] || 0;
+        
+        if (prize > 0) {
+            acc[clubId] = {
+                ...club,
+                balance: club.balance + prize
+            };
+        } else {
+            acc[clubId] = club; // No change, return original object
         }
-    });
-    return newClubs;
+        return acc;
+    }, {} as Record<number, Club>);
 };
 
 export const processPromotionsAndRelegations = (

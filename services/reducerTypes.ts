@@ -1,4 +1,3 @@
-
 import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType } from '../types';
 
 export type Action =
@@ -24,7 +23,6 @@ export type Action =
     | { type: 'UPDATE_LIVE_PLAYER_INSTRUCTIONS'; payload: { playerId: number; instructions: PlayerInstructions } }
     | { type: 'END_MATCH' }
     // Player & Contract Management
-    | { type: 'RENEW_CONTRACT'; payload: { playerId: number; newWage: number; newExpiryDate: Date } }
     | { type: 'PLAYER_INTERACTION'; payload: { playerId: number; interactionType: 'praise' | 'criticize' | 'promise' } }
     // Training & Scouting
     | { type: 'UPDATE_TRAINING_SETTINGS'; payload: { teamFocus: TeamTrainingFocus, individualFocuses: Record<number, IndividualTrainingFocus> } }
@@ -37,6 +35,7 @@ export type Action =
     | { type: 'START_NEW_SEASON' }
     // New Transfer Negotiation Actions
     | { type: 'START_TRANSFER_NEGOTIATION'; payload: { playerId: number } }
+    | { type: 'START_RENEWAL_NEGOTIATION'; payload: { playerId: number } }
     | { type: 'SUBMIT_CLUB_OFFER'; payload: { negotiationId: number; offer: Omit<TransferOffer, 'fromClubId'> } }
     | { type: 'ACCEPT_CLUB_COUNTER'; payload: { negotiationId: number } }
     | { type: 'SUBMIT_AGENT_OFFER'; payload: { negotiationId: number; offer: ContractOffer } }

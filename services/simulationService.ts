@@ -215,21 +215,24 @@ const getTrainingFocusAttributes = (focus: TeamTrainingFocus): (keyof PlayerAttr
 };
 
 export const processPlayerDevelopment = (players: Record<number, Player>, clubs: Record<number, Club>): Record<number, Player> => {
-    const newPlayers = JSON.parse(JSON.stringify(players));
-    for (const pId in newPlayers) {
-        const player: Player = newPlayers[pId];
+    const newPlayersState: Record<number, Player> = {}; // The new state to return
+
+    for (const pId in players) {
+        const player = { // Create a shallow clone of the player
+            ...players[pId],
+            attributes: { ...players[pId].attributes }, // Deep clone attributes
+            positionalFamiliarity: { ...players[pId].positionalFamiliarity } // Deep clone familiarity
+        };
+
         const club = clubs[player.clubId];
         const teamFocus = club.trainingFocus;
         const individualFocus = player.individualTrainingFocus;
-        
-        let developmentHappened = false;
 
         // Handle individual role training
         if (individualFocus?.type === 'role' && Math.random() < 0.5) { // 50% chance to improve role familiarity each month
             const roleToTrain = individualFocus.role;
             if (player.positionalFamiliarity[roleToTrain] < 100) {
                 player.positionalFamiliarity[roleToTrain] = Math.min(100, player.positionalFamiliarity[roleToTrain] + 2);
-                developmentHappened = true;
             }
         }
 
@@ -239,15 +242,15 @@ export const processPlayerDevelopment = (players: Record<number, Player>, clubs:
             if (Math.random() < potentialFactor) {
                 const attrs = Object.keys(player.attributes) as (keyof PlayerAttributes)[];
                 let attrToImprove = attrs[Math.floor(Math.random() * attrs.length)];
-                
+
                 let improvementChance = 1.0;
-                
+
                 // Boost chance based on team focus
                 const focusAttrs = getTrainingFocusAttributes(teamFocus);
                 if (focusAttrs.includes(attrToImprove)) {
                     improvementChance *= 1.5;
                 }
-                
+
                 // Greatly boost chance based on individual focus
                 if (individualFocus?.type === 'attribute' && individualFocus.attribute === attrToImprove) {
                     improvementChance *= 2.5;
@@ -255,25 +258,24 @@ export const processPlayerDevelopment = (players: Record<number, Player>, clubs:
 
                 if (Math.random() < improvementChance && player.attributes[attrToImprove] < 99) {
                     player.attributes[attrToImprove] += 1;
-                    developmentHappened = true;
                 }
             }
         }
-        
+
         // Handle attribute decline
-         if (player.age > 30 && Math.random() < 0.2) { // 20% chance of decline per month
+        if (player.age > 30 && Math.random() < 0.2) { // 20% chance of decline per month
             const ageFactor = (player.age - 30) / 10;
-             if (Math.random() < ageFactor) {
+            if (Math.random() < ageFactor) {
                 const physicalAttrs: (keyof PlayerAttributes)[] = ['pace', 'stamina', 'strength'];
                 const attrToDecline = physicalAttrs[Math.floor(Math.random() * physicalAttrs.length)];
                 if (player.attributes[attrToDecline] > 30) {
                     player.attributes[attrToDecline] -= 1;
-                    developmentHappened = true;
                 }
-             }
+            }
         }
+        newPlayersState[pId] = player;
     }
-    return newPlayers;
+    return newPlayersState;
 };
 
 
@@ -349,10 +351,12 @@ export const generateRegens = (clubs: Record<number, Club>, retiredPlayerCount: 
 export const processWages = (clubs: Record<number, Club>, players: Record<number, Player>, staff: Record<number, Staff>): Record<number, Club> => {
     const newClubs = { ...clubs };
     for (const club of Object.values(newClubs)) {
-        const clubPlayers = Object.values(players).filter(p => p.clubId === club.id);
+        // FIX: Cast Object.values result to prevent type errors on an array of 'unknown'.
+        const clubPlayers = (Object.values(players) as Player[]).filter(p => p.clubId === club.id);
         const playerWages = clubPlayers.reduce((sum, p) => sum + p.wage, 0);
 
-        const clubStaff = Object.values(staff).filter(s => s.clubId === club.id);
+        // FIX: Cast Object.values result to prevent type errors on an array of 'unknown'.
+        const clubStaff = (Object.values(staff) as Staff[]).filter(s => s.clubId === club.id);
         const staffWages = clubStaff.reduce((sum, s) => sum + s.wage, 0);
 
         const totalWages = playerWages + staffWages;

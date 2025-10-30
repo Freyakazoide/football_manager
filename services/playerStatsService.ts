@@ -19,7 +19,6 @@ export const updatePlayerStatsFromMatchResult = (
 ): Record<number, Player> => {
     if (!matchResult.playerStats) return currentPlayers;
 
-    // Create a shallow copy to avoid mutating the original state directly in the reducer.
     const newPlayers = { ...currentPlayers };
 
     for (const pIdStr in matchResult.playerStats) {
@@ -29,16 +28,11 @@ export const updatePlayerStatsFromMatchResult = (
 
         if (!originalPlayer) continue;
 
-        // Deep copy only the player being modified to prevent state mutation issues.
-        const player = JSON.parse(JSON.stringify(originalPlayer));
-        // Re-hydrate all date objects that get stringified
-        player.contractExpires = new Date(originalPlayer.contractExpires);
-        if (player.injury?.returnDate) {
-            player.injury.returnDate = new Date(player.injury.returnDate);
-        }
-        if (player.suspension?.returnDate) {
-            player.suspension.returnDate = new Date(player.suspension.returnDate);
-        }
+        // Clone player and history array for modification
+        const player: Player = {
+            ...originalPlayer,
+            history: originalPlayer.history.map(h => ({ ...h })), // Deep clone history
+        };
 
         if (player.promise) {
             player.promise = null; // Promise fulfilled by playing
@@ -62,7 +56,7 @@ export const updatePlayerStatsFromMatchResult = (
             };
             player.history.push(seasonStats);
         }
-        
+
         seasonStats.apps += 1;
         seasonStats.goals += matchStats.goals;
         seasonStats.assists += matchStats.assists;
@@ -82,8 +76,7 @@ export const updatePlayerStatsFromMatchResult = (
                 seasonStats.subOn += 1;
             }
         }
-        
-        // Place the updated, cloned player back into the new players object.
+
         newPlayers[playerId] = player;
     }
 

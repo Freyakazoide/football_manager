@@ -7,7 +7,7 @@ interface PlayerProfileViewProps {
     playerId: number;
     gameState: GameState;
     dispatch: React.Dispatch<Action>;
-    onPlayerClick: (player: Player) => void;
+    onStartNegotiation: (playerId: number) => void;
 }
 
 const AttributeBar: React.FC<{ label: string, value: number, isScouted: boolean }> = ({ label, value, isScouted }) => {
@@ -118,14 +118,12 @@ const PositionalFamiliarityPitch: React.FC<{ player: Player }> = ({ player }) =>
     );
 };
 
-const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameState, dispatch }) => {
+const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameState, dispatch, onStartNegotiation }) => {
     const player = gameState.players[playerId];
     if (!player) return <div>Player not found.</div>;
     
     const club = gameState.clubs[player.clubId];
-    const playerClub = gameState.playerClubId ? gameState.clubs[gameState.playerClubId] : null;
-
-    const [offerAmount, setOfferAmount] = useState(player.marketValue);
+    
     const [activeTab, setActiveTab] = useState<'attributes' | 'history'>('attributes');
     const [isRenewing, setIsRenewing] = useState(false);
     const [newWage, setNewWage] = useState(player.wage);
@@ -145,10 +143,6 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     }
 
     const cooldownRemaining = interactionCooldownDays - daysSinceInteraction;
-
-    const makeOffer = () => {
-        dispatch({ type: 'MAKE_TRANSFER_OFFER', payload: { player, offerAmount } });
-    };
     
     const handleRenewContract = () => {
         const newExpiryDate = new Date(gameState.currentDate);
@@ -210,27 +204,14 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                    </div>
                 </div>
 
-                {isTransferTarget && playerClub && (
+                {isTransferTarget && (
                 <div className="bg-gray-700 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-green-400 mb-2">Transfer Offer</h3>
-                    <p className="text-xs text-gray-400 mb-2">Your balance: {formatCurrency(playerClub.balance)}</p>
-                    <input
-                        type="number"
-                        value={offerAmount}
-                        onChange={(e) => setOfferAmount(Number(e.target.value))}
-                        className="w-full bg-gray-800 p-2 rounded mb-2"
-                    />
-                     <div className="flex gap-2 mb-4">
-                        <button onClick={() => setOfferAmount(Math.round(player.marketValue * 0.9))} className="flex-1 bg-gray-600 text-xs p-1 rounded">90%</button>
-                        <button onClick={() => setOfferAmount(player.marketValue)} className="flex-1 bg-gray-600 text-xs p-1 rounded">100%</button>
-                        <button onClick={() => setOfferAmount(Math.round(player.marketValue * 1.1))} className="flex-1 bg-gray-600 text-xs p-1 rounded">110%</button>
-                     </div>
+                    <h3 className="text-lg font-semibold text-green-400 mb-2">Transfer</h3>
                     <button
-                        onClick={makeOffer}
-                        disabled={playerClub.balance < offerAmount}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded disabled:bg-gray-500 disabled:cursor-not-allowed"
+                        onClick={() => onStartNegotiation(player.id)}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded"
                     >
-                        Make Offer
+                        Start Transfer Negotiation
                     </button>
                 </div>
                 )}

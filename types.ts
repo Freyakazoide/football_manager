@@ -1,3 +1,4 @@
+
 // Enums
 export enum View {
     SQUAD = 'Squad',
@@ -212,11 +213,6 @@ export interface Match {
     injuryEvents?: { playerId: number, type: string, returnDate: Date }[];
 }
 
-export interface TransferResult {
-    success: boolean;
-    message: string;
-}
-
 export interface NewsItem {
     id: number;
     date: Date;
@@ -316,6 +312,39 @@ export interface SeasonReviewData {
     prizeMoney: number;
 }
 
+// --- NEW TRANSFER SYSTEM TYPES ---
+
+export interface TransferOffer {
+    fee: number;
+    sellOnPercentage?: number;
+    // For AI counter offers
+    playerToSwapId?: number; 
+}
+
+export interface ContractOffer {
+    wage: number;
+    signingBonus: number;
+    goalBonus: number;
+    releaseClause?: number;
+}
+
+export interface TransferNegotiation {
+    id: number;
+    playerId: number;
+    sellingClubId: number;
+    buyingClubId: number;
+    stage: 'club' | 'agent';
+    // player_turn: player needs to make an offer or accept/reject counter
+    // ai_turn: AI is considering player's offer
+    // club_agreed: move to agent stage
+    status: 'player_turn' | 'ai_turn' | 'club_agreed' | 'completed' | 'cancelled_player' | 'cancelled_ai';
+    lastOfferBy: 'player' | 'ai';
+    clubOfferHistory: { offer: TransferOffer, by: 'player' | 'ai' }[];
+    agentOfferHistory: { offer: ContractOffer, by: 'player' | 'ai' }[];
+    agreedFee: number;
+}
+
+
 export interface GameState {
     currentDate: Date;
     playerClubId: number | null;
@@ -325,7 +354,6 @@ export interface GameState {
     competitions: Record<number, Competition>;
     schedule: Match[];
     leagueTable: LeagueEntry[];
-    transferResult: TransferResult | null;
     liveMatch: LiveMatchState | null;
     news: NewsItem[];
     nextNewsId: number;
@@ -335,4 +363,12 @@ export interface GameState {
     scoutingAssignments: ScoutingAssignment[];
     nextScoutAssignmentId: number;
     seasonReviewData: SeasonReviewData | null;
+    transferNegotiations: Record<number, TransferNegotiation>;
+    nextNegotiationId: number;
+}
+
+// FIX: Add missing TransferResult type used by TransferResultModal.
+export interface TransferResult {
+    success: boolean;
+    message: string;
 }

@@ -1,5 +1,7 @@
+
+
 import React, { useState, useReducer, useEffect, useCallback } from 'react';
-import { GameState, View, Club, Player, Match, PlayerRole } from './types';
+import { GameState, View, Club, Player, Match, PlayerRole, TransferNegotiation } from './types';
 import { gameReducer, initialState } from './services/gameReducer';
 import { generateInitialDatabase } from './services/database';
 import Navigation from './components/Navigation';
@@ -12,7 +14,7 @@ import FinancesView from './components/FinancesView';
 import TransfersView from './components/TransfersView';
 import PlayerProfileView from './components/PlayerProfileView';
 import MatchDayModal from './components/MatchDayModal';
-import TransferResultModal from './components/TransferResultModal';
+import TransferNegotiationModal from './components/TransferNegotiationModal';
 import MatchView from './components/MatchView';
 import NewsView from './components/NewsView';
 import MatchResultsModal from './components/MatchResultsModal';
@@ -111,6 +113,7 @@ const App: React.FC = () => {
     const [selectedMatchForReport, setSelectedMatchForReport] = useState<Match | null>(null);
     const [viewingClub, setViewingClub] = useState<Club | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
+    const [activeNegotiationId, setActiveNegotiationId] = useState<number | null>(null);
 
     const currentViewInfo = viewHistory[historyIndex];
     const currentView = currentViewInfo.view;
@@ -122,6 +125,19 @@ const App: React.FC = () => {
             setIsInitialized(true);
         }
     }, [isInitialized]);
+
+    useEffect(() => {
+        // If a new negotiation is created, automatically open its modal.
+        // This effect is designed to fire only when a new negotiation is added to the state.
+        // It should not re-trigger when the modal is closed (which changes activeNegotiationId).
+        const newNegotiation = (Object.values(state.transferNegotiations) as TransferNegotiation[]).find((n) => n.id === state.nextNegotiationId - 1);
+        if (newNegotiation && activeNegotiationId !== newNegotiation.id) {
+             setActiveNegotiationId(newNegotiation.id);
+        }
+        // Disabling exhaustive-deps is intentional here to prevent the modal from re-opening
+        // immediately after being closed by the user.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state.nextNegotiationId, state.transferNegotiations]);
 
     const handleNavigate = useCallback((view: View, context?: any) => {
         const newHistoryEntry = { view, context };
@@ -157,6 +173,14 @@ const App: React.FC = () => {
     const handlePlayerClick = (player: Player) => {
         handleNavigate(View.PLAYER_PROFILE, { playerId: player.id });
     };
+    
+    const handleStartNegotiation = (playerId: number) => {
+        dispatch({ type: 'START_TRANSFER_NEGOTIATION', payload: { playerId } });
+    };
+
+    const handleOpenNegotiation = (negotiationId: number) => {
+        setActiveNegotiationId(negotiationId);
+    };
 
     const closeMatchDayModal = () => {
         dispatch({ type: 'CLEAR_MATCH_DAY_FIXTURES' });
@@ -170,10 +194,6 @@ const App: React.FC = () => {
     const closeMatchResultsModal = () => {
         dispatch({ type: 'CLEAR_MATCH_RESULTS' });
     }
-
-    const closeTransferResultModal = () => {
-        dispatch({ type: 'CLEAR_TRANSFER_RESULT' });
-    };
 
     const handleMatchClick = (match: Match) => {
         if (match.homeScore !== undefined && match.log) { // Only open for played matches with logs
@@ -191,6 +211,8 @@ const App: React.FC = () => {
     const closeViewClubModal = () => {
         setViewingClub(null);
     };
+    
+    const activeNegotiation = activeNegotiationId ? state.transferNegotiations[activeNegotiationId] : null;
 
     const renderView = () => {
         if (!state.playerClubId) return null;
@@ -210,7 +232,7 @@ const App: React.FC = () => {
             case View.FINANCES:
                 return <FinancesView gameState={state} />;
             case View.TRANSFERS:
-                return <TransfersView gameState={state} onPlayerClick={handlePlayerClick} />;
+                return <TransfersView gameState={state} onPlayerClick={handlePlayerClick} onOpenNegotiation={handleOpenNegotiation} />;
             case View.NEWS:
                 return <NewsView gameState={state} dispatch={dispatch} />;
             case View.TRAINING:
@@ -220,7 +242,7 @@ const App: React.FC = () => {
             case View.PLAYER_PROFILE:
                 const playerId = currentViewInfo.context?.playerId;
                 if (!playerId) return <SquadView gameState={state} onPlayerClick={handlePlayerClick} />;
-                return <PlayerProfileView playerId={playerId} gameState={state} dispatch={dispatch} onPlayerClick={handlePlayerClick} />;
+                return <PlayerProfileView playerId={playerId} gameState={state} dispatch={dispatch} onStartNegotiation={handleStartNegotiation} />;
             default:
                 return <TeamView gameState={state} />;
         }
@@ -277,7 +299,7 @@ const App: React.FC = () => {
             {state.seasonReviewData && <SeasonReviewModal reviewData={state.seasonReviewData} gameState={state} onContinue={handleStartNewSeason} />}
             {state.matchDayFixtures && <MatchDayModal fixtures={state.matchDayFixtures} gameState={state} dispatch={dispatch} onGoToTactics={handleGoToTactics} />}
             {state.matchDayResults && <MatchResultsModal results={state.matchDayResults} gameState={state} onClose={closeMatchResultsModal} />}
-            {state.transferResult && <TransferResultModal result={state.transferResult} onClose={closeTransferResultModal} />}
+            {activeNegotiation && <TransferNegotiationModal negotiation={activeNegotiation} gameState={state} dispatch={dispatch} onClose={() => setActiveNegotiationId(null)} />}
             {selectedMatchForReport && <MatchReportModal match={selectedMatchForReport} gameState={state} onClose={closeMatchReportModal} onPlayerClick={handlePlayerClick} />}
             {viewingClub && <ClubSquadModal club={viewingClub} gameState={state} onClose={closeViewClubModal} onPlayerClick={handlePlayerClick} />}
         </div>

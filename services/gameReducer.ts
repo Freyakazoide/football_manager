@@ -1,4 +1,4 @@
-import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, PhysioAttributes, StaffRole, ScoutAttributes, SeasonReviewData, LeagueEntry } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, PhysioAttributes, StaffRole, ScoutAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation } from '../types';
 import { Action } from './reducerTypes';
 import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
@@ -17,7 +17,6 @@ export const initialState: GameState = {
     competitions: {},
     schedule: [],
     leagueTable: [],
-    transferResult: null,
     liveMatch: null,
     news: [],
     nextNewsId: 1,
@@ -27,6 +26,8 @@ export const initialState: GameState = {
     scoutingAssignments: [],
     nextScoutAssignmentId: 1,
     seasonReviewData: null,
+    transferNegotiations: {},
+    nextNegotiationId: 1,
 };
 
 const rehydratePlayers = (players: Record<number, Player>): Record<number, Player> => {
@@ -40,6 +41,14 @@ const rehydratePlayers = (players: Record<number, Player>): Record<number, Playe
     }
     return players;
 }
+
+const rehydrateAssignments = (assignments: ScoutingAssignment[]): ScoutingAssignment[] => {
+    assignments.forEach(a => {
+        if (a.completionDate) a.completionDate = new Date(a.completionDate);
+    });
+    return assignments;
+};
+
 
 const addNewsItem = (state: GameState, headline: string, content: string, type: NewsItem['type'], relatedEntityId?: number, matchStatsSummary?: Match): GameState => {
     const newNewsItem: NewsItem = {
@@ -58,6 +67,17 @@ const addNewsItem = (state: GameState, headline: string, content: string, type: 
         nextNewsId: state.nextNewsId + 1,
     };
 };
+
+const processNegotiations = (state: GameState): GameState => {
+    let newState = { ...state };
+    for (const negId in newState.transferNegotiations) {
+        const negotiation = newState.transferNegotiations[negId];
+        if (negotiation.status === 'ai_turn') {
+            newState = gameReducer(newState, { type: 'PROCESS_AI_NEGOTIATION_RESPONSE', payload: { negotiationId: negotiation.id } });
+        }
+    }
+    return newState;
+}
 
 export const gameReducer = (state: GameState, action: Action): GameState => {
     switch (action.type) {
@@ -79,7 +99,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             return {
                 ...state,
                 playerClubId: playerClubId,
-                players: newPlayers
+                players: rehydratePlayers(newPlayers)
             };
         }
         case 'ADVANCE_DAY': {
@@ -93,7 +113,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 const { promoted, relegated } = processPromotionsAndRelegations(state.clubs, finalTable);
 
                 const playerClub = state.clubs[state.playerClubId!];
-                const playerClubPlayers = Object.values(state.players).filter(p => p.clubId === state.playerClubId);
+                // FIX: Cast Object.values result to prevent type errors on an array of 'unknown'.
+                const playerClubPlayers = (Object.values(state.players) as Player[]).filter(p => p.clubId === state.playerClubId);
                 
                 const getPlayerSeasonStats = (p: Player) => p.history.find(s => s.season === season);
 
@@ -121,7 +142,11 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const newDate = new Date(state.currentDate);
             newDate.setDate(newDate.getDate() + 1);
 
-            let newState = { ...state, currentDate: newDate, transferResult: null };
+            let newState = { ...state, currentDate: newDate };
+            
+            // Process negotiations
+            newState = processNegotiations(newState);
+
 
             // Process scouting assignments
             const clonedAssignments = JSON.parse(JSON.stringify(newState.scoutingAssignments)) as ScoutingAssignment[];
@@ -132,7 +157,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     const scout = newState.staff[scoutId] as Staff & { attributes: ScoutAttributes };
                     const { judgingPlayerAbility, judgingPlayerPotential } = scout.attributes;
                     
-                    const foundPlayers = Object.values(newState.players).filter(p => {
+                    // FIX: Cast Object.values result to prevent type errors on an array of 'unknown'.
+                    const foundPlayers = (Object.values(newState.players) as Player[]).filter(p => {
                         if (p.clubId === newState.playerClubId) return false;
                         if (filters.minAge && p.age < filters.minAge) return false;
                         if (filters.maxAge && p.age > filters.maxAge) return false;
@@ -171,12 +197,12 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                             playerToScout.scoutedAttributes[attr] = playerToScout.attributes[attr];
                         });
                     });
-                    newState.players = clonedPlayersForScouting;
+                    newState.players = rehydratePlayers(clonedPlayersForScouting);
 
                     newState = addNewsItem(newState, "Scouting Report Ready", `Your scouting assignment "${assignment.description}" is complete. ${foundPlayers.length} players were found matching your criteria.`, 'scouting_report_ready', assignment.id);
                 }
             });
-            newState.scoutingAssignments = clonedAssignments;
+            newState.scoutingAssignments = rehydrateAssignments(clonedAssignments);
 
 
             // Process player status updates (injuries, suspensions, fitness decay)
@@ -242,7 +268,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         const { players } = processPlayerAging(newState.players);
                         newState.players = players;
                     } else if (newDate.getMonth() === 6 && newDate.getDate() === 1) { // New season start
-                        Object.values(newState.players).forEach(p => p.seasonYellowCards = 0);
+                        // FIX: Cast Object.values result to prevent type errors on an array of 'unknown'.
+                        (Object.values(newState.players) as Player[]).forEach(p => p.seasonYellowCards = 0);
                     }
                 }
                 return newState;
@@ -349,7 +376,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     const { players } = processPlayerAging(newState.players);
                     newState.players = players;
                 } else if (newDate.getMonth() === 6 && newDate.getDate() === 1) { // New season
-                    Object.values(newState.players).forEach(p => p.seasonYellowCards = 0);
+                    // FIX: Cast Object.values result to prevent type errors on an array of 'unknown'.
+                    (Object.values(newState.players) as Player[]).forEach(p => p.seasonYellowCards = 0);
                 }
             }
 
@@ -395,7 +423,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             newState.schedule = generateScheduleForCompetition(newLeagueClubs, newState.currentDate);
             
             // 8. Reset season-specific player data
-            Object.values(newState.players).forEach(p => p.seasonYellowCards = 0);
+            Object.values(newState.players).forEach(p => (p as Player).seasonYellowCards = 0);
 
             // 9. Clear season review data
             newState.seasonReviewData = null;
@@ -424,42 +452,6 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
              newClubs[state.playerClubId].tactics = action.payload;
              return { ...state, clubs: newClubs };
         }
-        case 'MAKE_TRANSFER_OFFER': {
-            const { player, offerAmount } = action.payload;
-            const buyerClub = state.clubs[state.playerClubId!];
-            if (buyerClub.balance < offerAmount) {
-                return { ...state, transferResult: { success: false, message: "You don't have enough funds for this offer." } };
-            }
-            const acceptanceChance = Math.min(0.95, (offerAmount / player.marketValue) * 0.7);
-            if (Math.random() < acceptanceChance) {
-                const sellerClub = { ...state.clubs[player.clubId] };
-                const updatedBuyerClub = { ...buyerClub };
-                updatedBuyerClub.balance -= offerAmount;
-                sellerClub.balance += offerAmount;
-                const updatedPlayer = { ...state.players[player.id] };
-                updatedPlayer.clubId = buyerClub.id;
-                updatedPlayer.wage = Math.round(updatedPlayer.wage * 1.1);
-                const newContractYears = updatedPlayer.age < 28 ? 4 : 2;
-                updatedPlayer.contractExpires = new Date(state.currentDate.getFullYear() + newContractYears, state.currentDate.getMonth(), state.currentDate.getDate());
-                updatedPlayer.marketValue = recalculateMarketValue(updatedPlayer);
-                // Reveal all attributes upon signing
-                updatedPlayer.scoutedAttributes = updatedPlayer.attributes;
-                const newPlayers = { ...state.players, [player.id]: updatedPlayer };
-                const newClubs = { ...state.clubs, [buyerClub.id]: updatedBuyerClub, [sellerClub.id]: sellerClub };
-
-                let newState = { ...state, players: newPlayers, clubs: newClubs, transferResult: { success: true, message: `${player.name} has signed for your club!` } };
-                const headline = `Transfer Confirmed: ${player.name} joins ${buyerClub.name}`;
-                const content = `${player.name} has completed a move from ${sellerClub.name} to ${buyerClub.name} for a fee of ${offerAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}.`;
-                newState = addNewsItem(newState, headline, content, 'transfer_completed', player.id);
-
-                return newState;
-            } else {
-                return { ...state, transferResult: { success: false, message: `${state.clubs[player.clubId].name} rejected your offer for ${player.name}.` } };
-            }
-        }
-        case 'CLEAR_TRANSFER_RESULT': {
-            return { ...state, transferResult: null };
-        }
         case 'MARK_NEWS_AS_READ': {
             const newNews = state.news.map(item => 
                 item.id === action.payload.newsItemId ? { ...item, isRead: true } : item
@@ -487,11 +479,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 updatedPlayer.morale = Math.min(100, player.morale + 10);
                 newPlayers[playerId] = updatedPlayer;
 
-                return {
-                    ...state,
-                    players: newPlayers,
-                    transferResult: { success: true, message: `${player.name} has accepted the new contract offer.` }
-                };
+                // TODO: Add a transfer result modal for contract renewals.
+                // For now, this is a silent success.
+                return { ...state, players: newPlayers };
             } else {
                 // Rejected
                 const newPlayers = { ...state.players };
@@ -500,11 +490,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 updatedPlayer.morale = Math.max(0, player.morale - 5);
                 newPlayers[playerId] = updatedPlayer;
                 
-                return {
-                    ...state,
-                    players: newPlayers,
-                    transferResult: { success: false, message: `${player.name} has rejected your contract offer. He feels it doesn't meet his expectations.` }
-                };
+                // TODO: Add a transfer result modal for contract renewals.
+                // For now, this is a silent failure.
+                return { ...state, players: newPlayers };
             }
         }
         case 'PLAYER_INTERACTION': {
@@ -595,7 +583,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const club = state.clubs[playerClubId];
 
             if (club.balance < staffToHire.wage * 4) { // Check for one month's wage
-                return { ...state, transferResult: { success: false, message: "Insufficient funds to hire staff." } };
+                // TODO: Add feedback
+                return state;
             }
             
             const newStaff = { ...state.staff };
@@ -608,22 +597,22 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             switch(hiredStaff.role) {
                 case StaffRole.Assistant:
-                    if (newClub.staffIds.assistant) return { ...state, transferResult: { success: false, message: "You already have an Assistant Manager." } };
+                    if (newClub.staffIds.assistant) return state; // TODO: Add feedback
                     newClub.staffIds.assistant = hiredStaff.id;
                     break;
                 case StaffRole.Scout:
-                     if (newClub.staffIds.scouts.length >= 4) return { ...state, transferResult: { success: false, message: "You cannot hire more than 4 scouts." } };
+                     if (newClub.staffIds.scouts.length >= 4) return state; // TODO: Add feedback
                     newClub.staffIds.scouts.push(hiredStaff.id);
                     break;
                 case StaffRole.Physio:
-                     if (newClub.staffIds.physios.length >= 4) return { ...state, transferResult: { success: false, message: "You cannot hire more than 4 physios." } };
+                     if (newClub.staffIds.physios.length >= 4) return state; // TODO: Add feedback
                     newClub.staffIds.physios.push(hiredStaff.id);
                     break;
             }
             
             newClubs[playerClubId] = newClub;
 
-            return { ...state, staff: newStaff, clubs: newClubs, transferResult: { success: true, message: `${hiredStaff.name} (${hiredStaff.role}) has joined the club.` } };
+            return { ...state, staff: newStaff, clubs: newClubs };
         }
         case 'FIRE_STAFF': {
             const { staffId } = action.payload;
@@ -638,7 +627,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             const severance = staffToFire.wage * 4; // 1 month severance
             if (club.balance < severance) {
-                return { ...state, transferResult: { success: false, message: "Insufficient funds for severance package." } };
+                // TODO: Add feedback
+                return state;
             }
             club.balance -= severance;
 
@@ -659,7 +649,186 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             
             const newClubs = { ...state.clubs, [playerClubId]: club };
 
-            return { ...state, staff: newStaff, clubs: newClubs, transferResult: { success: true, message: `${staffToFire.name}'s contract has been terminated.` } };
+            return { ...state, staff: newStaff, clubs: newClubs };
+        }
+        // --- NEW TRANSFER NEGOTIATION ---
+        case 'START_TRANSFER_NEGOTIATION': {
+            const { playerId } = action.payload;
+            const player = state.players[playerId];
+            const newNegotiation: TransferNegotiation = {
+                id: state.nextNegotiationId,
+                playerId,
+                sellingClubId: player.clubId,
+                buyingClubId: state.playerClubId!,
+                stage: 'club',
+                status: 'player_turn',
+                lastOfferBy: 'player', // Technically no offer yet, but player initiates
+                clubOfferHistory: [],
+                agentOfferHistory: [],
+                agreedFee: 0
+            };
+            return {
+                ...state,
+                transferNegotiations: {
+                    ...state.transferNegotiations,
+                    [state.nextNegotiationId]: newNegotiation,
+                },
+                nextNegotiationId: state.nextNegotiationId + 1,
+            };
+        }
+        case 'SUBMIT_CLUB_OFFER': {
+            const { negotiationId, offer } = action.payload;
+            const negotiation = state.transferNegotiations[negotiationId];
+            if (!negotiation || negotiation.stage !== 'club') return state;
+            
+            const newNegotiations = { ...state.transferNegotiations };
+            newNegotiations[negotiationId] = {
+                ...negotiation,
+                status: 'ai_turn',
+                lastOfferBy: 'player',
+                clubOfferHistory: [...negotiation.clubOfferHistory, { offer, by: 'player' }]
+            };
+            return { ...state, transferNegotiations: newNegotiations };
+        }
+        case 'ACCEPT_CLUB_COUNTER': {
+            const { negotiationId } = action.payload;
+            const negotiation = state.transferNegotiations[negotiationId];
+            if (!negotiation || negotiation.stage !== 'club' || negotiation.status !== 'player_turn') return state;
+
+            const lastOffer = negotiation.clubOfferHistory[negotiation.clubOfferHistory.length - 1].offer;
+            const newNegotiations = { ...state.transferNegotiations };
+            newNegotiations[negotiationId] = {
+                ...negotiation,
+                stage: 'agent',
+                status: 'player_turn',
+                lastOfferBy: 'player',
+                agreedFee: lastOffer.fee,
+            };
+            return { ...state, transferNegotiations: newNegotiations };
+        }
+        case 'SUBMIT_AGENT_OFFER': {
+            const { negotiationId, offer } = action.payload;
+            const negotiation = state.transferNegotiations[negotiationId];
+            if (!negotiation || negotiation.stage !== 'agent') return state;
+            
+            const newNegotiations = { ...state.transferNegotiations };
+            newNegotiations[negotiationId] = {
+                ...negotiation,
+                status: 'ai_turn',
+                lastOfferBy: 'player',
+                agentOfferHistory: [...negotiation.agentOfferHistory, { offer, by: 'player' }]
+            };
+            return { ...state, transferNegotiations: newNegotiations };
+        }
+        case 'ACCEPT_AGENT_COUNTER': {
+            const { negotiationId } = action.payload;
+            const negotiation = state.transferNegotiations[negotiationId];
+            if (!negotiation || negotiation.stage !== 'agent' || negotiation.status !== 'player_turn') return state;
+
+            const player = { ...state.players[negotiation.playerId] };
+            const buyerClub = { ...state.clubs[negotiation.buyingClubId] };
+            const sellerClub = { ...state.clubs[negotiation.sellingClubId] };
+            const lastOffer = negotiation.agentOfferHistory[negotiation.agentOfferHistory.length - 1].offer;
+
+            // Finalize transfer
+            buyerClub.balance -= (negotiation.agreedFee + lastOffer.signingBonus);
+            sellerClub.balance += negotiation.agreedFee;
+            player.clubId = negotiation.buyingClubId;
+            player.wage = lastOffer.wage;
+            player.scoutedAttributes = player.attributes;
+
+            const newPlayers = { ...state.players, [player.id]: player };
+            const newClubs = { ...state.clubs, [buyerClub.id]: buyerClub, [sellerClub.id]: sellerClub };
+            
+            const newNegotiations = { ...state.transferNegotiations };
+            newNegotiations[negotiationId] = { ...negotiation, status: 'completed' };
+
+            let newState = addNewsItem({ ...state }, `Transfer Confirmed: ${player.name} joins ${buyerClub.name}`, `${player.name} has completed a move from ${sellerClub.name} to ${buyerClub.name} for a fee of ${negotiation.agreedFee.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}.`, 'transfer_completed', player.id);
+            
+            return { ...newState, players: newPlayers, clubs: newClubs, transferNegotiations: newNegotiations };
+        }
+        case 'CANCEL_NEGOTIATION': {
+            const { negotiationId } = action.payload;
+            const newNegotiations = { ...state.transferNegotiations };
+            if (newNegotiations[negotiationId]) {
+                newNegotiations[negotiationId].status = 'cancelled_player';
+            }
+            return { ...state, transferNegotiations: newNegotiations };
+        }
+        case 'PROCESS_AI_NEGOTIATION_RESPONSE': {
+            const { negotiationId } = action.payload;
+            const negotiation = state.transferNegotiations[negotiationId];
+            if (!negotiation || negotiation.status !== 'ai_turn') return state;
+
+            const player = state.players[negotiation.playerId];
+            const newNegotiations = { ...state.transferNegotiations };
+            const currentNeg = { ...negotiation };
+
+            if (currentNeg.stage === 'club') {
+                const lastOffer = currentNeg.clubOfferHistory[currentNeg.clubOfferHistory.length - 1].offer;
+                const valueRatio = lastOffer.fee / player.marketValue;
+                const acceptanceChance = Math.max(0.05, Math.min(0.95, valueRatio - 0.1));
+
+                if (Math.random() < acceptanceChance) {
+                    // Accept offer
+                    currentNeg.stage = 'agent';
+                    currentNeg.status = 'player_turn';
+                    currentNeg.lastOfferBy = 'player';
+                    currentNeg.agreedFee = lastOffer.fee;
+                } else {
+                    // Counter offer
+                    const feeMultiplier = 1.1 + Math.random() * 0.3;
+                    const counterFee = Math.round((Math.max(lastOffer.fee, player.marketValue) * feeMultiplier) / 1000) * 1000;
+                    const counterOffer = { fee: counterFee, sellOnPercentage: Math.random() < 0.3 ? 15 : undefined };
+                    currentNeg.clubOfferHistory.push({ offer: counterOffer, by: 'ai' });
+                    currentNeg.status = 'player_turn';
+                    currentNeg.lastOfferBy = 'ai';
+                }
+            } else if (currentNeg.stage === 'agent') {
+                const lastOffer = currentNeg.agentOfferHistory[currentNeg.agentOfferHistory.length - 1].offer;
+                const expectedWage = player.marketValue / 100;
+                const wageRatio = lastOffer.wage / expectedWage;
+                const acceptanceChance = Math.max(0.1, Math.min(0.95, (wageRatio - 0.9) * 2));
+                
+                if (Math.random() < acceptanceChance) {
+                    // Accept and complete transfer
+                    const buyerClub = { ...state.clubs[negotiation.buyingClubId] };
+                    const sellerClub = { ...state.clubs[negotiation.sellingClubId] };
+                    const updatedPlayer = { ...player };
+
+                    buyerClub.balance -= (currentNeg.agreedFee + lastOffer.signingBonus);
+                    sellerClub.balance += currentNeg.agreedFee;
+                    updatedPlayer.clubId = negotiation.buyingClubId;
+                    updatedPlayer.wage = lastOffer.wage;
+                    updatedPlayer.scoutedAttributes = player.attributes;
+                    
+                    const newPlayers = { ...state.players, [player.id]: updatedPlayer };
+                    const newClubs = { ...state.clubs, [buyerClub.id]: buyerClub, [sellerClub.id]: sellerClub };
+                    currentNeg.status = 'completed';
+                    
+                    let newState = addNewsItem({ ...state }, `Transfer Confirmed: ${player.name} joins ${buyerClub.name}`, `${player.name} has completed a move from ${sellerClub.name} to ${buyerClub.name} for a fee of ${currentNeg.agreedFee.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}.`, 'transfer_completed', player.id);
+                    
+                    newNegotiations[negotiationId] = currentNeg;
+                    return { ...newState, players: newPlayers, clubs: newClubs, transferNegotiations: newNegotiations };
+
+                } else {
+                    // Counter agent offer
+                    const wageMultiplier = 1.05 + Math.random() * 0.15;
+                    const counterWage = Math.round((Math.max(lastOffer.wage, expectedWage) * wageMultiplier) / 100) * 100;
+                    const counterOffer = {
+                        wage: counterWage,
+                        signingBonus: Math.max(lastOffer.signingBonus, player.marketValue * 0.05),
+                        goalBonus: lastOffer.goalBonus,
+                        releaseClause: lastOffer.releaseClause
+                    };
+                    currentNeg.agentOfferHistory.push({ offer: counterOffer, by: 'ai' });
+                    currentNeg.status = 'player_turn';
+                    currentNeg.lastOfferBy = 'ai';
+                }
+            }
+
+            newNegotiations[negotiationId] = currentNeg;
+            return { ...state, transferNegotiations: newNegotiations };
         }
         // Match Engine Reducers
         case 'START_MATCH': {
@@ -698,7 +867,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             // If AI is playing, generate dynamic tactics for them
             const opponent = homeTeam.id === playerClubId ? awayTeam : homeTeam;
-            const opponentPlayers = Object.values(state.players).filter(p => p.clubId === opponent.id && !p.injury && !p.suspension);
+            // FIX: Cast Object.values result to prevent type errors on an array of 'unknown'.
+            const opponentPlayers = (Object.values(state.players) as Player[]).filter(p => p.clubId === opponent.id && !p.injury && !p.suspension);
             
             const opponentStaffIds = [opponent.staffIds.assistant, ...opponent.staffIds.scouts, ...opponent.staffIds.physios].filter(Boolean) as number[];
             const opponentStaff = opponentStaffIds.map(id => state.staff[id]);

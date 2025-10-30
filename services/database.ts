@@ -1,3 +1,4 @@
+
 import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantAttributes, ScoutAttributes, PhysioAttributes, Competition } from '../types';
 
 const FIRST_NAMES = ['John', 'Paul', 'Mike', 'Leo', 'Chris', 'David', 'Alex', 'Ben', 'Sam', 'Tom', 'Dan', 'Matt'];
@@ -257,7 +258,9 @@ export const generateScheduleForCompetition = (clubsInCompetition: Club[], start
 };
 
 
-export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'transferResult'| 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData'> => {
+// FIX: Update function signature to match the INITIALIZE_GAME payload type in the reducer.
+// This omits properties that are handled by the initial state, resolving a type error.
+export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData' | 'transferNegotiations' | 'nextNegotiationId'> => {
     const clubs: Record<number, Club> = {};
     const players: Record<number, Player> = {};
     const staff: Record<number, Staff> = {};

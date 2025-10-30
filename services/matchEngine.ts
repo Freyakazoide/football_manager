@@ -122,6 +122,18 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     const newEvents: MatchEvent[] = [];
     newState.minute++;
 
+    const homePlayerCount = newState.homeLineup.filter(p => !p.isSentOff).length;
+    const awayPlayerCount = newState.awayLineup.filter(p => !p.isSentOff).length;
+    let homeMod = 1.0;
+    let awayMod = 1.0;
+    if (homePlayerCount > awayPlayerCount) {
+        homeMod = 1.10; // 10% bonus
+        awayMod = 0.85; // 15% penalty
+    } else if (awayPlayerCount > homePlayerCount) {
+        homeMod = 0.85; // 15% penalty
+        awayMod = 1.10; // 10% bonus
+    }
+
     const updateRating = (player: LivePlayer | undefined, change: number) => {
         if (player) {
             player.stats.rating = Math.max(3.0, Math.min(10, player.stats.rating + change));
@@ -237,11 +249,11 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
 
     if (isInShootingZone && Math.random() < (ballCarrier.attributes.shooting / 150) * shootMod * carrierMod) {
         // --- SHOT ---
-        const shotPower = (ballCarrier.attributes.shooting * 1.5) * fatigueMod(ballCarrier.stamina) * carrierMod * currentFitnessMod * currentMoraleMod;
+        const shotPower = (ballCarrier.attributes.shooting * 1.5) * fatigueMod(ballCarrier.stamina) * carrierMod * currentFitnessMod * currentMoraleMod * (isHomeAttacking ? homeMod : awayMod);
         const pressure = opponent.attributes.positioning * 0.5 * fatigueMod(opponent.stamina) * opponentMod;
         const keeper = getPlayerByRole(defendingTeam, ['Goalkeeper', 'Sweeper Keeper'])!;
         const keeperMod = getPositionalModifier(keeper.positionalFamiliarity[keeper.role] || 20);
-        const keeperPower = (keeper.attributes.positioning * 1.2) * fatigueMod(keeper.stamina) * keeperMod * fitnessMod(keeper.matchFitness) * moraleMod(keeper.morale);
+        const keeperPower = (keeper.attributes.positioning * 1.2) * fatigueMod(keeper.stamina) * keeperMod * fitnessMod(keeper.matchFitness) * moraleMod(keeper.morale) * (isHomeAttacking ? awayMod : homeMod);
         
         attackingStats.shots++;
         ballCarrier.stats.shots++;
@@ -297,8 +309,8 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
         // --- PASS ---
         const passTarget = getPlayerByRole(attackingTeam, ['Striker', 'Advanced Forward', 'Central Midfielder', 'Attacking Midfielder', 'Wide Midfielder']);
         if (passTarget) {
-            const passQuality = (ballCarrier.attributes.passing + ballCarrier.attributes.creativity) * fatigueMod(ballCarrier.stamina) * carrierMod * (inst.passing === PassingInstruction.Risky ? 1.1 : 1.0) * currentFitnessMod * currentMoraleMod;
-            const interceptionQuality = (opponent.attributes.positioning + opponent.attributes.workRate) * fatigueMod(opponent.stamina) * opponentMod;
+            const passQuality = (ballCarrier.attributes.passing + ballCarrier.attributes.creativity) * fatigueMod(ballCarrier.stamina) * carrierMod * (inst.passing === PassingInstruction.Risky ? 1.1 : 1.0) * currentFitnessMod * currentMoraleMod * (isHomeAttacking ? homeMod : awayMod);
+            const interceptionQuality = (opponent.attributes.positioning + opponent.attributes.workRate) * fatigueMod(opponent.stamina) * opponentMod * (isHomeAttacking ? awayMod : homeMod);
 
             if (passQuality * Math.random() > interceptionQuality * Math.random()) {
                 ballCarrier.stats.passes++;
@@ -323,8 +335,8 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     } else {
         // --- DRIBBLE ---
         newState.lastPasser = null;
-        const dribblePower = (ballCarrier.attributes.dribbling + ballCarrier.attributes.pace) * fatigueMod(ballCarrier.stamina) * carrierMod * currentFitnessMod * currentMoraleMod;
-        const tacklePower = (opponent.attributes.tackling + opponent.attributes.pace) * fatigueMod(opponent.stamina) * opponentMod;
+        const dribblePower = (ballCarrier.attributes.dribbling + ballCarrier.attributes.pace) * fatigueMod(ballCarrier.stamina) * carrierMod * currentFitnessMod * currentMoraleMod * (isHomeAttacking ? homeMod : awayMod);
+        const tacklePower = (opponent.attributes.tackling + opponent.attributes.pace) * fatigueMod(opponent.stamina) * opponentMod * (isHomeAttacking ? awayMod : homeMod);
         const tackleMod = opponent.instructions.tackling === TacklingInstruction.Harder ? 1.2 : (opponent.instructions.tackling === TacklingInstruction.Cautious ? 0.8 : 1.0);
         
         if (dribblePower * Math.random() > (tacklePower * tackleMod) * Math.random()) {
@@ -346,8 +358,7 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
                          opponent.isSentOff = true;
                          updateRating(opponent, -2.0);
                          newEvents.push({minute: newState.minute, text: `Second yellow! ${opponent.name} is sent off!`, type: 'RedCard', primaryPlayerId: opponent.id});
-                         const sentOffTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
-                         newState.forcedSubstitution = { teamId: sentOffTeamId, playerOutId: opponent.id, reason: 'red_card' };
+                         newEvents.push({minute: newState.minute, text: `The match is paused for tactical changes.`, type: 'Info'});
                          newState.isPaused = true;
                     } else {
                          updateRating(opponent, -0.5);

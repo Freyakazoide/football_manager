@@ -123,6 +123,8 @@ const generatePlayerAttributes = (): PlayerAttributes => ({
     shooting: randInt(40, 90),
     tackling: randInt(40, 90),
     heading: randInt(40, 90),
+    // FIX: Initialize the 'crossing' attribute for generated players.
+    crossing: randInt(40, 90),
     aggression: randInt(30, 90),
     creativity: randInt(30, 90),
     positioning: randInt(40, 90),

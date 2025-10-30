@@ -38,6 +38,8 @@ export enum MarkingInstruction { Normal = 'Normal', Zonal = 'Zonal', ManMarking 
 // Interfaces & Types
 export interface PlayerAttributes {
     passing: number; dribbling: number; shooting: number; tackling: number; heading: number;
+    // FIX: Add 'crossing' attribute to PlayerAttributes interface.
+    crossing: number;
     aggression: number; creativity: number; positioning: number; teamwork: number; workRate: number;
     pace: number; stamina: number; strength: number; naturalFitness: number;
 }

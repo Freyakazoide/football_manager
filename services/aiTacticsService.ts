@@ -1,27 +1,10 @@
 import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction } from '../types';
 import { ROLE_DEFINITIONS } from './database';
+import { FORMATION_PRESETS } from './formations';
 
 const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
     return ROLE_DEFINITIONS[role]?.category || 'MID';
 };
-
-const defaultPositions442: { position: { x: number, y: number }, role: PlayerRole }[] = [
-    // GK
-    { position: { x: 50, y: 95 }, role: 'Goalkeeper' },
-    // DEF
-    { position: { x: 20, y: 75 }, role: 'Full-Back' },
-    { position: { x: 40, y: 78 }, role: 'Central Defender' },
-    { position: { x: 60, y: 78 }, role: 'Central Defender' },
-    { position: { x: 80, y: 75 }, role: 'Full-Back' },
-    // MID
-    { position: { x: 20, y: 50 }, role: 'Wide Midfielder' },
-    { position: { x: 40, y: 55 }, role: 'Central Midfielder' },
-    { position: { x: 60, y: 55 }, role: 'Central Midfielder' },
-    { position: { x: 80, y: 50 }, role: 'Wide Midfielder' },
-    // FWD
-    { position: { x: 40, y: 25 }, role: 'Striker' },
-    { position: { x: 60, y: 25 }, role: 'Striker' },
-];
 
 const getOverallRating = (p: Player) => {
     const attrs = p.attributes;
@@ -75,55 +58,96 @@ export const suggestBestXI = (lineupSlots: (Omit<LineupPlayer, 'playerId' | 'ins
 
 
 export const generateAITactics = (clubPlayers: Player[]): Tactics => {
-    // 1. Select Best XI based on positions for a 4-4-2
-    const gks = clubPlayers.filter(p => getRoleCategory(p.naturalPosition) === 'GK').sort((a, b) => getOverallRating(b) - getOverallRating(a));
-    const defs = clubPlayers.filter(p => getRoleCategory(p.naturalPosition) === 'DEF').sort((a, b) => getOverallRating(b) - getOverallRating(a));
-    const mids = clubPlayers.filter(p => getRoleCategory(p.naturalPosition) === 'MID').sort((a, b) => getOverallRating(b) - getOverallRating(a));
-    const fwds = clubPlayers.filter(p => getRoleCategory(p.naturalPosition) === 'FWD').sort((a, b) => getOverallRating(b) - getOverallRating(a));
+    // --- New Formation Selection Logic ---
+    let bestFormation = FORMATION_PRESETS[0];
+    let bestFormationScore = 0;
 
-    const lineupPlayers: Player[] = [
-        ...gks.slice(0, 1),
-        ...defs.slice(0, 4),
-        ...mids.slice(0, 4),
-        ...fwds.slice(0, 2),
-    ];
-    
-    // Fill lineup if a position is short
-    if (lineupPlayers.length < 11) {
-        const remainingPlayers = clubPlayers.filter(p => !lineupPlayers.some(lp => lp.id === p.id)).sort((a, b) => getOverallRating(b) - getOverallRating(a));
-        lineupPlayers.push(...remainingPlayers.slice(0, 11 - lineupPlayers.length));
+    const getPlayerScoreForRole = (player: Player, role: PlayerRole): number => {
+        const familiarity = player.positionalFamiliarity[role] || 20;
+        const overall = getOverallRating(player);
+        // More weight on familiarity for AI team cohesion
+        return (familiarity * 2) + overall; 
+    };
+
+    for (const formation of FORMATION_PRESETS) {
+        let currentFormationScore = 0;
+        let availablePlayers = [...clubPlayers];
+
+        const lineupSlots = formation.positions.map(p => ({ role: p.role }));
+        
+        for (const slot of lineupSlots) {
+            if (availablePlayers.length === 0) break;
+
+            availablePlayers.sort((a, b) => getPlayerScoreForRole(b, slot.role) - getPlayerScoreForRole(a, slot.role));
+            const bestPlayerForSlot = availablePlayers[0];
+            
+            currentFormationScore += getPlayerScoreForRole(bestPlayerForSlot, slot.role);
+            
+            // Remove player from pool so they can't be picked again
+            availablePlayers = availablePlayers.filter(p => p.id !== bestPlayerForSlot.id);
+        }
+
+        if (currentFormationScore > bestFormationScore) {
+            bestFormationScore = currentFormationScore;
+            bestFormation = formation;
+        }
     }
-    
+
+    // --- Generate Best XI for the chosen formation ---
+    const lineupSlots = bestFormation.positions.map(p => ({ position: { x: p.x, y: p.y }, role: p.role }));
+    const lineup = suggestBestXI(lineupSlots, clubPlayers);
+
+    const lineupPlayers = lineup.map(lp => lp ? clubPlayers.find(p => p.id === lp.playerId) : null).filter(Boolean) as Player[];
     const lineupIds = new Set(lineupPlayers.map(p => p.id));
     const benchPlayers = clubPlayers.filter(p => !lineupIds.has(p.id)).sort((a, b) => getOverallRating(b) - getOverallRating(a)).slice(0, 7);
     
-    const lineup: (LineupPlayer | null)[] = lineupPlayers.map((player, index) => ({
-        playerId: player.id,
-        position: defaultPositions442[index]?.position || { x: 50, y: 50 },
-        role: defaultPositions442[index]?.role || 'Central Midfielder',
-        instructions: createDefaultInstructions(),
-    }));
+    // --- New Dynamic Instruction Logic ---
+    lineup.forEach(lp => {
+        if (!lp) return;
+        
+        const player = clubPlayers.find(p => p.id === lp.playerId);
+        if (!player) return;
 
-    // 2. Assign special instructions based on standout attributes
-    const bestShooter = lineupPlayers.reduce((best, p) => p.attributes.shooting > best.attributes.shooting ? p : best, lineupPlayers[0]);
-    const bestPasser = lineupPlayers.reduce((best, p) => p.attributes.creativity > best.attributes.creativity ? p : best, lineupPlayers[0]);
-    const bestDribbler = lineupPlayers.reduce((best, p) => p.attributes.dribbling > best.attributes.dribbling ? p : best, lineupPlayers[0]);
-    const bestTackler = lineupPlayers.filter(p => getRoleCategory(p.naturalPosition) !== 'FWD').reduce((best, p) => p.attributes.tackling > best.attributes.tackling ? p : best, lineupPlayers[0]);
+        const { attributes } = player;
+        const role = lp.role;
+        const instructions = createDefaultInstructions();
+        const category = getRoleCategory(role);
 
-    const setInstruction = (playerId: number, instruction: Partial<PlayerInstructions>) => {
-        const lineupEntry = lineup.find(lp => lp?.playerId === playerId);
-        if (lineupEntry) {
-            lineupEntry.instructions = { ...lineupEntry.instructions, ...instruction };
+        // Universal instructions based on standout attributes
+        if (attributes.aggression > 80) instructions.tackling = TacklingInstruction.Harder;
+        if (attributes.workRate > 85) instructions.pressing = PressingInstruction.Urgent;
+
+        // Role-specific instructions
+        switch(category) {
+            case 'FWD':
+                if (attributes.shooting > 80) instructions.shooting = ShootingInstruction.ShootMoreOften;
+                if (attributes.dribbling > 80 && attributes.pace > 80) instructions.dribbling = DribblingInstruction.DribbleMore;
+                if ((role === 'Deep-Lying Forward' || role === 'False Nine') && attributes.passing > 75) instructions.passing = PassingInstruction.Risky;
+                if ((role.includes('Wide') || role === 'Advanced Forward') && attributes.crossing > 75) instructions.crossing = CrossingInstruction.CrossMore;
+                break;
+            case 'MID':
+                if (role.includes('Wide') && attributes.crossing > 75) instructions.crossing = CrossingInstruction.CrossMore;
+                if (attributes.dribbling > 80) instructions.dribbling = DribblingInstruction.DribbleMore;
+                if (attributes.creativity > 80 && role.includes('Playmaker')) instructions.passing = PassingInstruction.Risky;
+                if (attributes.shooting > 75 && (role === 'Box-To-Box Midfielder' || role === 'Mezzala' || role === 'Attacking Midfielder')) instructions.positioning = PositioningInstruction.GetForward;
+                if (role === 'Ball Winning Midfielder' || role === 'Carrilero') {
+                    instructions.tackling = TacklingInstruction.Harder;
+                    instructions.pressing = PressingInstruction.Urgent;
+                }
+                if (role === 'Defensive Midfielder' || role === 'Deep Lying Playmaker') instructions.positioning = PositioningInstruction.HoldPosition;
+                break;
+            case 'DEF':
+                if ((role === 'Wing-Back' || role === 'Full-Back') && attributes.crossing > 70) instructions.crossing = CrossingInstruction.CrossMore;
+                if (role === 'Wing-Back' && attributes.workRate > 80) instructions.positioning = PositioningInstruction.GetForward;
+                if (role === 'Ball-Playing Defender' && attributes.passing > 75) instructions.passing = PassingInstruction.Risky;
+                if (role.includes('Central') || role === 'Libero') instructions.positioning = PositioningInstruction.HoldPosition;
+                break;
         }
-    };
-    
-    if (bestShooter) setInstruction(bestShooter.id, { shooting: ShootingInstruction.ShootMoreOften });
-    if (bestPasser) setInstruction(bestPasser.id, { passing: PassingInstruction.Risky });
-    if (bestDribbler) setInstruction(bestDribbler.id, { dribbling: DribblingInstruction.DribbleMore });
-    if (bestTackler) setInstruction(bestTackler.id, { tackling: TacklingInstruction.Harder });
+        lp.instructions = instructions;
+    });
 
     return {
-        mentality: 'Balanced',
+        mentality: 'Balanced', // This could also be randomized or based on team strength comparison in the future
         lineup,
         bench: benchPlayers.map(p => p.id),
     };

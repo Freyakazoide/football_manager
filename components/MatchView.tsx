@@ -260,6 +260,24 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
         return cards;
     }, [liveMatch?.log]);
 
+    useEffect(() => {
+        if (!liveMatch || liveMatch.log.length === 0) return;
+
+        const lastEvent = liveMatch.log[liveMatch.log.length - 1];
+        if (lastEvent.type === 'Goal') {
+            const idsToHighlight = new Set<number>();
+            if (lastEvent.primaryPlayerId) idsToHighlight.add(lastEvent.primaryPlayerId);
+            if (lastEvent.secondaryPlayerId) idsToHighlight.add(lastEvent.secondaryPlayerId);
+
+            if (idsToHighlight.size > 0) {
+                setHighlightedPlayerIds(idsToHighlight);
+                const timeoutId = setTimeout(() => {
+                    setHighlightedPlayerIds(new Set());
+                }, 5000); // Highlight for 5 seconds
+                return () => clearTimeout(timeoutId);
+            }
+        }
+    }, [liveMatch?.log]);
 
     useEffect(() => {
         if (liveMatch && !liveMatch.isPaused) {

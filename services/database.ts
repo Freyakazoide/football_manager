@@ -119,21 +119,21 @@ export const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' 
     return ROLE_DEFINITIONS[role]?.category || 'MID';
 };
 
-const generatePlayerAttributes = (): PlayerAttributes => ({
-    passing: randInt(40, 90),
-    dribbling: randInt(40, 90),
-    shooting: randInt(40, 90),
-    tackling: randInt(40, 90),
-    heading: randInt(40, 90),
-    crossing: randInt(40, 90),
+const generatePlayerAttributes = (isYouth: boolean = false): PlayerAttributes => ({
+    passing: randInt(isYouth ? 20 : 40, isYouth ? 55 : 90),
+    dribbling: randInt(isYouth ? 20 : 40, isYouth ? 55 : 90),
+    shooting: randInt(isYouth ? 20 : 40, isYouth ? 55 : 90),
+    tackling: randInt(isYouth ? 20 : 40, isYouth ? 55 : 90),
+    heading: randInt(isYouth ? 20 : 40, isYouth ? 55 : 90),
+    crossing: randInt(isYouth ? 20 : 40, isYouth ? 55 : 90),
     aggression: randInt(30, 90),
-    creativity: randInt(30, 90),
-    positioning: randInt(40, 90),
-    teamwork: randInt(50, 95),
-    workRate: randInt(40, 95),
-    pace: randInt(50, 95),
-    stamina: randInt(50, 95),
-    strength: randInt(50, 95),
+    creativity: randInt(isYouth ? 20 : 30, isYouth ? 55 : 90),
+    positioning: randInt(isYouth ? 20 : 40, isYouth ? 55 : 90),
+    teamwork: randInt(isYouth ? 20 : 50, isYouth ? 60 : 95),
+    workRate: randInt(isYouth ? 20 : 40, isYouth ? 60 : 95),
+    pace: randInt(isYouth ? 30 : 50, isYouth ? 70 : 95),
+    stamina: randInt(isYouth ? 30 : 50, isYouth ? 70 : 95),
+    strength: randInt(isYouth ? 25 : 50, isYouth ? 65 : 95),
     naturalFitness: randInt(30, 95),
 });
 
@@ -401,6 +401,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
                 scoutedAttributes: {},
                 scoutedPotentialRange: null,
                 individualTrainingFocus: null,
+                squadStatus: 'senior',
                 interactions: [],
                 attributeChanges: [],
             };
@@ -409,6 +410,56 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             playerIdCounter++;
         }
         
+        // Initial Youth Intake
+        const clubRep = clubs[clubId].reputation;
+        for (let k = 0; k < randInt(8, 15); k++) {
+            let naturalPos: PlayerRole;
+            const posRoll = Math.random();
+            if (posRoll < 0.1) naturalPos = pickRandom(GK_ROLES);
+            else if (posRoll < 0.4) naturalPos = pickRandom(DEF_ROLES);
+            else if (posRoll < 0.8) naturalPos = pickRandom(MID_ROLES);
+            else naturalPos = pickRandom(FWD_ROLES);
+
+            const age = randInt(15, 18);
+            const contractExpires = new Date();
+            contractExpires.setFullYear(contractExpires.getFullYear() + randInt(1, 3));
+            
+            const partialPlayer = {
+                age,
+                name: `${pickRandom(FIRST_NAMES)} ${pickRandom(LAST_NAMES)}`,
+                nationality: pickRandom(COUNTRIES),
+                naturalPosition: naturalPos,
+                wage: randInt(50, 250),
+                attributes: generatePlayerAttributes(true),
+                potential: randInt(Math.max(40, clubRep - 15), Math.min(100, clubRep + 15)),
+            };
+
+             const player: Player = {
+                ...partialPlayer,
+                id: playerIdCounter,
+                clubId: clubId,
+                contractExpires,
+                marketValue: calculateMarketValue(partialPlayer as any),
+                positionalFamiliarity: generateFamiliarity(naturalPos),
+                morale: randInt(60, 80),
+                satisfaction: randInt(70, 90),
+                matchFitness: 50,
+                injury: null,
+                suspension: null,
+                seasonYellowCards: 0,
+                history: [],
+                scoutedAttributes: {},
+                scoutedPotentialRange: null,
+                individualTrainingFocus: null,
+                squadStatus: 'youth',
+                interactions: [],
+                attributeChanges: [],
+            };
+            players[playerIdCounter] = player;
+            playerIdCounter++;
+        }
+
+
         const lineup: (LineupPlayer | null)[] = Array(11).fill(null);
         const assignedToLineup = new Set<number>();
 

@@ -5,6 +5,7 @@ export enum View {
     TACTICS = 'Tactics',
     STAFF = 'Staff',
     BOARD = 'Board',
+    ACADEMY = 'Academy',
     COMPETITION = 'Competition',
     CALENDAR = 'Calendar',
     FINANCES = 'Finances',
@@ -153,6 +154,7 @@ export interface Player {
     seasonYellowCards: number;
     promise?: { type: 'playing_time', deadline: Date } | null;
     individualTrainingFocus: IndividualTrainingFocus;
+    squadStatus: 'senior' | 'youth';
 
     // --- NEW/UPDATED Player properties ---
     lastRenewalDate?: Date; // Cooldown for new negotiations
@@ -245,7 +247,7 @@ export interface NewsItem {
     date: Date;
     headline: string;
     content: string;
-    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report';
+    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted';
     relatedEntityId?: number;
     isRead: boolean;
     matchStatsSummary?: Match;

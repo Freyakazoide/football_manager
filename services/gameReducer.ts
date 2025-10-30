@@ -450,6 +450,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
         }
         case 'START_NEW_SEASON': {
             const tempState = { ...state };
+            const playerClubId = tempState.playerClubId!;
 
             // 1. Award Prize Money (immutable)
             const clubsWithPrizeMoney = awardPrizeMoney(tempState.clubs, tempState.leagueTable);
@@ -472,8 +473,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             // 3. Process Aging and Retirements (immutable)
             const { players: agedPlayers, retiredPlayers } = processPlayerAging(tempState.players);
             
-            // 4. Generate Regens
-            const regens = generateRegens(clubsAfterPromotion, retiredPlayers.length, agedPlayers);
+            // 4. Generate Regens (Youth Intake)
+            const regens = generateRegens(clubsAfterPromotion, retiredPlayers.length, agedPlayers, playerClubId, tempState.staff);
             const playersWithRegens = regens.reduce((acc, regen) => {
                 acc[regen.id] = regen;
                 return acc;
@@ -608,6 +609,26 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             return { ...newState, players: rehydratePlayers(newPlayers) };
         }
+        case 'PROMOTE_YOUTH_PLAYER': {
+            const { playerId } = action.payload;
+            const player = state.players[playerId];
+            if (!player || player.clubId !== state.playerClubId || player.squadStatus !== 'youth') {
+                return state;
+            }
+            
+            const newPlayers = {
+                ...state.players,
+                [playerId]: {
+                    ...player,
+                    squadStatus: 'senior' as const,
+                }
+            };
+
+            const content = `${player.name}, a promising ${player.age}-year-old ${player.naturalPosition}, has been promoted from the youth academy to the senior squad.`;
+            const newState = addNewsItem(state, 'Youth Prospect Promoted', content, 'youth_player_promoted', playerId);
+
+            return { ...newState, players: newPlayers };
+        }
         case 'UPDATE_TRAINING_SETTINGS': {
             if (!state.playerClubId) return state;
             const { teamFocus, individualFocuses } = action.payload;
@@ -670,19 +691,28 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const playerClubId = state.playerClubId;
             if (!playerClubId) return state;
 
-            const staffToHire = state.staff[staffId];
-            const club = { ...state.clubs[playerClubId] };
-            club.departments = { ...club.departments };
-            
+            const club = state.clubs[playerClubId];
             if (club.departments[department].chiefId) return state; // Position already filled
 
-            const newStaff = { ...state.staff };
-            newStaff[staffId] = { ...staffToHire, clubId: playerClubId };
+            const staffToHire = state.staff[staffId];
+            const newStaff = { 
+                ...state.staff,
+                [staffId]: { ...staffToHire, clubId: playerClubId },
+            };
 
-            const newClubDepartments = { ...club.departments };
-            newClubDepartments[department] = { ...newClubDepartments[department], chiefId: staffId };
-            
-            const newClubs = { ...state.clubs, [playerClubId]: { ...club, departments: newClubDepartments } };
+            const newClubs = { 
+                ...state.clubs, 
+                [playerClubId]: { 
+                    ...club, 
+                    departments: {
+                        ...club.departments,
+                        [department]: {
+                            ...club.departments[department],
+                            chiefId: staffId,
+                        }
+                    } 
+                } 
+            };
 
             return { ...state, staff: newStaff, clubs: newClubs };
         }
@@ -694,26 +724,32 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const staffToFire = state.staff[staffId];
             if (staffToFire.clubId !== playerClubId) return state;
 
-            const club = { ...state.clubs[playerClubId] };
-            
+            const club = state.clubs[playerClubId];
             const severance = staffToFire.wage * 4; // 1 month severance
             if (club.balance < severance) {
-                // TODO: Add feedback
                 return state;
             }
-            club.balance -= severance;
 
-            const newStaff = { ...state.staff };
-            newStaff[staffId] = { ...staffToFire, clubId: null };
+            const newStaff = { 
+                ...state.staff,
+                [staffId]: { ...staffToFire, clubId: null },
+            };
             
-            const newDepartments = { ...club.departments };
-            const departmentKey = Object.keys(newDepartments).find(d => newDepartments[d as DepartmentType].chiefId === staffId) as DepartmentType | undefined;
+            const departmentKey = Object.keys(club.departments).find(d => club.departments[d as DepartmentType].chiefId === staffId) as DepartmentType | undefined;
 
-            if (departmentKey) {
-                newDepartments[departmentKey] = { ...newDepartments[departmentKey], chiefId: null };
-            }
+            const newDepartments = departmentKey ? {
+                ...club.departments,
+                [departmentKey]: { ...club.departments[departmentKey], chiefId: null }
+            } : club.departments;
             
-            const newClubs = { ...state.clubs, [playerClubId]: { ...club, departments: newDepartments } };
+            const newClubs = { 
+                ...state.clubs, 
+                [playerClubId]: { 
+                    ...club, 
+                    balance: club.balance - severance,
+                    departments: newDepartments 
+                } 
+            };
 
             return { ...state, staff: newStaff, clubs: newClubs };
         }
@@ -837,6 +873,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 player.lastRenewalDate = new Date(state.currentDate);
                 player.satisfaction = Math.min(100, player.satisfaction + 20);
                 player.morale = Math.min(100, player.morale + 15);
+                if (player.squadStatus === 'youth') {
+                    player.squadStatus = 'senior';
+                }
             }
 
             const newPlayers = { ...state.players, [player.id]: player };
@@ -919,6 +958,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         updatedPlayer.lastRenewalDate = new Date(state.currentDate);
                         updatedPlayer.satisfaction = Math.min(100, player.satisfaction + 20);
                         updatedPlayer.morale = Math.min(100, player.morale + 15);
+                        if (updatedPlayer.squadStatus === 'youth') {
+                            updatedPlayer.squadStatus = 'senior';
+                        }
                     }
                     
                     const newPlayers = { ...state.players, [player.id]: updatedPlayer };
@@ -1316,7 +1358,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             if (scheduleIndex !== -1) newSchedule[scheduleIndex] = finalResult;
             
             const newLeagueTable = updateLeagueTableForMatch(state.leagueTable, finalResult);
-            newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - b.goalDifference || b.goalsFor - a.goalsFor);
+            newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
             
             const aiResultsToday = state.schedule.filter(m => new Date(m.date).toDateString() === new Date(finalResult.date).toDateString() && m.id !== finalResult.id && m.homeScore !== undefined);
 

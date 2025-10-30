@@ -24,6 +24,7 @@ import TrainingView from './components/TrainingView';
 import ScoutingView from './components/ScoutingView';
 import StaffView from './components/StaffView';
 import BoardView from './components/BoardView';
+import AcademyView from './components/AcademyView';
 import SeasonReviewModal from './components/SeasonReviewModal';
 
 const roleOrder: Record<PlayerRole, number> = {
@@ -178,6 +179,10 @@ const App: React.FC = () => {
     const handleStartNegotiation = (playerId: number) => {
         dispatch({ type: 'START_TRANSFER_NEGOTIATION', payload: { playerId } });
     };
+    
+    const handlePromotePlayer = useCallback((playerId: number) => {
+        dispatch({ type: 'PROMOTE_YOUTH_PLAYER', payload: { playerId } });
+    }, [dispatch]);
 
     const handleOpenNegotiation = (negotiationId: number) => {
         setActiveNegotiationId(negotiationId);
@@ -228,6 +233,8 @@ const App: React.FC = () => {
                 return <StaffView gameState={state} dispatch={dispatch} />;
             case View.BOARD:
                 return <BoardView gameState={state} />;
+            case View.ACADEMY:
+                return <AcademyView gameState={state} onPromotePlayer={handlePromotePlayer} onPlayerClick={handlePlayerClick} />;
             case View.COMPETITION:
                 return <CompetitionView gameState={state} onClubClick={handleViewClub} />;
             case View.CALENDAR:

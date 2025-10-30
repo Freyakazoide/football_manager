@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { GameState, Staff, StaffRole, DepartmentType, StaffAttributes } from '../types';
 import { Action } from '../services/reducerTypes';
@@ -40,13 +41,15 @@ const DepartmentCard: React.FC<{
     const chief = department.chiefId ? gameState.staff[department.chiefId] : null;
 
     const handleUpgrade = () => {
-        if (confirm(`Upgrade ${departmentType} department to Level ${department.level + 1} for ${getDepartmentUpgradeCost(department.level).toLocaleString()}`)) {
-             dispatch({ type: 'UPGRADE_DEPARTMENT', payload: { department: departmentType } });
-        }
+        // The confirm() dialog might be blocked, making the button appear unresponsive.
+        // Removing it for a direct, immediate action.
+        dispatch({ type: 'UPGRADE_DEPARTMENT', payload: { department: departmentType } });
     };
 
     const handleFire = () => {
-         if (chief && confirm(`Are you sure you want to terminate ${chief.name}'s contract?`)) {
+         if (chief) {
+            // The confirm() dialog might be blocked, making the button appear unresponsive.
+            // Removing it for a direct, immediate action.
             dispatch({ type: 'FIRE_STAFF', payload: { staffId: chief.id } });
         }
     };

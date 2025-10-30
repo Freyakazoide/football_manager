@@ -83,7 +83,7 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
         const timer = setTimeout(() => {
             const season = getSeason(gameState.currentDate);
             let squadPlayers = (Object.values(gameState.players) as Player[])
-                .filter(p => p.clubId === gameState.playerClubId)
+                .filter(p => p.clubId === gameState.playerClubId && p.squadStatus === 'senior')
                 .map(player => {
                     const seasonStats = player.history.find(h => h.season === season);
                     const avgRating = (seasonStats && seasonStats.apps > 0) ? (seasonStats.ratingPoints / seasonStats.apps) : 0;

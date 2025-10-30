@@ -1,4 +1,4 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes } from '../types';
 import { getRoleCategory, ALL_ROLES } from './database';
 import { generateInjury } from './injuryService';
 
@@ -315,23 +315,35 @@ export const processPlayerAging = (players: Record<number, Player>) => {
     return { players: newPlayers, retiredPlayers };
 };
 
-export const generateRegens = (clubs: Record<number, Club>, retiredPlayerCount: number, existingPlayers: Record<number, Player>): Player[] => {
+export const generateRegens = (clubs: Record<number, Club>, retiredPlayerCount: number, existingPlayers: Record<number, Player>, playerClubId: number, staff: Record<number, Staff>): Player[] => {
+    const playerClub = clubs[playerClubId];
+    const scoutingDept = playerClub.departments[DepartmentType.Scouting];
+    const scoutingLevel = scoutingDept.level;
+    const scout = scoutingDept.chiefId ? staff[scoutingDept.chiefId] as Staff & { attributes: HeadOfScoutingAttributes } : null;
+    
+    // Determine player intake quality and quantity based on scouting level and head scout ability
+    const baseIntake = 2 + Math.floor(scoutingLevel / 2);
+    const abilityBonus = scout ? Math.floor(scout.attributes.judgingPlayerPotential / 25) : 0;
+    const numPlayerIntake = baseIntake + abilityBonus;
+    const potentialBoost = (scoutingLevel - 1) * 3 + (scout ? scout.attributes.judgingPlayerPotential / 15 : 0);
+
     const newPlayers: Player[] = [];
     const highestId = Math.max(0, ...Object.keys(existingPlayers).map(Number));
     let newIdCounter = highestId + 1;
+    const totalToGenerate = retiredPlayerCount + 20; // Generate a larger pool
 
-    for (let i = 0; i < retiredPlayerCount + 5; i++) { // Generate a few extra players
-        const club = pickRandom(Object.values(clubs));
-        const age = randInt(16, 19);
+    for (let i = 0; i < totalToGenerate; i++) {
+        const age = randInt(15, 18);
         const naturalPosition = pickRandom(ALL_ROLES);
-        const potential = randInt(Math.max(40, club.reputation - 20), Math.min(100, club.reputation + 20));
+        const isPlayerIntake = i < numPlayerIntake;
+        const potential = randInt(isPlayerIntake ? 50 + potentialBoost : 40, isPlayerIntake ? Math.min(100, 80 + potentialBoost) : 85);
         
         const newPlayer: Player = {
             id: newIdCounter++,
-            clubId: club.id,
+            clubId: 0, // Will be assigned later
             name: `Regen ${newIdCounter}`, // Placeholder name
             age,
-            nationality: club.country,
+            nationality: pickRandom(Object.values(clubs).map(c => c.country)),
             naturalPosition,
             positionalFamiliarity: { [naturalPosition]: 100 } as any, // Simplified
             wage: randInt(100, 500),
@@ -355,13 +367,26 @@ export const generateRegens = (clubs: Record<number, Club>, retiredPlayerCount: 
             suspension: null,
             seasonYellowCards: 0,
             individualTrainingFocus: null,
+            squadStatus: 'youth',
             interactions: [],
             attributeChanges: [],
         };
         newPlayer.marketValue = recalculateMarketValue(newPlayer);
         newPlayers.push(newPlayer);
     }
-    return newPlayers;
+    
+    // Assign best players to player's club
+    newPlayers.sort((a,b) => b.potential - a.potential);
+    const playerIntake = newPlayers.slice(0, numPlayerIntake);
+    playerIntake.forEach(p => p.clubId = playerClubId);
+    
+    // Distribute the rest randomly
+    const remainingPlayers = newPlayers.slice(numPlayerIntake);
+    remainingPlayers.forEach(p => {
+        p.clubId = pickRandom(Object.values(clubs)).id;
+    });
+
+    return [...playerIntake, ...remainingPlayers];
 };
 
 const getDepartmentMaintenanceCost = (level: number) => {

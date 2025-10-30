@@ -24,6 +24,7 @@ export type Action =
     | { type: 'END_MATCH' }
     // Player & Contract Management
     | { type: 'PLAYER_INTERACTION'; payload: { playerId: number; interactionType: 'praise' | 'criticize' | 'promise' } }
+    | { type: 'PROMOTE_YOUTH_PLAYER'; payload: { playerId: number } }
     // Training & Scouting
     | { type: 'UPDATE_TRAINING_SETTINGS'; payload: { teamFocus: TeamTrainingFocus, individualFocuses: Record<number, IndividualTrainingFocus> } }
     | { type: 'CREATE_SCOUTING_ASSIGNMENT'; payload: Omit<ScoutingAssignment, 'id' | 'isComplete' | 'reportPlayerIds'> }

@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useReducer, useEffect, useCallback, useRef } from 'react';
 import { GameState, View, Club, Player, Match, PlayerRole, TransferNegotiation, Tactics, MatchDayInfo } from './types';
 import { gameReducer, initialState } from './services/gameReducer';
@@ -200,7 +196,7 @@ const App: React.FC = () => {
         if (playerMatchToday) {
             const aiMatches = matchesToday.filter(m => m.id !== playerMatchToday.id);
             dispatch({
-                type: 'REOPEN_MATCH_DAY_MODAL',
+                type: 'SET_MATCH_DAY_FIXTURES',
                 payload: {
                     playerMatch: {
                         match: playerMatchToday,

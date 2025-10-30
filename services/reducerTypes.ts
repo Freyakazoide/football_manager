@@ -8,7 +8,7 @@ export type Action =
     | { type: 'MARK_NEWS_AS_READ'; payload: { newsItemId: number } }
     // New Match Flow Actions
     | { type: 'CLEAR_MATCH_DAY_FIXTURES' }
-    | { type: 'REOPEN_MATCH_DAY_MODAL'; payload: { playerMatch: MatchDayInfo; aiMatches: Match[] } }
+    | { type: 'SET_MATCH_DAY_FIXTURES'; payload: { playerMatch: MatchDayInfo; aiMatches: Match[] } }
     | { type: 'CLEAR_MATCH_RESULTS' }
     | { type: 'CLEAR_MATCH_START_ERROR' }
     // Match Engine Actions

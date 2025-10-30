@@ -213,13 +213,12 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             let newState = { ...state, currentDate: newDate };
             
-            // On Sundays, process AI transfer market activity
+            // On Sundays, process AI transfer market activity and negotiations
             if (newDate.getDay() === 0) { // 0 is Sunday
                 newState = processAITransfers(newState);
+                // Process negotiations (this will also handle AI responses to offers)
+                newState = processNegotiations(newState);
             }
-
-            // Process negotiations (this will also handle AI responses to offers)
-            newState = processNegotiations(newState);
 
 
             // Process scouting assignments
@@ -539,7 +538,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
         case 'CLEAR_MATCH_DAY_FIXTURES': {
             return { ...state, matchDayFixtures: null };
         }
-        case 'REOPEN_MATCH_DAY_MODAL': {
+        case 'SET_MATCH_DAY_FIXTURES': {
             return { ...state, matchDayFixtures: action.payload, matchStartError: null };
         }
         case 'CLEAR_MATCH_RESULTS': {
@@ -954,31 +953,37 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const player = state.players[negotiation.playerId];
             const newNegotiations = { ...state.transferNegotiations };
             const currentNeg = { ...negotiation };
+            
+            const isPlayerBuying = currentNeg.buyingClubId === state.playerClubId;
+            const isPlayerSelling = currentNeg.sellingClubId === state.playerClubId;
+            const isPlayerInvolved = isPlayerBuying || isPlayerSelling;
 
             if (currentNeg.stage === 'club') {
                 const lastOffer = currentNeg.clubOfferHistory[currentNeg.clubOfferHistory.length - 1].offer;
                 const valueRatio = lastOffer.fee / player.marketValue;
-                const acceptanceChance = Math.max(0.05, Math.min(0.95, valueRatio - 0.1));
+                const repDiffFactor = (state.clubs[currentNeg.buyingClubId].reputation - state.clubs[currentNeg.sellingClubId].reputation) / 100;
+                const acceptanceChance = Math.max(0.05, Math.min(0.95, (valueRatio - 0.2) + repDiffFactor));
 
                 if (Math.random() < acceptanceChance) {
-                    // Accept offer
+                    // AI accepts the club-to-club offer. Move to agent stage.
                     currentNeg.stage = 'agent';
-                    currentNeg.status = 'player_turn';
-                    currentNeg.lastOfferBy = 'player';
                     currentNeg.agreedFee = lastOffer.fee;
+                    currentNeg.lastOfferBy = 'ai'; // The AI (seller) just accepted.
+                    // If player is buying, it's their turn to negotiate with agent.
+                    // If AI-to-AI, the buyer AI needs to act next, so keep status as ai_turn.
+                    currentNeg.status = isPlayerBuying ? 'player_turn' : 'ai_turn';
                 } else {
                     // Counter offer
                     const feeMultiplier = 1.1 + Math.random() * 0.3;
                     const counterFee = Math.round((Math.max(lastOffer.fee, player.marketValue) * feeMultiplier) / 1000) * 1000;
                     const counterOffer = { fee: counterFee, sellOnPercentage: Math.random() < 0.3 ? 15 : undefined };
                     currentNeg.clubOfferHistory.push({ offer: counterOffer, by: 'ai' });
-                    currentNeg.status = 'player_turn';
                     currentNeg.lastOfferBy = 'ai';
+                    // If player is involved (buying or selling), it's their turn.
+                    // If AI-to-AI, the other AI needs to respond, so keep as ai_turn.
+                    currentNeg.status = isPlayerInvolved ? 'player_turn' : 'ai_turn';
                 }
             } else if (currentNeg.stage === 'agent') {
-                const isPlayerSelling = negotiation.sellingClubId === state.playerClubId;
-                const isPlayerBuying = negotiation.buyingClubId === state.playerClubId;
-                
                 // --- SIMULATION FOR WHEN PLAYER IS SELLING ---
                 if (isPlayerSelling) {
                     const buyerClub = state.clubs[currentNeg.buyingClubId];
@@ -1017,14 +1022,53 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         return { ...newState, transferNegotiations: newNegotiations };
                     }
                 }
+                // --- NEW: SIMULATION FOR AI-to-AI TRANSFERS ---
+                else if (!isPlayerInvolved) {
+                    const buyerClub = state.clubs[currentNeg.buyingClubId];
+                    const wageOffer = Math.max(player.wage * 1.1, player.marketValue / 120);
+                    const wageRatio = wageOffer / player.wage;
+                    const repRatio = buyerClub.reputation / state.clubs[player.clubId].reputation;
+                    const acceptanceChance = Math.max(0.2, Math.min(0.95, (wageRatio * 0.4) + (repRatio * 0.4)));
+
+                    if (Math.random() < acceptanceChance) {
+                        // Transfer successful
+                        const sellerClub = { ...state.clubs[currentNeg.sellingClubId] };
+                        const updatedBuyerClub = { ...buyerClub };
+                        const updatedPlayer = { ...player };
+
+                        sellerClub.balance += currentNeg.agreedFee;
+                        updatedBuyerClub.balance -= currentNeg.agreedFee;
+                        updatedPlayer.clubId = currentNeg.buyingClubId;
+                        updatedPlayer.wage = wageOffer;
+                        const newExpiry = new Date(state.currentDate);
+                        newExpiry.setFullYear(newExpiry.getFullYear() + 3);
+                        updatedPlayer.contractExpires = newExpiry;
+
+                        const newPlayers = { ...state.players, [player.id]: updatedPlayer };
+                        const newClubs = { ...state.clubs, [sellerClub.id]: sellerClub, [updatedBuyerClub.id]: updatedBuyerClub };
+                        currentNeg.status = 'completed';
+                        
+                        // Create global news item
+                        let newState = addNewsItem(state, `Transfer Confirmed: ${player.name} joins ${buyerClub.name}`, `${player.name} has completed a move from ${sellerClub.name} to ${buyerClub.name} for a fee of ${currentNeg.agreedFee.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}.`, 'transfer_completed', player.id);
+                        newNegotiations[negotiationId] = currentNeg;
+                        return { ...newState, players: rehydratePlayers(newPlayers), clubs: newClubs, transferNegotiations: newNegotiations };
+
+                    } else {
+                        // Transfer collapses
+                        currentNeg.status = 'cancelled_ai';
+                        newNegotiations[negotiationId] = currentNeg;
+                        let newState = addNewsItem(state, `Transfer Collapses`, `The transfer of ${player.name} to ${buyerClub.name} has collapsed after the player failed to agree personal terms.`, 'transfer_deal_collapsed', player.id);
+                        return { ...newState, transferNegotiations: newNegotiations };
+                    }
+                }
+
 
                 // --- AI RESPONSE LOGIC FOR WHEN PLAYER IS BUYING ---
-                if (isPlayerBuying) {
+                else if (isPlayerBuying) {
                     const lastOffer = currentNeg.agentOfferHistory[currentNeg.agentOfferHistory.length - 1].offer;
                     const expectedWage = player.marketValue / 100;
                     const wageRatio = lastOffer.wage / expectedWage;
                     const acceptanceChance = Math.max(0.1, Math.min(0.95, (wageRatio - 0.9) * 2));
-                    const isRenewal = currentNeg.sellingClubId === currentNeg.buyingClubId;
                     
                     if (Math.random() < acceptanceChance) {
                         // Player accepts player's contract offer

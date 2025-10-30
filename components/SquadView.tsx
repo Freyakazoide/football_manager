@@ -73,57 +73,50 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
     const [positionFilter, setPositionFilter] = useState('All');
     const [showAlertsOnly, setShowAlertsOnly] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'name', direction: 'ascending' });
-    const [isLoading, setIsLoading] = useState(true);
-    const [processedSquad, setProcessedSquad] = useState<any[]>([]);
     
     if (!gameState.playerClubId) return null;
     
-    useEffect(() => {
-        setIsLoading(true);
-        const timer = setTimeout(() => {
-            const season = getSeason(gameState.currentDate);
-            let squadPlayers = (Object.values(gameState.players) as Player[])
-                .filter(p => p.clubId === gameState.playerClubId && p.squadStatus === 'senior')
-                .map(player => {
-                    const seasonStats = player.history.find(h => h.season === season);
-                    const avgRating = (seasonStats && seasonStats.apps > 0) ? (seasonStats.ratingPoints / seasonStats.apps) : 0;
-                    return {
-                        ...player,
-                        apps: seasonStats?.apps ?? 0,
-                        goals: seasonStats?.goals ?? 0,
-                        assists: seasonStats?.assists ?? 0,
-                        avgRating: parseFloat(avgRating.toFixed(2)),
-                    };
-                });
-            
-            // Filtering
-            if (positionFilter !== 'All') {
-                squadPlayers = squadPlayers.filter(p => getRoleCategory(p.naturalPosition) === positionFilter);
-            }
-            if (showAlertsOnly) {
-                squadPlayers = squadPlayers.filter(p => p.injury || p.suspension || p.seasonYellowCards > 0);
-            }
-            
-            // Sorting
-            squadPlayers.sort((a, b) => {
-                const aValue = a[sortConfig.key];
-                const bValue = b[sortConfig.key];
-    
-                if (aValue < bValue) {
-                    return sortConfig.direction === 'ascending' ? -1 : 1;
-                }
-                if (aValue > bValue) {
-                    return sortConfig.direction === 'ascending' ? 1 : -1;
-                }
-                return 0;
+    const processedSquad = useMemo(() => {
+        const season = getSeason(gameState.currentDate);
+        let squadPlayers = (Object.values(gameState.players) as Player[])
+            .filter(p => p.clubId === gameState.playerClubId && p.squadStatus === 'senior')
+            .map(player => {
+                const seasonStats = player.history.find(h => h.season === season);
+                const avgRating = (seasonStats && seasonStats.apps > 0) ? (seasonStats.ratingPoints / seasonStats.apps) : 0;
+                return {
+                    ...player,
+                    apps: seasonStats?.apps ?? 0,
+                    goals: seasonStats?.goals ?? 0,
+                    assists: seasonStats?.assists ?? 0,
+                    avgRating: parseFloat(avgRating.toFixed(2)),
+                };
             });
-            setProcessedSquad(squadPlayers);
-            setIsLoading(false);
-        }, 50); // Small delay to allow UI to render loading state before heavy computation
+        
+        // Filtering
+        if (positionFilter !== 'All') {
+            squadPlayers = squadPlayers.filter(p => getRoleCategory(p.naturalPosition) === positionFilter);
+        }
+        if (showAlertsOnly) {
+            squadPlayers = squadPlayers.filter(p => p.injury || p.suspension || p.seasonYellowCards > 0);
+        }
+        
+        // Sorting
+        squadPlayers.sort((a, b) => {
+            const aValue = a[sortConfig.key];
+            const bValue = b[sortConfig.key];
 
-        return () => clearTimeout(timer);
+            if (aValue < bValue) {
+                return sortConfig.direction === 'ascending' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === 'ascending' ? 1 : -1;
+            }
+            return 0;
+        });
 
+        return squadPlayers;
     }, [gameState.players, gameState.playerClubId, gameState.currentDate, positionFilter, showAlertsOnly, sortConfig]);
+
 
     const requestSort = (key: SortKey) => {
         let direction: 'ascending' | 'descending' = 'ascending';
@@ -180,39 +173,36 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {isLoading ? (
-                            Array.from({ length: 15 }).map((_, index) => <SkeletonRow key={index} />)
-                        ) : (
-                            processedSquad.map((player) => (
-                                <tr
-                                    key={player.id}
-                                    className={`border-b border-gray-700 hover:bg-gray-700 cursor-pointer ${(player.injury || player.suspension) ? 'opacity-60' : ''}`}
-                                    onClick={() => onPlayerClick(player)}
-                                >
-                                    <td className="p-3 font-semibold">{player.name}</td>
-                                    <td className="p-3 text-center">{player.naturalPosition}</td>
-                                    <td className="p-3 text-center">
-                                        {player.injury && <span className="text-red-500 font-bold" title={`Injured: ${player.injury.type}`}>✚</span>}
-                                        {player.suspension && <span className="text-red-500 font-bold" title={`Suspended until ${player.suspension.returnDate.toLocaleDateString()}`}>■</span>}
-                                        {player.seasonYellowCards > 0 && 
-                                            <span className="inline-flex items-center justify-center w-5 h-5 bg-yellow-400 text-black font-bold text-xs rounded-sm">
-                                                {player.seasonYellowCards}
-                                            </span>
-                                        }
-                                    </td>
-                                    <td className="p-3 text-center whitespace-nowrap"><MoraleDisplay morale={player.morale} /></td>
-                                    <td className="p-3"><FitnessBar fitness={player.matchFitness} /></td>
-                                    <td className="p-3 text-center">{player.apps}</td>
-                                    <td className="p-3 text-center">{player.goals}</td>
-                                    <td className="p-3 text-center">{player.assists}</td>
-                                    <td className="p-3 text-center font-bold">{player.avgRating > 0 ? player.avgRating.toFixed(2) : '-'}</td>
-                                    <td className="p-3 text-center">{player.age}</td>
-                                    <td className="p-3 text-right">
-                                        {player.marketValue.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
+                        {processedSquad.map((player) => (
+                            <tr
+                                key={player.id}
+                                className={`border-b border-gray-700 hover:bg-gray-700 cursor-pointer ${(player.injury || player.suspension) ? 'opacity-60' : ''}`}
+                                onClick={() => onPlayerClick(player)}
+                            >
+                                <td className="p-3 font-semibold">{player.name}</td>
+                                <td className="p-3 text-center">{player.naturalPosition}</td>
+                                <td className="p-3 text-center">
+                                    {player.injury && <span className="text-red-500 font-bold" title={`Injured: ${player.injury.type}`}>✚</span>}
+                                    {player.suspension && <span className="text-red-500 font-bold" title={`Suspended until ${player.suspension.returnDate.toLocaleDateString()}`}>■</span>}
+                                    {player.seasonYellowCards > 0 && 
+                                        <span className="inline-flex items-center justify-center w-5 h-5 bg-yellow-400 text-black font-bold text-xs rounded-sm">
+                                            {player.seasonYellowCards}
+                                        </span>
+                                    }
+                                </td>
+                                <td className="p-3 text-center whitespace-nowrap"><MoraleDisplay morale={player.morale} /></td>
+                                <td className="p-3"><FitnessBar fitness={player.matchFitness} /></td>
+                                <td className="p-3 text-center">{player.apps}</td>
+                                <td className="p-3 text-center">{player.goals}</td>
+                                <td className="p-3 text-center">{player.assists}</td>
+                                <td className="p-3 text-center font-bold">{player.avgRating > 0 ? player.avgRating.toFixed(2) : '-'}</td>
+                                <td className="p-3 text-center">{player.age}</td>
+                                <td className="p-3 text-right">
+                                    {player.marketValue.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}
+                                </td>
+                            </tr>
+                        ))
+                        }
                     </tbody>
                 </table>
             </div>

@@ -346,6 +346,12 @@ export interface SeasonReviewData {
 
 // --- NEW TRANSFER SYSTEM TYPES ---
 
+// FIX: Add missing TransferResult interface for the TransferResultModal component.
+export interface TransferResult {
+    success: boolean;
+    message: string;
+}
+
 export interface TransferOffer {
     fee: number;
     sellOnPercentage?: number;
@@ -398,10 +404,4 @@ export interface GameState {
     seasonReviewData: SeasonReviewData | null;
     transferNegotiations: Record<number, TransferNegotiation>;
     nextNegotiationId: number;
-}
-
-// FIX: Add missing TransferResult type used by TransferResultModal.
-export interface TransferResult {
-    success: boolean;
-    message: string;
 }

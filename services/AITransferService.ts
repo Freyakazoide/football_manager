@@ -58,15 +58,21 @@ const processClubTransferLogic = (
     const potentialTargets = Object.values(gameState.players).filter(p => {
         if (p.clubId === club.id) return false; // Not from their own club
         if (getRoleCategory(p.naturalPosition) !== getRoleCategory(weakestStarter!.naturalPosition)) return false; // Must be same position category
-        if (p.marketValue > club.balance * 0.4) return false; // Must be affordable (max 40% of balance)
-        if (getOverallRating(p) < weakestStarterScore + 5) return false; // Must be a clear upgrade
+        if (p.marketValue > club.balance * 0.7) return false; // Must be affordable (max 70% of balance)
+
+        // New logic: Must be an upgrade in either current ability or potential
+        const ratingImprovement = getOverallRating(p) - weakestStarterScore;
+        const potentialImprovement = p.potential - weakestStarter!.potential;
+        const valueScore = ratingImprovement + (potentialImprovement / 4); // Potential is a factor
+        if (valueScore < 1) return false; // Must be at least a minor upgrade in ability or potential
 
         const sellingClub = gameState.clubs[p.clubId];
         if (!sellingClub) return false;
-        if (sellingClub.reputation > club.reputation + 10) return false; // Avoid buying from much bigger clubs
+        if (sellingClub.reputation > club.reputation + 15) return false; // Avoid buying from much bigger clubs
 
         return true;
     });
+
 
     if (potentialTargets.length === 0) return acc;
 

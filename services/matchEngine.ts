@@ -120,13 +120,12 @@ const moraleMod = (morale: number) => 0.75 + (morale / 400);
 const getPositionalModifier = (familiarity: number): number => 0.5 + (familiarity / 200);
 
 export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, newEvents: MatchEvent[] } => {
-    const newState = JSON.parse(JSON.stringify(state)) as LiveMatchState;
+    let newState: LiveMatchState = { ...state };
     const newEvents: MatchEvent[] = [];
     newState.minute++;
 
     // --- DYNAMIC AI TACTICS ---
     const isAITeamHome = newState.homeTeamId !== newState.playerTeamId;
-    const aiTeam = isAITeamHome ? newState.homeLineup : newState.awayLineup;
     const aiTeamMentality = isAITeamHome ? newState.homeMentality : newState.awayMentality;
     const aiScore = isAITeamHome ? newState.homeScore : newState.awayScore;
     const playerScore = isAITeamHome ? newState.awayScore : newState.homeScore;
@@ -166,9 +165,12 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     if (newState.minute === 45) {
         newState.status = 'half-time'; newState.isPaused = true;
         newEvents.push({ minute: 45, text: "Half-time. The players head to the tunnel for a rest.", type: 'Info' });
-        [...newState.homeLineup, ...newState.awayLineup].forEach(p => {
-            p.stamina = Math.min(100, p.stamina + (100 - p.stamina) * (p.attributes.naturalFitness / 500));
-        });
+        const updateStamina = (p: LivePlayer) => ({...p, stamina: Math.min(100, p.stamina + (100 - p.stamina) * (p.attributes.naturalFitness / 500))});
+        newState = {
+            ...newState,
+            homeLineup: newState.homeLineup.map(updateStamina),
+            awayLineup: newState.awayLineup.map(updateStamina),
+        };
     }
     if (newState.minute === 46) { newState.status = 'second-half'; newEvents.push({ minute: 46, text: "The second half begins!", type: 'Info' }); }
     if (newState.minute >= 90) {
@@ -176,15 +178,22 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
         newEvents.push({ minute: 90, text: "Full-time. The referee blows the final whistle.", type: 'Info' });
     }
     // Stamina drain based on work rate and instructions
-    [...newState.homeLineup, ...newState.awayLineup].forEach(p => {
+    const drainStamina = (p: LivePlayer) => {
         if(!p.isSentOff) {
             let drain = 0.3 * (p.attributes.workRate / 70) / (1 + p.attributes.stamina / 150);
             if (p.instructions.pressing === PressingInstruction.Urgent) drain *= 1.3;
             if (p.instructions.positioning === PositioningInstruction.GetForward) drain *= 1.2;
             if (p.instructions.dribbling === DribblingInstruction.DribbleMore) drain *= 1.1;
-            p.stamina = Math.max(0, p.stamina - drain);
+            return {...p, stamina: Math.max(0, p.stamina - drain)};
         }
-    });
+        return p;
+    };
+    newState = {
+        ...newState,
+        homeLineup: newState.homeLineup.map(drainStamina),
+        awayLineup: newState.awayLineup.map(drainStamina)
+    };
+
 
     if (newState.status === 'first-half' || newState.status === 'second-half') {
         if (newState.attackingTeamId === newState.homeTeamId) {
@@ -195,7 +204,7 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     }
 
     if (newState.status !== 'first-half' && newState.status !== 'second-half') {
-        newState.log.push(...newEvents);
+        newState.log = [...newState.log, ...newEvents];
         return { newState, newEvents };
     }
 
@@ -217,8 +226,8 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
                  newState.attackingTeamId = newState.homeTeamId;
                  newState.ballZone = 5;
             } else {
-                newState.log.push(...newEvents);
-                return { newState, newEvents };
+                newState.log = [...newState.log, ...newEvents];
+                return {newState, newEvents};
             }
         }
     }
@@ -239,12 +248,12 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
              newEvents.push({minute: newState.minute, text: `The ball is loose, and ${newCarrier.name} picks it up.`, type: 'Info', primaryPlayerId: newCarrier.id});
              newState.lastPasser = null;
         }
-        newState.log.push(...newEvents);
+        newState.log = [...newState.log, ...newEvents];
         return {newState, newEvents};
     }
     
     const opponent = getNearestOpponent(ballCarrier, newState.ballZone, defendingTeam);
-    if (!opponent) { newState.log.push(...newEvents); return {newState, newEvents}; }
+    if (!opponent) { newState.log = [...newState.log, ...newEvents]; return {newState, newEvents}; }
     
     const carrierFamiliarity = ballCarrier.positionalFamiliarity[ballCarrier.role] || 20;
     const carrierMod = getPositionalModifier(carrierFamiliarity);
@@ -479,6 +488,6 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
         attackingStats.passAccuracy = (successfulPasses / attackingStats.passes) * 100;
     }
 
-    newState.log.push(...newEvents);
+    newState.log = [...newState.log, ...newEvents];
     return { newState, newEvents };
 };

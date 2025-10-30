@@ -23,6 +23,7 @@ import TeamView from './components/TeamView';
 import TrainingView from './components/TrainingView';
 import ScoutingView from './components/ScoutingView';
 import StaffView from './components/StaffView';
+import BoardView from './components/BoardView';
 import SeasonReviewModal from './components/SeasonReviewModal';
 
 const roleOrder: Record<PlayerRole, number> = {
@@ -225,6 +226,8 @@ const App: React.FC = () => {
                 return <TacticsView gameState={state} dispatch={dispatch} />;
             case View.STAFF:
                 return <StaffView gameState={state} dispatch={dispatch} />;
+            case View.BOARD:
+                return <BoardView gameState={state} />;
             case View.COMPETITION:
                 return <CompetitionView gameState={state} onClubClick={handleViewClub} />;
             case View.CALENDAR:

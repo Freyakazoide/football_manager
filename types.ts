@@ -4,6 +4,7 @@ export enum View {
     TEAM = 'Team',
     TACTICS = 'Tactics',
     STAFF = 'Staff',
+    BOARD = 'Board',
     COMPETITION = 'Competition',
     CALENDAR = 'Calendar',
     FINANCES = 'Finances',
@@ -187,6 +188,9 @@ export interface Club {
     staffWageBudget: number;
     // --- REMOVED old staffIds ---
     competitionId: number;
+    // --- NEW BOARD ---
+    managerConfidence: number; // 0-100
+    boardObjective: { type: 'league_finish', position: number, description: string } | null;
 }
 
 

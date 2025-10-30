@@ -1,6 +1,6 @@
 import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType } from '../types';
 import { Action } from './reducerTypes';
-import { runMatch, processPlayerDevelopment, processPlayerAging, processWages, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens, getUnitRatings } from './simulationService';
+import { runMatch, processPlayerDevelopment, processPlayerAging, processMonthlyFinances, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens, getUnitRatings } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
 import { generateNarrativeReport } from './newsGenerator';
 import { generateAITactics } from './aiTacticsService';
@@ -121,8 +121,8 @@ const handleMonthlyUpdates = (state: GameState): GameState => {
         newState = addNewsItem(newState, "Monthly Training Report", content, 'training_report');
     }
 
-    // 3. Process Wages
-    newState.clubs = processWages(newState.clubs, newState.players, newState.staff);
+    // 3. Process Monthly Finances (Income & Expenses)
+    newState.clubs = processMonthlyFinances(newState.clubs, newState.players, newState.staff);
 
     // 4. Handle yearly aging
     if (newState.currentDate.getMonth() === 0) { // New year
@@ -193,7 +193,19 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     prizeMoney,
                 };
 
-                return { ...state, seasonReviewData };
+                // --- NEW: Update manager confidence based on objective ---
+                let newConfidence = playerClub.managerConfidence;
+                if (playerClub.boardObjective?.type === 'league_finish') {
+                    const finalPosition = finalTable.findIndex(e => e.clubId === state.playerClubId!) + 1;
+                    if (finalPosition <= playerClub.boardObjective.position) {
+                        newConfidence = Math.min(100, newConfidence + 20); // Objective met
+                    } else {
+                        newConfidence = Math.max(0, newConfidence - 30); // Objective failed
+                    }
+                }
+                const newClubs = { ...state.clubs, [state.playerClubId!]: { ...playerClub, managerConfidence: newConfidence }};
+
+                return { ...state, clubs: newClubs, seasonReviewData };
             }
 
             const newDate = new Date(state.currentDate);
@@ -488,11 +500,29 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             // 7. Generate new schedule
             const newSchedule = generateScheduleForCompetition(newLeagueClubs, newStartDate);
+            
+            // --- NEW: Generate Board Objectives and Reset Confidence ---
+            const clubsWithObjectives = Object.values(clubsAfterPromotion).reduce((acc, club) => {
+                const newClub = { ...club };
+                let objective;
+                const leagueSize = Object.values(clubsAfterPromotion).filter(c => c.competitionId === newClub.competitionId).length;
+                if (newClub.reputation > 80) {
+                    objective = { type: 'league_finish' as const, position: 1, description: 'Win the league title.' };
+                } else if (newClub.reputation > 65) {
+                    objective = { type: 'league_finish' as const, position: Math.floor(leagueSize / 2), description: `Finish in the top half.` };
+                } else {
+                    objective = { type: 'league_finish' as const, position: leagueSize - 3, description: 'Avoid relegation.' };
+                }
+                newClub.boardObjective = objective;
+                newClub.managerConfidence = 100; // Reset confidence for new season
+                acc[newClub.id] = newClub;
+                return acc;
+            }, {} as Record<number, Club>);
 
             // 9. Return the final, assembled state
             return {
                 ...tempState,
-                clubs: clubsAfterPromotion,
+                clubs: clubsWithObjectives,
                 players: finalPlayersState,
                 leagueTable: newLeagueTable,
                 currentDate: newStartDate,
@@ -1200,6 +1230,16 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             let tempState = { ...state };
             
+            // --- NEW: Update confidence on heavy loss ---
+            const isPlayerHome = finalResult.homeTeamId === tempState.playerClubId!;
+            const scoreDiff = isPlayerHome ? finalResult.homeScore! - finalResult.awayScore! : finalResult.awayScore! - finalResult.homeScore!;
+            if (scoreDiff < -2) { // Lost by 3 or more goals
+                const playerClub = { ...tempState.clubs[tempState.playerClubId!] };
+                playerClub.managerConfidence = Math.max(0, playerClub.managerConfidence - 5);
+                tempState.clubs = { ...tempState.clubs, [tempState.playerClubId!]: playerClub };
+            }
+            // --- END NEW ---
+
             for (const livePlayer of allPlayersInMatchLive) {
                 const playerToUpdate = updatedPlayers[livePlayer.id];
                 if (!playerToUpdate) continue;
@@ -1276,7 +1316,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             if (scheduleIndex !== -1) newSchedule[scheduleIndex] = finalResult;
             
             const newLeagueTable = updateLeagueTableForMatch(state.leagueTable, finalResult);
-            newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
+            newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - b.goalDifference || b.goalsFor - a.goalsFor);
             
             const aiResultsToday = state.schedule.filter(m => new Date(m.date).toDateString() === new Date(finalResult.date).toDateString() && m.id !== finalResult.id && m.homeScore !== undefined);
 

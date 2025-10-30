@@ -1,4 +1,5 @@
 
+
 import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantManagerAttributes, HeadOfScoutingAttributes, HeadOfPhysiotherapyAttributes, HeadOfPerformanceAttributes, Competition, DepartmentType } from '../types';
 
 const FIRST_NAMES = ['John', 'Paul', 'Mike', 'Leo', 'Chris', 'David', 'Alex', 'Ben', 'Sam', 'Tom', 'Dan', 'Matt'];
@@ -325,6 +326,8 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             },
             staffWageBudget: 25000,
             competitionId,
+            managerConfidence: 100,
+            boardObjective: null,
         };
 
         if (competitionId === 1) {

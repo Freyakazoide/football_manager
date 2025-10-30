@@ -368,27 +368,42 @@ const getDepartmentMaintenanceCost = (level: number) => {
     return [0, 1000, 3000, 7500, 15000, 25000][level] || 0;
 }
 
-export const processWages = (clubs: Record<number, Club>, players: Record<number, Player>, staff: Record<number, Staff>): Record<number, Club> => {
+const getMonthlyIncome = (club: Club, players: Player[]): number => {
+    // 1. Sponsorship Money based on club reputation
+    const sponsorMoney = club.reputation * 10000; // e.g., 80 rep = $800,000/month
+
+    // 2. Ticket Sales based on reputation and average player morale
+    const avgPlayerMorale = players.length > 0
+        ? players.reduce((sum, p) => sum + p.morale, 0) / players.length
+        : 50; // Default morale if no players
+    // Assume 2 home games a month for a simple calculation
+    const ticketSalesPerMatch = (club.reputation * 200) + (avgPlayerMorale * 100);
+    const ticketSales = ticketSalesPerMatch * 2; 
+
+    return sponsorMoney + ticketSales;
+};
+
+export const processMonthlyFinances = (clubs: Record<number, Club>, players: Record<number, Player>, staff: Record<number, Staff>): Record<number, Club> => {
     return Object.values(clubs).reduce((acc, club) => {
-        // Player wages (weekly * 4)
+        // --- EXPENSES ---
         const clubPlayers = (Object.values(players) as Player[]).filter(p => p.clubId === club.id);
         const playerWages = clubPlayers.reduce((sum, p) => sum + p.wage, 0) * 4;
 
-        // FIX: Cast Object.values to StaffDepartment[] once to correctly infer types for subsequent operations.
         const departments = (Object.values(club.departments) as StaffDepartment[]);
 
-        // Staff chief wages (weekly * 4)
         const staffChiefs = departments.map(d => d.chiefId).filter(Boolean) as number[];
         const staffWages = staffChiefs.reduce((sum, id) => sum + staff[id].wage, 0) * 4;
 
-        // Department maintenance costs (monthly)
         const maintenanceCost = departments.reduce((sum, d) => sum + getDepartmentMaintenanceCost(d.level), 0);
         
         const totalMonthlyBill = playerWages + staffWages + maintenanceCost;
+
+        // --- INCOME ---
+        const totalMonthlyIncome = getMonthlyIncome(club, clubPlayers);
         
         acc[club.id] = {
             ...club,
-            balance: club.balance - totalMonthlyBill,
+            balance: club.balance - totalMonthlyBill + totalMonthlyIncome,
         };
         return acc;
     }, {} as Record<number, Club>);

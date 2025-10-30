@@ -108,6 +108,7 @@ export const createLiveMatchState = (matchInfo: MatchDayInfo, clubs: Record<numb
         initialAwayLineup: awayTeam.tactics.lineup,
         lastPasser: null,
         forcedSubstitution: null,
+        injuredPlayerIds: [],
     };
 };
 
@@ -347,11 +348,8 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
                          updateRating(opponent, -2.0);
                          newEvents.push({minute: newState.minute, text: `Second yellow! ${opponent.name} is sent off!`, type: 'RedCard'});
                          const sentOffTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
-                         const playerClubId = isHomeAttacking ? state.homeTeamId : state.awayTeamId; // Assuming player is one of them. For AI vs AI this is ok.
-                         if (sentOffTeamId === playerClubId) {
-                            newState.forcedSubstitution = { teamId: sentOffTeamId, playerOutId: opponent.id, reason: 'red_card' };
-                            newState.isPaused = true;
-                         }
+                         newState.forcedSubstitution = { teamId: sentOffTeamId, playerOutId: opponent.id, reason: 'red_card' };
+                         newState.isPaused = true;
                     } else {
                          updateRating(opponent, -0.5);
                          newEvents.push({minute: newState.minute, text: `${opponent.name} receives a yellow card.`, type: 'YellowCard'});
@@ -366,18 +364,17 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
                  newState.attackingTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
                  newState.ballCarrierId = opponent.id;
                  
-                 const injuryChance = (opponent.attributes.aggression / 400) * (opponent.instructions.tackling === TacklingInstruction.Harder ? 1.5 : 1.0);
+                 const injuryChance = 0.015 * (opponent.attributes.aggression / 60) * (opponent.instructions.tackling === TacklingInstruction.Harder ? 1.8 : 1.0) * (1.3 - (ballCarrier.attributes.naturalFitness / 100));
                  if (Math.random() < injuryChance) {
                      ballCarrier.isInjured = true;
+                     if (!newState.injuredPlayerIds.includes(ballCarrier.id)) {
+                         newState.injuredPlayerIds.push(ballCarrier.id);
+                     }
                      const eventText = `${ballCarrier.name} has picked up an injury from that challenge and has to come off!`;
                      newEvents.push({ minute: newState.minute, text: eventText, type: 'Injury' });
                      const injuredTeamId = isHomeAttacking ? newState.homeTeamId : newState.awayTeamId;
-                     const playerClubId = isHomeAttacking ? state.homeTeamId : state.awayTeamId;
-                     // Only force pause for player's team
-                     if (injuredTeamId === playerClubId) {
-                         newState.forcedSubstitution = { teamId: injuredTeamId, playerOutId: ballCarrier.id, reason: 'injury' };
-                         newState.isPaused = true;
-                     }
+                     newState.forcedSubstitution = { teamId: injuredTeamId, playerOutId: ballCarrier.id, reason: 'injury' };
+                     newState.isPaused = true;
                  }
              }
         }

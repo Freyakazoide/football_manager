@@ -102,7 +102,7 @@ const ClubSquadModal: React.FC<{
 
 const App: React.FC = () => {
     const [state, dispatch] = useReducer(gameReducer, initialState);
-    const [viewHistory, setViewHistory] = useState<{ view: View; context?: any }[]>([{ view: View.SQUAD }]);
+    const [viewHistory, setViewHistory] = useState<{ view: View; context?: any }[]>([{ view: View.TEAM }]);
     const [historyIndex, setHistoryIndex] = useState(0);
     const [selectedMatchForReport, setSelectedMatchForReport] = useState<Match | null>(null);
     const [viewingClub, setViewingClub] = useState<Club | null>(null);
@@ -134,7 +134,7 @@ const App: React.FC = () => {
 
     const handleGoForward = useCallback(() => {
         if (historyIndex < viewHistory.length - 1) {
-            setHistoryIndex(prev => prev + 1);
+            setHistoryIndex(prev => prev - 1);
         }
     }, [historyIndex, viewHistory.length]);
 
@@ -203,7 +203,7 @@ const App: React.FC = () => {
                 if (!playerId) return <SquadView gameState={state} onPlayerClick={handlePlayerClick} />;
                 return <PlayerProfileView playerId={playerId} gameState={state} dispatch={dispatch} onPlayerClick={handlePlayerClick} />;
             default:
-                return <SquadView gameState={state} onPlayerClick={handlePlayerClick} />;
+                return <TeamView gameState={state} />;
         }
     };
     

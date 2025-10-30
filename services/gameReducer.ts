@@ -5,6 +5,7 @@ import { createLiveMatchState } from './matchEngine';
 import { generateNarrativeReport } from './newsGenerator';
 import { generateAITactics } from './aiTacticsService';
 import { updatePlayerStatsFromMatchResult, getSeason } from './playerStatsService';
+import { generateInjury } from './injuryService';
 
 export const initialState: GameState = {
     currentDate: new Date(2024, 7, 1), // July 1st, 2024
@@ -161,12 +162,13 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         result.injuryEvents.forEach(injury => {
                             const player = newState.players[injury.playerId];
                             if (player) {
-                                player.injury = { type: 'Match Injury', returnDate: new Date(injury.returnDate) };
+                                // The injury object from generateInjury is now just assigned directly
+                                player.injury = { type: injury.type, returnDate: new Date(injury.returnDate) };
                                 if (player.clubId === playerClubId) {
-                                    const diffTime = Math.abs(injury.returnDate.getTime() - result.date.getTime());
+                                    const diffTime = Math.abs(new Date(injury.returnDate).getTime() - result.date.getTime());
                                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                                     const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
-                                    newState = addNewsItem(newState, `Player Injured: ${player.name}`, `${player.name} picked up an injury in the match against ${player.clubId === result.homeTeamId ? newState.clubs[result.awayTeamId].name : newState.clubs[result.homeTeamId].name}.\n\nHe is expected to be out for ${durationText}.`, 'injury_report_player', player.id);
+                                    newState = addNewsItem(newState, `Player Injured: ${player.name}`, `${player.name} picked up an injury in the match against ${player.clubId === result.homeTeamId ? newState.clubs[result.awayTeamId].name : newState.clubs[result.homeTeamId].name}.\n\nHe is expected to be out for ${durationText}. The diagnosis is: ${injury.type}.`, 'injury_report_player', player.id);
                                 }
                             }
                         });
@@ -413,19 +415,25 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
         }
         case 'DISMISS_FORCED_SUBSTITUTION': {
             if (!state.liveMatch || !state.liveMatch.forcedSubstitution) return state;
-            
-            const liveMatch = { ...state.liveMatch, forcedSubstitution: null };
-            const { playerOutId, reason } = state.liveMatch.forcedSubstitution;
-
+        
+            const liveMatch = JSON.parse(JSON.stringify(state.liveMatch)); // Deep copy to avoid mutation
+            const { playerOutId, reason } = liveMatch.forcedSubstitution;
+            liveMatch.forcedSubstitution = null;
+            liveMatch.isPaused = false;
+        
             if (reason === 'injury') {
-                 const isHome = liveMatch.homeTeamId === state.playerClubId;
-                 let lineup = isHome ? liveMatch.homeLineup : liveMatch.awayLineup;
-                 const playerIndex = lineup.findIndex(p => p.id === playerOutId);
-                 if (playerIndex > -1) {
-                     lineup[playerIndex].isInjured = true;
-                 }
+                const isHome = liveMatch.homeTeamId === state.playerClubId;
+                const lineup = isHome ? liveMatch.homeLineup : liveMatch.awayLineup;
+                const playerIndex = lineup.findIndex((p: LivePlayer) => p.id === playerOutId);
+                
+                if (playerIndex > -1) {
+                    // This player is now considered injured for the rest of the match
+                    // but remains on the pitch visually if no sub is made.
+                    // The injury itself is processed post-match.
+                    lineup[playerIndex].isInjured = true; 
+                }
             }
-            return { ...state, liveMatch: { ...liveMatch, isPaused: false } };
+            return { ...state, liveMatch };
         }
         case 'CHANGE_LIVE_TACTICS': {
              if (!state.liveMatch) return state;
@@ -447,6 +455,24 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             lineup[playerIndex].currentPosition = action.payload.position;
             lineup[playerIndex].role = action.payload.role;
 
+            const updatedLiveMatch = { ...state.liveMatch };
+            if (isHome) {
+                updatedLiveMatch.homeLineup = lineup;
+            } else {
+                updatedLiveMatch.awayLineup = lineup;
+            }
+            return { ...state, liveMatch: updatedLiveMatch };
+        }
+        case 'UPDATE_LIVE_PLAYER_INSTRUCTIONS': {
+            if (!state.liveMatch) return state;
+            const isHome = state.liveMatch.homeTeamId === state.playerClubId;
+            const lineup = isHome ? [...state.liveMatch.homeLineup] : [...state.liveMatch.awayLineup];
+        
+            const playerIndex = lineup.findIndex(p => p.id === action.payload.playerId);
+            if (playerIndex === -1) return state;
+        
+            lineup[playerIndex].instructions = action.payload.instructions;
+        
             const updatedLiveMatch = { ...state.liveMatch };
             if (isHome) {
                 updatedLiveMatch.homeLineup = lineup;
@@ -512,18 +538,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         tempState = addNewsItem(tempState, `Player Suspended: ${playerToUpdate.name}`, `${playerToUpdate.name} received a red card and will be suspended for the next match.`, 'suspension_report_player', playerToUpdate.id);
                     }
                 }
-                if (livePlayer.isInjured) {
-                    const returnDate = new Date(finalResult.date); returnDate.setDate(returnDate.getDate() + (Math.floor(Math.random() * 21) + 7));
-                    playerToUpdate.injury = { type: 'Match Injury', returnDate };
-                    finalResult.injuryEvents?.push({ playerId: livePlayer.id, returnDate });
-                    if (playerToUpdate.clubId === state.playerClubId) {
-                        const diffTime = Math.abs(returnDate.getTime() - finalResult.date.getTime());
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
-                        tempState = addNewsItem(tempState, `Player Injured: ${playerToUpdate.name}`, `${playerToUpdate.name} picked up an injury in the match against ${playerToUpdate.clubId === finalResult.homeTeamId ? state.clubs[finalResult.awayTeamId].name : state.clubs[finalResult.homeTeamId].name}.\n\nHe is expected to be out for ${durationText}.`, 'injury_report_player', playerToUpdate.id);
-                    }
-                }
-
+               
                 if (livePlayer.yellowCardCount > 0) {
                      for (let i = 0; i < livePlayer.yellowCardCount; i++) {
                         finalResult.disciplinaryEvents?.push({ playerId: livePlayer.id, type: 'yellow' });
@@ -540,6 +555,25 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     }
                 }
             }
+            
+            // --- NEW RELIABLE INJURY PROCESSING ---
+            for (const injuredPlayerId of finalMatchState.injuredPlayerIds) {
+                const playerToUpdate = updatedPlayers[injuredPlayerId];
+                if (!playerToUpdate) continue;
+
+                const injuryDetails = generateInjury(finalResult.date, playerToUpdate);
+                playerToUpdate.injury = injuryDetails;
+                finalResult.injuryEvents?.push({ playerId: injuredPlayerId, ...injuryDetails });
+                
+                if (playerToUpdate.clubId === state.playerClubId) {
+                    const diffTime = Math.abs(injuryDetails.returnDate.getTime() - finalResult.date.getTime());
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
+                    const opponentName = playerToUpdate.clubId === finalResult.homeTeamId ? state.clubs[finalResult.awayTeamId].name : state.clubs[finalResult.homeTeamId].name;
+                    tempState = addNewsItem(tempState, `Player Injured: ${playerToUpdate.name}`, `${playerToUpdate.name} picked up an injury in the match against ${opponentName}.\n\nHe is expected to be out for ${durationText}.\nDiagnosis: ${injuryDetails.type}.`, 'injury_report_player', playerToUpdate.id);
+                }
+            }
+            // --- END NEW INJURY PROCESSING ---
 
             const scheduleIndex = state.schedule.findIndex(m => m.id === finalMatchState.matchId);
             const newSchedule = [...state.schedule];

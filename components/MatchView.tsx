@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { GameState, LivePlayer, Mentality, LiveMatchState, PlayerRole } from '../types';
+import { GameState, LivePlayer, Mentality, LiveMatchState, PlayerRole, PlayerInstructions, LineupPlayer } from '../types';
 import { Action } from '../services/reducerTypes';
 import { runMinute } from '../services/matchEngine';
 import { getUnitRatings } from '../services/simulationService';
 import { ROLE_DEFINITIONS } from '../services/database';
+import PlayerInstructionModal from './PlayerInstructionModal';
+
 
 const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
     return ROLE_DEFINITIONS[role]?.category || 'MID';
@@ -64,20 +66,28 @@ const ForcedSubstitutionModal: React.FC<{
     const { playerOutId, reason } = liveMatch.forcedSubstitution;
     const playerOut = [...playerTeam, ...playerBench].find(p => p.id === playerOutId);
     
+    const handleSubstitute = (playerInId: number) => {
+        dispatch({ type: 'MAKE_SUBSTITUTION', payload: { playerOutId, playerInId }});
+    }
+
+    const handleDismiss = () => {
+        dispatch({ type: 'DISMISS_FORCED_SUBSTITUTION' });
+    }
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
             <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-md text-white p-6">
                 <h2 className={`text-2xl font-bold mb-2 ${reason === 'injury' ? 'text-red-400' : 'text-yellow-400'}`}>
                     {reason === 'injury' ? 'Player Injured!' : 'Player Sent Off!'}
                 </h2>
-                <p className="text-gray-300 mb-4">{playerOut?.name} must leave the pitch. You need to make a tactical change.</p>
+                <p className="text-gray-300 mb-4">{playerOut?.name} ({playerOut?.role}) must leave the pitch. You need to make a tactical change.</p>
                 
-                <h3 className="font-bold mb-2">Substitute with:</h3>
+                <h3 className="font-bold mb-2">Bring On:</h3>
                 <div className="grid grid-cols-2 gap-2 mb-4 max-h-48 overflow-y-auto">
                     {playerBench.map(p => (
                         <button 
                             key={p.id}
-                            onClick={() => dispatch({ type: 'MAKE_SUBSTITUTION', payload: { playerOutId, playerInId: p.id }})}
+                            onClick={() => handleSubstitute(p.id)}
                             disabled={subsMade >= 5}
                             className="bg-gray-700 hover:bg-green-600 p-2 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                             {p.name}
@@ -87,7 +97,7 @@ const ForcedSubstitutionModal: React.FC<{
 
                 <div className="flex flex-col gap-2">
                     <button 
-                        onClick={() => dispatch({ type: 'DISMISS_FORCED_SUBSTITUTION' })}
+                        onClick={handleDismiss}
                         className="w-full bg-gray-600 hover:bg-gray-700 p-2 rounded text-sm">
                         Continue with fewer players
                     </button>
@@ -180,6 +190,36 @@ const PreMatchPreview: React.FC<{ liveMatch: LiveMatchState, gameState: GameStat
     );
 };
 
+const FormationDisplayPitch: React.FC<{
+    lineup: LivePlayer[];
+    teamName: string;
+    teamColor: string;
+    isFlipped: boolean;
+}> = ({ lineup, teamName, teamColor, isFlipped }) => {
+    return (
+        <div className="flex-1 flex flex-col items-center min-w-0">
+            <h3 className="font-bold text-lg mb-2">{teamName}</h3>
+            <div className="relative w-full aspect-[7/10] bg-green-800/50 rounded-lg shadow-inner bg-center bg-no-repeat" style={{ backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' stroke='%2338A169' stroke-width='2' stroke-dasharray='4%2c 8' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e")` }}>
+                {lineup.filter(p => !p.isSentOff && !p.isInjured).map(player => {
+                    const top = isFlipped ? 100 - player.currentPosition.y : player.currentPosition.y;
+                    const left = isFlipped ? 100 - player.currentPosition.x : player.currentPosition.x;
+                    return (
+                        <div key={player.id}
+                            className="absolute -translate-x-1/2 -translate-y-1/2 group"
+                            style={{ top: `${top}%`, left: `${left}%`, transition: 'top 0.5s, left 0.5s' }}>
+                            <div className={`relative w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-lg border-2 ${teamColor}`}>
+                               {player.role.split(' ').map(w => w[0]).join('')}
+                            </div>
+                            <div className="absolute top-full mt-1 text-center text-xs font-semibold whitespace-nowrap bg-black/60 px-1 rounded">
+                               {player.name.split(' ')[1]}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
 
 const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Action> }> = ({ gameState, dispatch }) => {
     const { liveMatch } = gameState;
@@ -190,6 +230,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
     const [playerToSub, setPlayerToSub] = useState<number | null>(null);
     const [simSpeed, setSimSpeed] = useState(1000);
     const [draggedPlayer, setDraggedPlayer] = useState<{ id: number, element: HTMLDivElement } | null>(null);
+    const [instructionModalPlayer, setInstructionModalPlayer] = useState<LivePlayer | null>(null);
 
     useEffect(() => {
         if (liveMatch && !liveMatch.isPaused) {
@@ -208,7 +249,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
     }, [liveMatch?.log, activeTab]);
 
     const handlePlayerMouseDown = (e: React.MouseEvent<HTMLDivElement>, player: LivePlayer) => {
-        if (liveMatch?.isPaused) {
+        if (liveMatch?.isPaused && activeTab === 'tactics') {
             e.preventDefault();
             setDraggedPlayer({ id: player.id, element: e.currentTarget as HTMLDivElement });
         }
@@ -227,7 +268,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
     }, [draggedPlayer]);
 
     const onMouseUp = useCallback((e: MouseEvent) => {
-        if (!draggedPlayer || !pitchRef.current || !liveMatch) return;
+        if (!draggedPlayer || !pitchRef.current || !liveMatch || activeTab !== 'tactics') return;
         const pitchRect = pitchRef.current.getBoundingClientRect();
         
         let x = ((e.clientX - pitchRect.left) / pitchRect.width) * 100;
@@ -249,7 +290,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
             }
         });
         setDraggedPlayer(null);
-    }, [draggedPlayer, dispatch, liveMatch, gameState.playerClubId]);
+    }, [draggedPlayer, dispatch, liveMatch, gameState.playerClubId, activeTab]);
 
     useEffect(() => {
         window.addEventListener('mousemove', onMouseMove);
@@ -259,6 +300,32 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
             window.removeEventListener('mouseup', onMouseUp);
         };
     }, [onMouseMove, onMouseUp]);
+    
+    const handleEditInstructions = (player: LivePlayer) => {
+        if (liveMatch?.isPaused && activeTab === 'tactics') {
+            if (draggedPlayer) return; // Don't open modal if dragging
+            setInstructionModalPlayer(player);
+        }
+    };
+    
+    const handleSaveInstructions = (updatedLineupPlayer: LineupPlayer) => {
+        dispatch({
+            type: 'UPDATE_LIVE_PLAYER_INSTRUCTIONS',
+            payload: {
+                playerId: updatedLineupPlayer.playerId,
+                instructions: updatedLineupPlayer.instructions,
+            }
+        });
+        dispatch({
+            type: 'UPDATE_LIVE_PLAYER_POSITION',
+            payload: {
+                playerId: updatedLineupPlayer.playerId,
+                position: updatedLineupPlayer.position, // Keep position the same
+                role: updatedLineupPlayer.role, // But update role
+            }
+        });
+        setInstructionModalPlayer(null);
+    };
 
     if (!liveMatch) return <div>Loading match...</div>;
 
@@ -272,8 +339,7 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
     const playerBench = playerTeamIsHome ? liveMatch.homeBench : liveMatch.awayBench;
     const opponentBench = playerTeamIsHome ? liveMatch.awayBench : liveMatch.homeBench;
     const playerSubsMade = playerTeamIsHome ? liveMatch.homeSubsMade : liveMatch.awaySubsMade;
-    const playersToRender = activeTab === 'tactics' && liveMatch.isPaused ? playerTeam : [...playerTeam, ...opponentTeam];
-
+    
     const totalPossession = liveMatch.homePossessionMinutes + liveMatch.awayPossessionMinutes;
     const homePossession = totalPossession > 0 ? (liveMatch.homePossessionMinutes / totalPossession) * 100 : 50;
     const awayPossession = totalPossession > 0 ? 100 - homePossession : 50;
@@ -441,7 +507,6 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                                     <h4 className="font-bold text-white mb-2">Bench <span className="text-gray-400 font-normal text-xs">({5-playerSubsMade} left)</span></h4>
                                     {playerBench.map(p => {
                                         const fullPlayer = gameState.players[p.id];
-                                        {/* FIX: Coerce `suspension` (object or null) to a boolean for the `disabled` prop. */}
                                         const isUnavailable = !!fullPlayer.suspension;
                                         return (
                                             <button key={p.id} onClick={() => { if(playerToSub) { dispatch({ type: 'MAKE_SUBSTITUTION', payload: { playerOutId: playerToSub, playerInId: p.id } }); setPlayerToSub(null); } }} disabled={!playerToSub || playerSubsMade >= 5 || isUnavailable} className="w-full text-left p-1.5 rounded mb-1 text-xs bg-gray-700 disabled:opacity-50 relative">
@@ -474,6 +539,13 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
             </div>
         );
     };
+    
+    const lineupPlayerForModal = instructionModalPlayer ? {
+        playerId: instructionModalPlayer.id,
+        position: instructionModalPlayer.currentPosition,
+        role: instructionModalPlayer.role,
+        instructions: instructionModalPlayer.instructions,
+    } : null;
 
     return (
         <div className="h-screen bg-gray-900 text-white flex flex-col p-4 gap-4 font-sans">
@@ -486,6 +558,14 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
                     subsMade={playerSubsMade}
                 />
             )}
+            {instructionModalPlayer && lineupPlayerForModal && (
+                <PlayerInstructionModal
+                    player={gameState.players[instructionModalPlayer.id]}
+                    lineupPlayer={lineupPlayerForModal}
+                    onSave={handleSaveInstructions}
+                    onClose={() => setInstructionModalPlayer(null)}
+                />
+            )}
             <header className="bg-gray-800 rounded-lg p-4 flex items-center justify-between shadow-lg">
                 <div className="text-right w-2/5"><h2 className="text-2xl font-bold">{liveMatch.homeTeamName}</h2></div>
                 <div className="text-center w-1/5">
@@ -496,33 +576,37 @@ const MatchView: React.FC<{ gameState: GameState, dispatch: React.Dispatch<Actio
             </header>
 
             <main className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 overflow-hidden min-h-0">
-                <div className="lg:col-span-2 relative bg-green-800 bg-center bg-no-repeat rounded-lg shadow-inner min-h-0" ref={pitchRef} style={{ backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' stroke='%2338A169' stroke-width='4' stroke-dasharray='6%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e")`}}>
-                    {playersToRender.filter(p => !p.isSentOff && !p.isInjured).map((player) => {
-                        const isPlayerTeam = playerTeam.some(p => p.id === player.id);
-                        const displayPos = {
-                            x: isPlayerTeam ? (playerTeamIsHome ? player.currentPosition.x : 100 - player.currentPosition.x) : (playerTeamIsHome ? 100 - player.currentPosition.x : player.currentPosition.x),
-                            y: isPlayerTeam ? (playerTeamIsHome ? player.currentPosition.y : 100 - player.currentPosition.y) : (playerTeamIsHome ? 100 - player.currentPosition.y : player.currentPosition.y),
-                        };
-
-                        return (
-                            <div key={player.id} 
-                                 className={`absolute -translate-x-1/2 -translate-y-1/2 group transition-all duration-300 ease-in-out ${isPlayerTeam && liveMatch.isPaused ? 'cursor-grab' : 'cursor-default'} ${draggedPlayer?.id === player.id ? 'z-20 scale-125' : 'z-10'}`}
-                                 style={{ top: `${displayPos.y}%`, left: `${displayPos.x}%` }}
-                                 onMouseDown={(e) => isPlayerTeam && handlePlayerMouseDown(e, player)}>
-                               <div className={`relative w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-lg border-2 ${isPlayerTeam ? `border-yellow-400 ${player.stamina > 60 ? 'bg-blue-600' : player.stamina > 30 ? 'bg-yellow-600' : 'bg-red-600'}` : 'border-gray-900 bg-gray-600'}`}>
-                                   {player.role.split(' ').map(w => w[0]).join('')}
-                                   {liveMatch.ballCarrierId === player.id && <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-yellow-300 rounded-full border border-black animate-pulse" />}
-                                   {/* FIX: Corrected property name from `yellowCards` to `yellowCardCount` to match the LivePlayer type definition. */}
-                                   {player.yellowCardCount === 1 && <div className="absolute -top-1 -left-1 w-3 h-4 bg-yellow-400 rounded-sm border border-black" title="Yellow Card" />}
-                                   {player.isSentOff && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full border-2 border-white" />}
-                                   {player.isInjured && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full border-2 border-white flex items-center justify-center font-bold text-white text-xs">✚</div>}
-                               </div>
-                               <div className="absolute top-full mt-1 text-center text-xs font-semibold whitespace-nowrap bg-black/50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                   {player.name.split(' ')[1]}
-                               </div>
-                            </div>
-                        );
-                    })}
+                <div className="lg:col-span-2 relative bg-gray-900/50 rounded-lg shadow-inner min-h-0 p-2" ref={pitchRef}>
+                   {activeTab === 'tactics' && liveMatch.isPaused ? (
+                        <div className="relative w-full h-full bg-green-900 bg-center bg-no-repeat rounded-lg shadow-inner" style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 700 1000'%3e%3c!-- Pitch Outline --%3e%3crect x='2' y='2' width='696' height='996' fill='none' stroke='%231A4731' stroke-width='4'/%3e%3c!-- Halfway Line --%3e%3cline x1='2' y1='500' x2='698' y2='500' stroke='%231A4731' stroke-width='4'/%3e%3c!-- Center Circle --%3e%3ccircle cx='350' cy='500' r='91.5' fill='none' stroke='%231A4731' stroke-width='4'/%3e%3c/svg%3e")`}}>
+                            <h3 className="absolute top-2 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1 rounded-full text-sm font-bold z-20">TACTICS - CLICK TO EDIT, DRAG TO MOVE</h3>
+                            {playerTeam.filter(p => !p.isSentOff && !p.isInjured).map((player) => {
+                                const displayPos = {
+                                    x: playerTeamIsHome ? player.currentPosition.x : 100 - player.currentPosition.x,
+                                    y: playerTeamIsHome ? player.currentPosition.y : 100 - player.currentPosition.y,
+                                };
+                                return (
+                                    <div key={player.id} 
+                                        className={`absolute -translate-x-1/2 -translate-y-1/2 group transition-all duration-300 ease-in-out cursor-grab ${draggedPlayer?.id === player.id ? 'z-20 scale-125' : 'z-10'}`}
+                                        style={{ top: `${displayPos.y}%`, left: `${displayPos.x}%` }}
+                                        onMouseDown={(e) => handlePlayerMouseDown(e, player)}
+                                        onClick={() => handleEditInstructions(player)}>
+                                    <div className={`relative w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-lg border-2 border-yellow-400 ${player.stamina > 60 ? 'bg-blue-600' : player.stamina > 30 ? 'bg-yellow-600' : 'bg-red-600'}`}>
+                                        {player.role.split(' ').map(w => w[0]).join('')}
+                                    </div>
+                                    <div className="absolute top-full mt-1 text-center text-xs font-semibold whitespace-nowrap bg-black/50 px-1 rounded">
+                                        {player.name.split(' ')[1]}
+                                    </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                   ) : (
+                        <div className="flex h-full gap-4">
+                            <FormationDisplayPitch lineup={liveMatch.homeLineup} teamName={liveMatch.homeTeamName} teamColor={'bg-blue-600'} isFlipped={false} />
+                            <FormationDisplayPitch lineup={liveMatch.awayLineup} teamName={liveMatch.awayTeamName} teamColor={'bg-red-600'} isFlipped={true} />
+                        </div>
+                   )}
                 </div>
 
                 <div className="lg:col-span-1 h-full min-h-0">

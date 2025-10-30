@@ -141,7 +141,7 @@ export interface Match {
     homeLineup?: (LineupPlayer | null)[]; // For match report
     awayLineup?: (LineupPlayer | null)[]; // for match report
     disciplinaryEvents?: { playerId: number, type: 'yellow' | 'red' }[];
-    injuryEvents?: { playerId: number, returnDate: Date }[];
+    injuryEvents?: { playerId: number, type: string, returnDate: Date }[];
 }
 
 export interface TransferResult {
@@ -212,6 +212,7 @@ export interface LiveMatchState {
         playerOutId: number;
         reason: 'injury' | 'red_card';
     } | null;
+    injuredPlayerIds: number[];
 }
 
 export interface GameState {

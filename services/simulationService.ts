@@ -1,7 +1,9 @@
 import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats } from '../types';
 import { getRoleCategory } from './database';
+import { generateInjury } from './injuryService';
 
 const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 const getPositionalModifier = (familiarity: number): number => 0.5 + (familiarity / 200);
 
@@ -154,9 +156,8 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
     homeStats.corners = Math.floor(homeStats.shots / 5);
     awayStats.corners = Math.floor(awayStats.shots / 5);
 
-    // Simplified event simulation for cards and injuries in AI matches
+    // Simplified event simulation for cards
     const disciplinaryEvents: { playerId: number, type: 'yellow' | 'red' }[] = [];
-    const injuryEvents: { playerId: number, returnDate: Date }[] = [];
     const yellowCards: Record<number, number> = {};
 
     const totalFouls = homeStats.fouls + awayStats.fouls;
@@ -178,18 +179,27 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
         }
     }
 
-    const injuryChancePerMatch = 0.40; 
-    if (Math.random() < injuryChancePerMatch) {
-        const isHomeInjury = Math.random() < 0.5;
-        const lineup = isHomeInjury ? homeLineup : awayLineup;
-        const playerEntry = pickRandom(lineup.filter(Boolean));
-        if (playerEntry) {
-            const returnDate = new Date(match.date);
-            returnDate.setDate(returnDate.getDate() + Math.floor(Math.random() * 21) + 7); // 7-28 days
-            injuryEvents.push({ playerId: playerEntry.playerId, returnDate });
+    // New Injury Simulation for AI Matches
+    const injuryEvents: { playerId: number, type: string, returnDate: Date }[] = [];
+    const allStarters = [...homeLineup, ...awayLineup].filter(Boolean);
+    const injuredPlayerIds = new Set<number>();
+
+    for (const lineupPlayer of allStarters) {
+        const player = players[lineupPlayer.playerId];
+        if (!player) continue;
+
+        // Base 10% chance per match, modified by fitness. Aims for ~2.2 injuries per match.
+        const playerInjuryChance = 0.10 * (1.3 - (player.attributes.naturalFitness / 100));
+
+        if (Math.random() < playerInjuryChance) {
+            const injury = generateInjury(match.date, player);
+            if (injury && !injuredPlayerIds.has(player.id)) {
+                injuryEvents.push({ playerId: player.id, ...injury });
+                log.push({ minute: randInt(1, 90), type: 'Injury', text: `${player.name} has picked up an injury.` });
+                injuredPlayerIds.add(player.id);
+            }
         }
     }
-
 
     log.sort((a, b) => a.minute - b.minute);
 

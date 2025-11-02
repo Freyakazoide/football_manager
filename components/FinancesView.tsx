@@ -141,8 +141,8 @@ const Sponsorships: React.FC<{ gameState: GameState }> = ({ gameState }) => {
 
 const Loans: React.FC<{ gameState: GameState; dispatch: React.Dispatch<Action> }> = ({ gameState, dispatch }) => {
     const club = gameState.clubs[gameState.playerClubId!];
-    // FIX: Explicitly type the parameter 'b' as 'Bank' to resolve type inference issue.
-    const availableBanks = Object.values(gameState.banks).filter((b: Bank) => club.reputation >= b.minReputation);
+    // FIX: Cast the result of Object.values to Bank[] to ensure proper type inference for `availableBanks`.
+    const availableBanks = (Object.values(gameState.banks) as Bank[]).filter(b => club.reputation >= b.minReputation);
     const activeLoans = gameState.loans.filter(l => l.clubId === club.id);
 
     const [selectedBankId, setSelectedBankId] = useState<number | ''>('');

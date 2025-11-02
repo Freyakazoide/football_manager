@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GameState } from '../types';
+import BoardRequestModal from './BoardRequestModal';
+import { Action } from '../services/reducerTypes';
 
 interface BoardViewProps {
     gameState: GameState;
+    dispatch: React.Dispatch<Action>;
 }
 
 const ConfidenceBar: React.FC<{ confidence: number }> = ({ confidence }) => {
@@ -37,15 +40,29 @@ const ConfidenceBar: React.FC<{ confidence: number }> = ({ confidence }) => {
     );
 };
 
-const BoardView: React.FC<BoardViewProps> = ({ gameState }) => {
+const BoardView: React.FC<BoardViewProps> = ({ gameState, dispatch }) => {
+    const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+
     if (!gameState.playerClubId) return null;
 
     const club = gameState.clubs[gameState.playerClubId];
 
     return (
+        <>
+        {isRequestModalOpen && <BoardRequestModal gameState={gameState} dispatch={dispatch} onClose={() => setIsRequestModalOpen(false)} />}
         <div className="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-white mb-2">Sala da Diretoria</h2>
-            <p className="text-gray-400 mb-6">Uma visão geral do seu relacionamento com a diretoria e os objetivos atuais.</p>
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h2 className="text-3xl font-bold text-white mb-2">Sala da Diretoria</h2>
+                    <p className="text-gray-400">Uma visão geral do seu relacionamento com a diretoria e os objetivos atuais.</p>
+                </div>
+                <button
+                    onClick={() => setIsRequestModalOpen(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-transform duration-200 hover:scale-105"
+                >
+                    Fazer Pedido à Direção
+                </button>
+            </div>
             
             <div className="bg-gray-900/50 p-6 rounded-lg mb-6">
                 <h3 className="text-xl font-semibold text-green-400 mb-4">Confiança no Treinador</h3>
@@ -89,6 +106,7 @@ const BoardView: React.FC<BoardViewProps> = ({ gameState }) => {
                 )}
             </div>
         </div>
+        </>
     );
 };
 

@@ -356,6 +356,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             philosophies.push({ type: 'sign_young_players', description: 'Sign players aged 23 or younger for the first team.', parameters: { maxAge: 23 } });
         }
 
+        const currentDate = new Date(2024, 7, 1);
         clubs[i] = {
             id: i,
             name: `${pickRandom(CITIES)} ${pickRandom(CLUB_NAMES)}`,
@@ -379,6 +380,8 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             philosophies,
             creditScore: 50,
             loanHistory: [],
+            boardRequestCooldowns: {},
+            requestsThisMonth: { month: currentDate.getMonth(), year: currentDate.getFullYear(), count: 0 },
         };
 
         if (competitionId === 1) {

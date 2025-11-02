@@ -208,6 +208,38 @@ export type ClubPhilosophy =
     | { type: 'develop_youth'; description: string; }
     | { type: 'sign_high_reputation'; description: string; parameters: { minReputation: number } };
 
+// --- NEW BOARD REQUESTS ---
+export enum BoardRequestType {
+    INCREASE_TRANSFER_BUDGET = 'Aumentar Orçamento de Transferência',
+    INCREASE_WAGE_BUDGET = 'Aumentar Orçamento de Salários',
+    INVEST_IN_YOUTH_SETUP = 'Investir na Estrutura de Base',
+    UPGRADE_TRAINING_FACILITIES = 'Melhorar Instalações de Treino',
+    UPGRADE_MEDICAL_DEPARTMENT = 'Melhorar Departamento Médico',
+    EXPAND_SCOUTING_NETWORK = 'Expandir Rede de Observação',
+    IMPROVE_PERFORMANCE_ANALYSIS = 'Melhorar Análise de Desempenho',
+    EXPAND_STADIUM_CAPACITY = 'Expandir Capacidade do Estádio',
+    RELAY_PITCH = 'Reformar o Gramado',
+    SEARCH_FOR_AFFILIATE_CLUB = 'Procurar Clube Afiliado',
+    SEARCH_FOR_PARENT_CLUB = 'Procurar Clube Parceiro',
+    REQUEST_MORE_TIME = 'Pedir Mais Tempo',
+    PRAISE_BOARD = 'Elogiar a Diretoria',
+    CHANGE_CLUB_PHILOSOPHY = 'Mudar Filosofia do Clube',
+    IMPROVE_CLUB_REPUTATION = 'Melhorar Reputação do Clube',
+}
+
+export interface BoardRequest {
+    type: BoardRequestType;
+    title: string;
+    description: string;
+    cost: number;
+    cooldownMonths: number;
+    requirements: {
+        minConfidence?: number;
+        minReputation?: number;
+        minBalance?: number;
+    };
+}
+
 export interface Club {
     id: number;
     name: string;
@@ -226,6 +258,9 @@ export interface Club {
     // --- NEW FINANCIAL HISTORY ---
     creditScore: number; // 0-100, affects interest rates
     loanHistory: { bankId: number, outcome: 'paid_off' | 'defaulted', amount: number, date: Date }[];
+    // --- NEW BOARD REQUESTS ---
+    boardRequestCooldowns: Partial<Record<BoardRequestType, Date>>;
+    requestsThisMonth: { month: number, year: number, count: number };
 }
 
 
@@ -280,7 +315,7 @@ export interface NewsItem {
     date: Date;
     headline: string;
     content: string;
-    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed' | 'board_report' | 'loan_update';
+    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed' | 'board_report' | 'loan_update' | 'board_request_response';
     relatedEntityId?: number;
     isRead: boolean;
     matchStatsSummary?: Match;

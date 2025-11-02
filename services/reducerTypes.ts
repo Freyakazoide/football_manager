@@ -1,4 +1,4 @@
-import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType } from '../types';
+import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType, BoardRequestType } from '../types';
 
 export type Action =
     // FIX: Removed 'pressConference' from Omit as it's no longer a property of GameState.
@@ -51,4 +51,6 @@ export type Action =
     // Actions for selling players
     | { type: 'ACCEPT_INCOMING_CLUB_OFFER'; payload: { negotiationId: number } }
     | { type: 'SUBMIT_COUNTER_OFFER'; payload: { negotiationId: number; offer: TransferOffer } }
+    // Board Interaction
+    | { type: 'MAKE_BOARD_REQUEST'; payload: { requestType: BoardRequestType } }
     ;

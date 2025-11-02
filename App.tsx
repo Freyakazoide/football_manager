@@ -251,7 +251,7 @@ const App: React.FC = () => {
             case View.STAFF:
                 return <StaffView gameState={state} dispatch={dispatch} />;
             case View.BOARD:
-                return <BoardView gameState={state} />;
+                return <BoardView gameState={state} dispatch={dispatch} />;
             case View.ACADEMY:
                 return <AcademyView gameState={state} onPromotePlayer={handlePromotePlayer} onPlayerClick={handlePlayerClick} />;
             case View.COMPETITION:

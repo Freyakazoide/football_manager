@@ -1,4 +1,4 @@
-import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType, BoardRequestType, LoanOffer } from '../types';
+import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType, BoardRequestType, LoanOffer, SquadStatus } from '../types';
 
 export type Action =
     // FIX: Removed 'pressConference' from Omit as it's no longer a property of GameState.
@@ -27,6 +27,7 @@ export type Action =
     // Player & Contract Management
     | { type: 'PLAYER_INTERACTION'; payload: { playerId: number; interactionType: 'praise' | 'criticize' | 'promise' } }
     | { type: 'PROMOTE_YOUTH_PLAYER'; payload: { playerId: number } }
+    | { type: 'UPDATE_PLAYER_SQUAD_STATUS'; payload: { playerId: number, squadStatus: SquadStatus } }
     // Training & Scouting
     | { type: 'UPDATE_TRAINING_SETTINGS'; payload: { teamFocus: TeamTrainingFocus, individualFocuses: Record<number, IndividualTrainingFocus> } }
     | { type: 'CREATE_SCOUTING_ASSIGNMENT'; payload: Omit<ScoutingAssignment, 'id' | 'isComplete' | 'reportPlayerIds'> }
@@ -40,6 +41,8 @@ export type Action =
     // Season Logic
     | { type: 'START_NEW_SEASON' }
     // New Transfer Negotiation Actions
+    | { type: 'TOGGLE_PLAYER_TRANSFER_LIST_STATUS'; payload: { playerId: number } }
+    | { type: 'OFFER_PLAYER_TO_CLUBS'; payload: { playerId: number } }
     | { type: 'START_TRANSFER_NEGOTIATION'; payload: { playerId: number } }
     | { type: 'START_LOAN_NEGOTIATION'; payload: { playerId: number } }
     | { type: 'START_RENEWAL_NEGOTIATION'; payload: { playerId: number } }

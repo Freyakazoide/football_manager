@@ -1,6 +1,6 @@
 
 
-import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantManagerAttributes, HeadOfScoutingAttributes, HeadOfPhysiotherapyAttributes, HeadOfPerformanceAttributes, Competition, DepartmentType, Sponsor, SponsorshipDeal, ClubPhilosophy, Bank } from '../types';
+import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantManagerAttributes, HeadOfScoutingAttributes, HeadOfPhysiotherapyAttributes, HeadOfPerformanceAttributes, Competition, DepartmentType, Sponsor, SponsorshipDeal, ClubPhilosophy, Bank, SquadStatus } from '../types';
 import { SPONSOR_DATA } from './sponsors';
 
 const FIRST_NAMES = ['John', 'Paul', 'Mike', 'Leo', 'Chris', 'David', 'Alex', 'Ben', 'Sam', 'Tom', 'Dan', 'Matt'];
@@ -279,6 +279,10 @@ export const generateScheduleForCompetition = (clubsInCompetition: Club[], start
     return schedule;
 };
 
+const getOverallRatingForDB = (attrs: PlayerAttributes): number => {
+    const keyAttrs = attrs.shooting + attrs.passing + attrs.tackling + attrs.dribbling + attrs.pace + attrs.positioning + attrs.workRate + attrs.creativity + attrs.stamina;
+    return keyAttrs / 9;
+};
 
 // FIX: Removed 'pressConference' from the Omit<> type as it is no longer part of the GameState.
 export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData' | 'transferNegotiations' | 'nextNegotiationId'> => {
@@ -507,7 +511,8 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
                 scoutedAttributes: {},
                 scoutedPotentialRange: null,
                 individualTrainingFocus: null,
-                squadStatus: 'senior',
+                squadStatus: 'Rotação' as SquadStatus, // Temporary, will be overwritten
+                isTransferListed: false,
                 interactions: [],
                 attributeChanges: [],
             };
@@ -516,6 +521,17 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             playerIdCounter++;
         }
         
+        clubPlayers.sort((a, b) => getOverallRatingForDB(b.attributes) - getOverallRatingForDB(a.attributes));
+        clubPlayers.forEach((p, index) => {
+            let status: SquadStatus;
+            if (index < 5) status = 'Titular';
+            else if (index < 11) status = 'Rodízio';
+            else if (index < 17) status = 'Rotação';
+            else status = 'Jovem Promessa';
+            players[p.id].squadStatus = status;
+        });
+
+
         // Initial Youth Intake
         const clubRep = clubs[clubId].reputation;
         for (let k = 0; k < randInt(8, 15); k++) {
@@ -557,7 +573,8 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
                 scoutedAttributes: {},
                 scoutedPotentialRange: null,
                 individualTrainingFocus: null,
-                squadStatus: 'youth',
+                squadStatus: 'Base',
+                isTransferListed: false,
                 interactions: [],
                 attributeChanges: [],
             };

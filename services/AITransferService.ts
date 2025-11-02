@@ -1,6 +1,8 @@
 import { GameState, Club, Player, PlayerRole, LineupPlayer, TransferNegotiation, TransferOffer, NewsItem } from '../types';
 import { getRoleCategory } from './database';
 
+const formatCurrency = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
+
 /**
  * Calculates a player's general overall rating based on key attributes.
  * @param player The player object.
@@ -21,6 +23,113 @@ interface TransferProcessingAccumulator {
     nextNegotiationId: number;
     nextNewsId: number;
 }
+
+export const generateOffersForPlayer = (
+    playerId: number,
+    gameState: GameState
+): {
+    newNegotiations: Record<number, TransferNegotiation>;
+    newNews: NewsItem[];
+    nextNegotiationId: number;
+    nextNewsId: number;
+} => {
+    const offeredPlayer = gameState.players[playerId];
+    const sellingClub = gameState.clubs[offeredPlayer.clubId];
+    let currentNegotiationId = gameState.nextNegotiationId;
+    let currentNewsId = gameState.nextNewsId;
+
+    const interestedClubs: Club[] = [];
+
+    // 1. Identify interested clubs
+    for (const club of Object.values(gameState.clubs)) {
+        if (club.id === sellingClub.id) continue; // Can't sell to self
+
+        // Interest Check
+        const clubPlayers = Object.values(gameState.players).filter(p => p.clubId === club.id);
+        const playersInPosition = clubPlayers.filter(p => getRoleCategory(p.naturalPosition) === getRoleCategory(offeredPlayer.naturalPosition));
+        const avgRatingInPosition = playersInPosition.length > 0
+            ? playersInPosition.reduce((sum, p) => sum + getOverallRating(p), 0) / playersInPosition.length
+            : 0;
+        
+        const isUpgrade = getOverallRating(offeredPlayer) > avgRatingInPosition + 2;
+        const isAffordable = offeredPlayer.marketValue < club.transferBudget && offeredPlayer.wage < (club.wageBudget * 0.2); // Simple wage check
+        const reputationMatch = club.reputation > sellingClub.reputation - 20;
+
+        if (isUpgrade && isAffordable && reputationMatch) {
+            interestedClubs.push(club);
+        }
+    }
+
+    const newNegotiations: Record<number, TransferNegotiation> = {};
+    const newNews: NewsItem[] = [];
+
+    if (interestedClubs.length === 0) {
+        newNews.push({
+            id: currentNewsId++,
+            date: new Date(gameState.currentDate),
+            headline: `Sem interesse por ${offeredPlayer.name}`,
+            content: `Apesar de ter sido oferecido a vários clubes, não houve interesse imediato por ${offeredPlayer.name}. Você pode precisar diminuir suas expectativas ou esperar que o interesse surja.`,
+            type: 'transfer_deal_collapsed', // Re-using a type
+            relatedEntityId: offeredPlayer.id,
+            isRead: false
+        });
+    } else {
+        // 2. Generate offers from interested clubs
+        for (const buyingClub of interestedClubs) {
+            // Only 1 in 3 interested clubs actually make an offer to not spam the user
+            if (Math.random() > 0.33) continue;
+
+            const offerFee = Math.round(offeredPlayer.marketValue * (0.8 + Math.random() * 0.3)); // 80% to 110% of value
+            
+            const newNegotiation: TransferNegotiation = {
+                id: currentNegotiationId,
+                playerId: offeredPlayer.id,
+                type: 'transfer',
+                sellingClubId: sellingClub.id,
+                buyingClubId: buyingClub.id,
+                stage: 'club',
+                status: 'player_turn', // It's the user's turn to respond
+                lastOfferBy: 'ai',
+                clubOfferHistory: [{ offer: { fee: offerFee }, by: 'ai' }],
+                agentOfferHistory: [],
+                agreedFee: 0,
+            };
+
+            newNegotiations[currentNegotiationId] = newNegotiation;
+
+            const headline = `Oferta de Transferência por ${offeredPlayer.name}`;
+            const content = `${buyingClub.name} enviou uma oferta de transferência de ${formatCurrency(offerFee)} pelo seu jogador, ${offeredPlayer.name}. Você pode responder a esta oferta na tela de Transferências.`;
+            
+            newNews.push({
+                id: currentNewsId++,
+                date: new Date(gameState.currentDate),
+                headline,
+                content,
+                type: 'transfer_offer_received',
+                relatedEntityId: newNegotiation.id,
+                isRead: false,
+            });
+
+            currentNegotiationId++;
+        }
+        
+        // If after random chance no one made an offer, still send the "no interest" news
+        if (Object.keys(newNegotiations).length === 0) {
+            newNews.push({
+                id: currentNewsId++,
+                date: new Date(gameState.currentDate),
+                headline: `Interesse morno por ${offeredPlayer.name}`,
+                content: `Vários clubes mostraram interesse em ${offeredPlayer.name} depois que ele foi oferecido, mas nenhuma proposta formal foi feita ainda.`,
+                type: 'transfer_deal_collapsed',
+                relatedEntityId: offeredPlayer.id,
+                isRead: false
+            });
+        }
+    }
+
+    return { newNegotiations, newNews, nextNegotiationId: currentNegotiationId, nextNewsId: currentNewsId };
+};
+
 
 const processClubTransferLogic = (
     club: Club,
@@ -63,7 +172,12 @@ const processClubTransferLogic = (
         // New logic: Must be an upgrade in either current ability or potential
         const ratingImprovement = getOverallRating(p) - weakestStarterScore;
         const potentialImprovement = p.potential - weakestStarter!.potential;
-        const valueScore = ratingImprovement + (potentialImprovement / 4); // Potential is a factor
+        let valueScore = ratingImprovement + (potentialImprovement / 4); // Potential is a factor
+        
+        if (p.isTransferListed) {
+            valueScore += 5; // Significant bonus to make them attractive
+        }
+        
         if (valueScore < 1) return false; // Must be at least a minor upgrade in ability or potential
 
         const sellingClub = gameState.clubs[p.clubId];
@@ -76,8 +190,12 @@ const processClubTransferLogic = (
 
     if (potentialTargets.length === 0) return acc;
 
-    // Pick the best value target (highest rating for the price)
-    potentialTargets.sort((a, b) => (getOverallRating(b) / b.marketValue) - (getOverallRating(a) / a.marketValue));
+    // Pick the best value target (highest rating for the price, with bonus for being listed)
+    potentialTargets.sort((a, b) => {
+        const scoreA = (getOverallRating(a) / a.marketValue) * (a.isTransferListed ? 1.5 : 1);
+        const scoreB = (getOverallRating(b) / b.marketValue) * (b.isTransferListed ? 1.5 : 1);
+        return scoreB - scoreA;
+    });
     const target = potentialTargets[0];
 
     // 3. Initiate the transfer negotiation

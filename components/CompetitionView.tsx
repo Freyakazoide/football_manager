@@ -49,7 +49,10 @@ const PlayerStatsView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
             if (stat === 'yellowCards') {
                 return b.player.seasonYellowCards - a.player.seasonYellowCards;
             }
-            return b.seasonStats[stat as keyof PlayerSeasonStats] - a.seasonStats[stat as keyof PlayerSeasonStats];
+            // FIX: Explicitly cast 'stat' to a keyof PlayerSeasonStats that is known to be numeric,
+            // after handling the special string-only cases ('avgRating', 'yellowCards'), to resolve the arithmetic operation error.
+            const numericStat = stat as Exclude<StatCategory, 'avgRating' | 'yellowCards'>;
+            return b.seasonStats[numericStat] - a.seasonStats[numericStat];
         }).slice(0, 20);
     }, [playersWithStats, stat]);
 

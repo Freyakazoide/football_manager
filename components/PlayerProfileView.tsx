@@ -1,7 +1,7 @@
 
 
 import React, { useState, useMemo } from 'react';
-import { GameState, Player, PlayerAttributes, PlayerRole } from '../types';
+import { GameState, Player, PlayerAttributes, PlayerRole, SquadStatus } from '../types';
 import { Action } from '../services/reducerTypes';
 import { ROLE_TO_POSITION_MAP } from '../services/database';
 
@@ -237,6 +237,26 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                         <div className="text-sm space-y-1">
                             <p>Salário: <span className="font-semibold">{formatCurrency(player.wage)}/sem</span></p>
                             <p>Expira em: <span className="font-semibold">{player.contractExpires.toLocaleDateString()}</span></p>
+                             {!isTransferTarget && player.squadStatus !== 'Base' && (
+                                <div className="pt-2">
+                                    <label htmlFor="squad-status" className="block text-gray-400 text-xs font-bold mb-1">Status no Elenco</label>
+                                    <select 
+                                        id="squad-status"
+                                        value={player.squadStatus} 
+                                        onChange={e => dispatch({ 
+                                            type: 'UPDATE_PLAYER_SQUAD_STATUS', 
+                                            payload: { playerId: player.id, squadStatus: e.target.value as SquadStatus } 
+                                        })}
+                                        className="w-full bg-gray-700 text-white p-2 rounded text-sm"
+                                    >
+                                        <option value="Titular">Titular</option>
+                                        <option value="Rodízio">Rodízio</option>
+                                        <option value="Rotação">Rotação</option>
+                                        <option value="Jovem Promessa">Jovem Promessa</option>
+                                        <option value="Excedente">Excedente</option>
+                                    </select>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <div>
@@ -263,7 +283,7 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                         </button>
                     </div>
                     )}
-                    {!isTransferTarget && (
+                    {!isTransferTarget && player.squadStatus !== 'Base' && (
                         <>
                             <div className="bg-gray-700 p-4 rounded-lg">
                                 <h3 className="text-lg font-semibold text-green-400 mb-2">Renovação de Contrato</h3>

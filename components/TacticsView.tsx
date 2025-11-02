@@ -87,7 +87,7 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch, isPreMat
         const allPlayers = (Object.values(gameState.players) as Player[]);
         const reserves = allPlayers.filter(p =>
             p.clubId === gameState.playerClubId &&
-            p.squadStatus === 'senior' &&
+            p.squadStatus !== 'Base' &&
             !lineupPlayerIds.has(p.id) &&
             !benchPlayerIds.has(p.id) &&
             !p.injury && !p.suspension
@@ -112,7 +112,7 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch, isPreMat
 
         const lineupSlots = formation.positions.map(p => ({ position: { x: p.x, y: p.y }, role: p.role }));
         const allPlayers = (Object.values(gameState.players) as Player[])
-            .filter(p => p.clubId === gameState.playerClubId && p.squadStatus === 'senior' && !p.injury && !p.suspension);
+            .filter(p => p.clubId === gameState.playerClubId && p.squadStatus !== 'Base' && !p.injury && !p.suspension);
         const { lineup, bench } = suggestSquadSelection(lineupSlots, allPlayers, assistant?.attributes);
         setTactics(prev => ({ ...prev, lineup, bench }));
     };

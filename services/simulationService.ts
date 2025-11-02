@@ -1,4 +1,4 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes, SponsorshipDeal, NewsItem, Loan } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes, SponsorshipDeal, NewsItem, Loan, SquadStatus } from '../types';
 import { getRoleCategory, ALL_ROLES } from './database';
 import { generateInjury } from './injuryService';
 import { getSeason } from './playerStatsService';
@@ -423,7 +423,7 @@ export const generateRegens = (clubs: Record<number, Club>, retiredPlayerCount: 
             suspension: null,
             seasonYellowCards: 0,
             individualTrainingFocus: null,
-            squadStatus: 'youth',
+            squadStatus: 'Base',
             interactions: [],
             attributeChanges: [],
         };

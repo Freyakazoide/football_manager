@@ -1,4 +1,4 @@
-import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType, SponsorshipDeal, Loan, TransferOffer, LoanOffer, BoardRequestType } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType, SponsorshipDeal, Loan, TransferOffer, LoanOffer, BoardRequestType, SquadStatus, ContractOffer } from '../types';
 import { Action } from './reducerTypes';
 import { runMatch, processPlayerDevelopment, processPlayerAging, processMonthlyFinances, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens, getUnitRatings, processPhilosophyReview } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
@@ -7,7 +7,7 @@ import { generateAITactics } from './aiTacticsService';
 import { updatePlayerStatsFromMatchResult, getSeason } from './playerStatsService';
 import { generateInjury } from './injuryService';
 import { getRoleCategory, generateScheduleForCompetition } from './database';
-import { processAITransfers } from './AITransferService';
+import { processAITransfers, generateOffersForPlayer } from './AITransferService';
 import { BOARD_REQUESTS } from './boardRequests';
 
 export const initialState: GameState = {
@@ -106,6 +106,101 @@ const processNegotiations = (state: GameState): GameState => {
     return newState;
 }
 
+const processSquadStatusSatisfaction = (state: GameState): GameState => {
+    if (!state.playerClubId) return state;
+
+    const lastMonth = new Date(state.currentDate);
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+    const matchesLastMonth = state.schedule.filter(m => 
+        (m.homeTeamId === state.playerClubId || m.awayTeamId === state.playerClubId) &&
+        m.homeScore !== undefined &&
+        new Date(m.date) >= lastMonth &&
+        new Date(m.date) < state.currentDate
+    );
+
+    if (matchesLastMonth.length < 2) return state; // Don't run on too few matches
+
+    const newPlayers = JSON.parse(JSON.stringify(state.players));
+    let newState = { ...state };
+    let playerChanged = false;
+
+    Object.values(newPlayers).forEach((p: Player) => {
+        if (p.clubId !== state.playerClubId || p.squadStatus === 'Base' || p.squadStatus === 'Excedente') {
+            return;
+        }
+
+        let starts = 0;
+        let subIns = 0;
+
+        matchesLastMonth.forEach(match => {
+            const playerTeamLineup = match.homeTeamId === p.clubId ? match.homeLineup : match.awayLineup;
+            if (playerTeamLineup?.some(lp => lp?.playerId === p.id)) {
+                starts++;
+            }
+            if (match.log?.some(event => event.type === 'Sub' && event.primaryPlayerId === p.id)) {
+                subIns++;
+            }
+        });
+        
+        const appearances = starts + subIns;
+        const appearanceRatio = appearances / matchesLastMonth.length;
+        const startRatio = starts / matchesLastMonth.length;
+        
+        const expectations: Record<string, {startRatio?: number, appearanceRatio?: number, msg: string}> = {
+            'Titular': { startRatio: 0.70, msg: "espera ser titular na maioria dos jogos" },
+            'Rodízio': { appearanceRatio: 0.50, msg: "espera jogar regularmente" },
+            'Rotação': { appearanceRatio: 0.25, msg: "espera ter algumas oportunidades" },
+            'Jovem Promessa': { appearanceRatio: 0.10, msg: "está ansioso por algumas chances no time principal" },
+        };
+
+        let satisfactionChange = 0;
+        const status = p.squadStatus as Exclude<SquadStatus, 'Base' | 'Excedente'>;
+        const expectation = expectations[status];
+
+        if (expectation) {
+            if (expectation.startRatio !== undefined) {
+                if (startRatio < expectation.startRatio) satisfactionChange = -15;
+                else satisfactionChange = 3;
+            } else if (expectation.appearanceRatio !== undefined) {
+                if (appearanceRatio < expectation.appearanceRatio) {
+                     if (status === 'Rodízio') satisfactionChange = -10;
+                     else if (status === 'Rotação') satisfactionChange = -5;
+                     else if (status === 'Jovem Promessa' && p.age < 23) satisfactionChange = -3;
+                } else {
+                    satisfactionChange = 3;
+                }
+            }
+        }
+        
+        if (p.injury || p.suspension) {
+            const unavailableDate = p.injury?.returnDate || p.suspension?.returnDate;
+            if (unavailableDate && new Date(unavailableDate) > lastMonth) {
+                satisfactionChange = 0;
+            }
+        }
+
+
+        if (satisfactionChange !== 0) {
+            const playerToUpdate = newPlayers[p.id];
+            playerToUpdate.satisfaction = Math.max(0, Math.min(100, playerToUpdate.satisfaction + satisfactionChange));
+            playerToUpdate.morale = Math.max(0, Math.min(100, playerToUpdate.morale + Math.round(satisfactionChange / 2)));
+            playerChanged = true;
+
+            if (satisfactionChange < -5) {
+                const expectationMsg = expectations[p.squadStatus as keyof typeof expectations].msg;
+                newState = addNewsItem(newState, `Jogador Insatisfeito: ${p.name}`, `${p.name} está infeliz com seu tempo de jogo no último mês. Com o status de '${p.squadStatus}', ele ${expectationMsg}.`, 'promise_broken', p.id);
+            }
+        }
+    });
+
+    if (playerChanged) {
+        newState.players = rehydratePlayers(newPlayers);
+    }
+    
+    return newState;
+};
+
 const handleMonthlyUpdates = (state: GameState): GameState => {
     let newState = { ...state };
     
@@ -148,7 +243,10 @@ const handleMonthlyUpdates = (state: GameState): GameState => {
     const financialUpdates = processMonthlyFinances(newState);
     newState = { ...newState, ...financialUpdates };
 
-    // 4. Handle yearly aging
+    // 4. Process Squad Status Satisfaction
+    newState = processSquadStatusSatisfaction(newState);
+
+    // 5. Handle yearly aging
     if (newState.currentDate.getMonth() === 0) { // New year
         const { players } = processPlayerAging(newState.players);
         newState.players = players;
@@ -666,7 +764,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
         case 'PROMOTE_YOUTH_PLAYER': {
             const { playerId } = action.payload;
             const player = state.players[playerId];
-            if (!player || player.clubId !== state.playerClubId || player.squadStatus !== 'youth') {
+            if (!player || player.clubId !== state.playerClubId || player.squadStatus !== 'Base') {
                 return state;
             }
             
@@ -674,7 +772,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 ...state.players,
                 [playerId]: {
                     ...player,
-                    squadStatus: 'senior' as const,
+                    squadStatus: 'Jovem Promessa' as const,
                 }
             };
 
@@ -682,6 +780,23 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const newState = addNewsItem(state, 'Youth Prospect Promoted', content, 'youth_player_promoted', playerId);
 
             return { ...newState, players: newPlayers };
+        }
+        case 'UPDATE_PLAYER_SQUAD_STATUS': {
+            const { playerId, squadStatus } = action.payload;
+            const player = state.players[playerId];
+            if (!player || player.clubId !== state.playerClubId) {
+                return state;
+            }
+            return {
+                ...state,
+                players: {
+                    ...state.players,
+                    [playerId]: {
+                        ...player,
+                        squadStatus,
+                    },
+                },
+            };
         }
         case 'UPDATE_TRAINING_SETTINGS': {
             if (!state.playerClubId) return state;
@@ -971,6 +1086,35 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             return newState;
         }
         // --- NEW TRANSFER SYSTEM ---
+        case 'TOGGLE_PLAYER_TRANSFER_LIST_STATUS': {
+            const { playerId } = action.payload;
+            const player = state.players[playerId];
+            if (!player || player.clubId !== state.playerClubId) {
+                return state;
+            }
+            return {
+                ...state,
+                players: {
+                    ...state.players,
+                    [playerId]: {
+                        ...player,
+                        isTransferListed: !player.isTransferListed,
+                    },
+                },
+            };
+        }
+        case 'OFFER_PLAYER_TO_CLUBS': {
+            const { playerId } = action.payload;
+            const { newNegotiations, newNews, nextNegotiationId, nextNewsId } = generateOffersForPlayer(playerId, state);
+            
+            return {
+                ...state,
+                transferNegotiations: { ...state.transferNegotiations, ...newNegotiations },
+                news: [...newNews, ...state.news],
+                nextNegotiationId,
+                nextNewsId,
+            };
+        }
         case 'START_TRANSFER_NEGOTIATION': {
             const { playerId } = action.payload;
             const player = state.players[playerId];
@@ -1154,8 +1298,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 player.lastRenewalDate = new Date(state.currentDate);
                 player.satisfaction = Math.min(100, player.satisfaction + 20);
                 player.morale = Math.min(100, player.morale + 15);
-                if (player.squadStatus === 'youth') {
-                    player.squadStatus = 'senior';
+                if (player.squadStatus === 'Base') {
+                    player.squadStatus = 'Jovem Promessa';
                 }
             } else { // It's a new signing
                  const newExpiryDate = new Date(state.currentDate);
@@ -1193,6 +1337,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             if (!negotiation || negotiation.status !== 'ai_turn') return state;
 
             const player = state.players[negotiation.playerId];
+            const buyingClub = state.clubs[negotiation.buyingClubId];
             const newNegotiations = { ...state.transferNegotiations };
             const currentNeg = { ...negotiation };
             
@@ -1341,8 +1486,18 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     const lastOffer = currentNeg.agentOfferHistory[currentNeg.agentOfferHistory.length - 1].offer;
                     const expectedWage = player.marketValue / 100;
                     const wageRatio = lastOffer.wage / expectedWage;
-                    const acceptanceChance = Math.max(0.1, Math.min(0.95, (wageRatio - 0.9) * 2));
                     
+                    let acceptanceChance = Math.max(0.1, Math.min(0.95, (wageRatio - 0.9) * 2));
+
+                    // Factor in new clauses for acceptance
+                    if (lastOffer.appearanceBonus) acceptanceChance += 0.03;
+                    if (lastOffer.goalBonus) acceptanceChance += 0.03;
+                    if (lastOffer.loyaltyBonus) acceptanceChance += 0.05;
+                    if (lastOffer.leagueTitleBonus) acceptanceChance += 0.04;
+                    if (lastOffer.annualSalaryIncrease) acceptanceChance += 0.05;
+                    if (lastOffer.playerExtensionOption) acceptanceChance += 0.04;
+                    if (lastOffer.clubExtensionOption) acceptanceChance -= 0.03;
+
                     if (Math.random() < acceptanceChance) {
                         // Player accepts player's contract offer
                         return gameReducer(state, { type: 'ACCEPT_AGENT_COUNTER', payload: { negotiationId } });
@@ -1351,13 +1506,23 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         // Counter agent offer
                         const wageMultiplier = 1.05 + Math.random() * 0.15;
                         const counterWage = Math.round((Math.max(lastOffer.wage, expectedWage) * wageMultiplier) / 100) * 100;
-                        const counterOffer = {
+                        const counterOffer: ContractOffer = {
                             wage: counterWage,
                             signingBonus: Math.max(lastOffer.signingBonus, player.marketValue * 0.05),
                             goalBonus: lastOffer.goalBonus,
-                            releaseClause: lastOffer.releaseClause,
                             durationYears: lastOffer.durationYears,
                         };
+                        // AI demands clauses based on player/club status
+                        if (player.potential > 85 && Math.random() < 0.25) {
+                            counterOffer.loyaltyBonus = Math.round(player.marketValue * 0.1);
+                        }
+                        if (player.age < 22 && Math.random() < 0.3) {
+                            counterOffer.annualSalaryIncrease = 10; // 10%
+                        }
+                        if (buyingClub.reputation < 60 && Math.random() < 0.4) {
+                            counterOffer.relegationReleaseClause = Math.round(player.marketValue * 0.75);
+                        }
+
                         currentNeg.agentOfferHistory.push({ offer: counterOffer, by: 'ai' });
                         currentNeg.status = 'player_turn';
                         currentNeg.lastOfferBy = 'ai';

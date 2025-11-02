@@ -13,7 +13,8 @@ const AcademyView: React.FC<AcademyViewProps> = ({ gameState, onPromotePlayer, o
 
     const youthPlayers = useMemo(() =>
         (Object.values(gameState.players) as Player[])
-            .filter(p => p.clubId === playerClubId && p.squadStatus === 'youth')
+            // FIX: The comparison 'squadStatus === 'youth'' is invalid because 'youth' is not a valid SquadStatus. Changed to 'Base' to correctly filter for academy players.
+            .filter(p => p.clubId === playerClubId && p.squadStatus === 'Base')
             .sort((a, b) => b.potential - a.potential)
     , [gameState.players, playerClubId]);
     

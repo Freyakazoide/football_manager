@@ -276,7 +276,12 @@ const App: React.FC = () => {
             case View.FINANCES:
                 return <FinancesView gameState={state} dispatch={dispatch} />;
             case View.TRANSFERS:
-                return <TransfersView gameState={state} onPlayerClick={handlePlayerClick} onOpenNegotiation={handleOpenNegotiation} />;
+                return <TransfersView 
+                    gameState={state}
+                    dispatch={dispatch}
+                    onPlayerClick={handlePlayerClick} 
+                    onOpenNegotiation={handleOpenNegotiation} 
+                />;
             case View.NEWS:
                 return <NewsView gameState={state} dispatch={dispatch} />;
             case View.TRAINING:

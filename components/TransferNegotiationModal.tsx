@@ -33,7 +33,8 @@ const BuyingClubNegotiation: React.FC<{
         dispatch({ type: 'ACCEPT_CLUB_COUNTER', payload: { negotiationId: negotiation.id } });
     };
 
-    const lastAiOffer = negotiation.lastOfferBy === 'ai' ? negotiation.clubOfferHistory.findLast(o => o.by === 'ai')?.offer as TransferOffer | undefined : null;
+    // FIX: Replaced findLast with slice().reverse().find() for broader compatibility.
+    const lastAiOffer = negotiation.lastOfferBy === 'ai' ? negotiation.clubOfferHistory.slice().reverse().find(o => o.by === 'ai')?.offer as TransferOffer | undefined : null;
 
     return (
         <div>
@@ -70,8 +71,9 @@ const BuyingLoanNegotiation: React.FC<{
     dispatch: React.Dispatch<Action>;
     balance: number;
 }> = ({ negotiation, player, dispatch, balance }) => {
+    // FIX: Replaced findLast with slice().reverse().find() for broader compatibility.
     const lastAiOffer = negotiation.lastOfferBy === 'ai' 
-        ? negotiation.clubOfferHistory.findLast(o => o.by === 'ai')?.offer as LoanOffer | undefined 
+        ? negotiation.clubOfferHistory.slice().reverse().find(o => o.by === 'ai')?.offer as LoanOffer | undefined 
         : undefined;
 
     const [loanFee, setLoanFee] = useState(lastAiOffer?.loanFee ?? Math.round(player.marketValue * 0.1));
@@ -243,12 +245,31 @@ const AgentNegotiation: React.FC<{
 }> = ({ negotiation, player, dispatch }) => {
     const [wage, setWage] = useState(Math.round(player.wage * 1.1));
     const [signingBonus, setSigningBonus] = useState(Math.round(player.marketValue * 0.05));
-    const [goalBonus, setGoalBonus] = useState(0);
-    const [releaseClause, setReleaseClause] = useState(0);
     const [duration, setDuration] = useState(3);
-
+    const [releaseClause, setReleaseClause] = useState(0);
+    
+    // New Clauses State
+    const [appearanceBonus, setAppearanceBonus] = useState(0);
+    const [goalBonus, setGoalBonus] = useState(0);
+    const [cleanSheetBonus, setCleanSheetBonus] = useState(0);
+    const [leagueTitleBonus, setLeagueTitleBonus] = useState(0);
+    const [loyaltyBonus, setLoyaltyBonus] = useState(0);
+    const [annualSalaryIncrease, setAnnualSalaryIncrease] = useState(0);
+    const [relegationReleaseClause, setRelegationReleaseClause] = useState(0);
+    
     const handleSubmitOffer = () => {
-        dispatch({ type: 'SUBMIT_AGENT_OFFER', payload: { negotiationId: negotiation.id, offer: { wage, signingBonus, goalBonus, releaseClause: releaseClause > 0 ? releaseClause : undefined, durationYears: duration } } });
+        const offer: ContractOffer = {
+            wage, signingBonus, durationYears: duration,
+            goalBonus: goalBonus > 0 ? goalBonus : undefined,
+            releaseClause: releaseClause > 0 ? releaseClause : undefined,
+            appearanceBonus: appearanceBonus > 0 ? appearanceBonus : undefined,
+            cleanSheetBonus: cleanSheetBonus > 0 ? cleanSheetBonus : undefined,
+            leagueTitleBonus: leagueTitleBonus > 0 ? leagueTitleBonus : undefined,
+            loyaltyBonus: loyaltyBonus > 0 ? loyaltyBonus : undefined,
+            annualSalaryIncrease: annualSalaryIncrease > 0 ? annualSalaryIncrease : undefined,
+            relegationReleaseClause: relegationReleaseClause > 0 ? relegationReleaseClause : undefined,
+        };
+        dispatch({ type: 'SUBMIT_AGENT_OFFER', payload: { negotiationId: negotiation.id, offer }});
     };
 
     const handleAcceptCounter = () => {
@@ -261,45 +282,73 @@ const AgentNegotiation: React.FC<{
         <div>
             {lastAiOffer && (
                 <div className="bg-yellow-900/50 p-4 rounded-lg mb-4 border border-yellow-600">
-                    <h4 className="font-bold text-yellow-300">Agent Demands!</h4>
-                    <p>Wage: <span className="font-mono">{formatCurrency(lastAiOffer.wage)}/wk</span></p>
-                    <p>Signing Bonus: <span className="font-mono">{formatCurrency(lastAiOffer.signingBonus)}</span></p>
-                    <p>Duration: <span className="font-mono">{lastAiOffer.durationYears} Years</span></p>
+                    <h4 className="font-bold text-yellow-300">Exigências do Agente!</h4>
+                    <p>Salário: <span className="font-mono">{formatCurrency(lastAiOffer.wage)}/sem</span></p>
+                    <p>Bônus de Assinatura: <span className="font-mono">{formatCurrency(lastAiOffer.signingBonus)}</span></p>
+                    <p>Duração: <span className="font-mono">{lastAiOffer.durationYears} Anos</span></p>
+                    {lastAiOffer.loyaltyBonus && <p>Bônus de Lealdade: <span className="font-mono">{formatCurrency(lastAiOffer.loyaltyBonus)}</span></p>}
+                    {lastAiOffer.annualSalaryIncrease && <p>Aumento Anual: <span className="font-mono">{lastAiOffer.annualSalaryIncrease}%</span></p>}
+                    {lastAiOffer.relegationReleaseClause && <p>Cláusula de Rebaixamento: <span className="font-mono">{formatCurrency(lastAiOffer.relegationReleaseClause)}</span></p>}
                     <button onClick={handleAcceptCounter} className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded">
-                        Accept Terms
+                        Aceitar Termos
                     </button>
                 </div>
             )}
              <div className="space-y-3">
-                <div>
-                    <label className="block text-sm font-bold text-gray-300 mb-1">Weekly Wage</label>
-                    <input type="number" step="100" value={wage} onChange={e => setWage(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
-                </div>
-                <div>
-                    <label className="block text-sm font-bold text-gray-300 mb-1">Signing Bonus</label>
-                    <input type="number" step="1000" value={signingBonus} onChange={e => setSigningBonus(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-300 mb-1">Salário Semanal</label>
+                        <input type="number" step="100" value={wage} onChange={e => setWage(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
+                    </div>
+                     <div>
+                        <label className="block text-sm font-bold text-gray-300 mb-1">Bônus de Assinatura</label>
+                        <input type="number" step="1000" value={signingBonus} onChange={e => setSigningBonus(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
+                    </div>
+                     <div>
+                        <label className="block text-sm font-bold text-gray-300 mb-1">Duração (Anos)</label>
+                        <select value={duration} onChange={e => setDuration(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded">
+                            <option value={1}>1</option><option value={2}>2</option><option value={3}>3</option><option value={4}>4</option><option value={5}>5</option>
+                        </select>
+                    </div>
                 </div>
                  <div>
-                    <label className="block text-sm font-bold text-gray-300 mb-1">Goal Bonus</label>
-                    <input type="number" step="100" value={goalBonus} onChange={e => setGoalBonus(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
-                </div>
-                 <div>
-                    <label className="block text-sm font-bold text-gray-300 mb-1">Release Clause (Optional)</label>
+                    <label className="block text-sm font-bold text-gray-300 mb-1">Cláusula de Rescisão (Opcional)</label>
                     <input type="number" step="10000" value={releaseClause} onChange={e => setReleaseClause(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
                 </div>
-                <div>
-                    <label className="block text-sm font-bold text-gray-300 mb-1">Contract Duration (Years)</label>
-                    <select value={duration} onChange={e => setDuration(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded">
-                        <option value={1}>1</option>
-                        <option value={2}>2</option>
-                        <option value={3}>3</option>
-                        <option value={4}>4</option>
-                        <option value={5}>5</option>
-                    </select>
-                </div>
+
+                <details className="pt-2">
+                    <summary className="cursor-pointer text-green-400 font-semibold">Cláusulas Adicionais</summary>
+                    <div className="p-4 mt-2 bg-gray-900/50 rounded-lg space-y-4">
+                        {/* Bônus de Desempenho */}
+                        <div>
+                            <h5 className="font-bold text-gray-400 text-sm mb-2">Bônus de Desempenho (por evento)</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div><label className="block text-xs font-bold text-gray-300 mb-1">Por Jogo Disputado</label><input type="number" step="100" value={appearanceBonus} onChange={e => setAppearanceBonus(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" /></div>
+                                <div><label className="block text-xs font-bold text-gray-300 mb-1">Por Gol Marcado</label><input type="number" step="100" value={goalBonus} onChange={e => setGoalBonus(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" /></div>
+                                <div><label className="block text-xs font-bold text-gray-300 mb-1">Por Jogo sem Sofrer Gol</label><input type="number" step="100" value={cleanSheetBonus} onChange={e => setCleanSheetBonus(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" /></div>
+                            </div>
+                        </div>
+                        {/* Cláusulas Contratuais */}
+                        <div>
+                             <h5 className="font-bold text-gray-400 text-sm mb-2">Cláusulas Contratuais</h5>
+                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div><label className="block text-xs font-bold text-gray-300 mb-1">Bônus de Lealdade</label><input type="number" step="10000" value={loyaltyBonus} onChange={e => setLoyaltyBonus(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" /></div>
+                                <div><label className="block text-xs font-bold text-gray-300 mb-1">Aumento Salarial Anual (%)</label><input type="number" step="1" value={annualSalaryIncrease} onChange={e => setAnnualSalaryIncrease(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" /></div>
+                                <div><label className="block text-xs font-bold text-gray-300 mb-1">Cláusula de Rebaixamento</label><input type="number" step="10000" value={relegationReleaseClause} onChange={e => setRelegationReleaseClause(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" /></div>
+                             </div>
+                        </div>
+                         {/* Bônus de Conquista */}
+                         <div>
+                            <h5 className="font-bold text-gray-400 text-sm mb-2">Bônus de Conquista (fim de temporada)</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div><label className="block text-xs font-bold text-gray-300 mb-1">Por Título da Liga</label><input type="number" step="10000" value={leagueTitleBonus} onChange={e => setLeagueTitleBonus(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" /></div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
             </div>
             <button onClick={handleSubmitOffer} className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded">
-                Propose Contract
+                Propor Contrato
             </button>
         </div>
     );

@@ -1,7 +1,60 @@
 import { Player } from '../types';
 
 const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+const pickRandom = <T extends { likelihood: number }>(arr: T[]): T => {
+    const totalLikelihood = arr.reduce((sum, item) => sum + item.likelihood, 0);
+    let randomPoint = Math.random() * totalLikelihood;
+    for (const item of arr) {
+        if (randomPoint < item.likelihood) {
+            return item;
+        }
+        randomPoint -= item.likelihood;
+    }
+    // Fallback in case of floating point inaccuracies
+    return arr[arr.length - 1];
+};
+
+interface InjuryDefinition {
+    type: string;
+    minDays: number;
+    maxDays: number;
+    likelihood: number; // A weight for this specific injury within its category
+}
+
+// All injury types in Portuguese
+const MUSCULAR_INJURIES: InjuryDefinition[] = [
+    { type: 'Estiramento no Posterior da Coxa (Grau 1)', minDays: 7, maxDays: 21, likelihood: 30 },
+    { type: 'Lesão no Posterior da Coxa (Grau 2)', minDays: 28, maxDays: 56, likelihood: 10 },
+    { type: 'Estiramento no Adutor (Grau 1)', minDays: 10, maxDays: 25, likelihood: 25 },
+    { type: 'Lesão no Adutor (Grau 2)', minDays: 30, maxDays: 60, likelihood: 8 },
+    { type: 'Estiramento na Panturrilha (Grau 1)', minDays: 7, maxDays: 18, likelihood: 15 },
+    { type: 'Lesão na Panturrilha (Grau 2)', minDays: 25, maxDays: 50, likelihood: 5 },
+    { type: 'Estiramento no Quadríceps', minDays: 14, maxDays: 28, likelihood: 7 },
+];
+
+const JOINT_LIGAMENT_INJURIES: InjuryDefinition[] = [
+    { type: 'Tornozelo Torcido (Leve)', minDays: 7, maxDays: 14, likelihood: 40 },
+    { type: 'Entorse de Tornozelo (Moderada)', minDays: 21, maxDays: 42, likelihood: 25 },
+    { type: 'Lesão nos Ligamentos do Tornozelo', minDays: 60, maxDays: 90, likelihood: 5 },
+    { type: 'Entorse de Joelho (Leve)', minDays: 14, maxDays: 28, likelihood: 20 },
+    { type: 'Lesão no Ligamento Colateral Medial (LCM)', minDays: 40, maxDays: 70, likelihood: 10 },
+];
+
+const IMPACT_INJURIES: InjuryDefinition[] = [
+    { type: 'Pancada Forte na Coxa', minDays: 2, maxDays: 5, likelihood: 50 },
+    { type: 'Costelas Machucadas', minDays: 14, maxDays: 28, likelihood: 30 },
+    { type: 'Fratura no Dedo do Pé', minDays: 25, maxDays: 40, likelihood: 20 },
+    { type: 'Concussão Leve', minDays: 7, maxDays: 14, likelihood: 10 },
+];
+
+const SEVERE_INJURIES: InjuryDefinition[] = [
+    { type: 'Rompimento do Ligamento Cruzado Anterior (LCA)', minDays: 180, maxDays: 270, likelihood: 30 },
+    { type: 'Fratura na Perna (Tíbia/Fíbula)', minDays: 120, maxDays: 180, likelihood: 25 },
+    { type: 'Lesão no Menisco', minDays: 60, maxDays: 120, likelihood: 20 },
+    { type: 'Ruptura do Tendão de Aquiles', minDays: 150, maxDays: 240, likelihood: 15 },
+    { type: 'Fratura no Metatarso', minDays: 50, maxDays: 80, likelihood: 10 },
+];
+
 
 /**
  * Generates a realistic injury with type and duration based on real-world football data.
@@ -11,62 +64,35 @@ const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.lengt
  * @returns An object with the injury type and the expected return date.
  */
 export const generateInjury = (currentDate: Date, player: Player) => {
-    const injuryRoll = Math.random();
-    let injuryType: string;
-    let durationDays: number;
+    const injuryCategoryRoll = Math.random();
+    let injuryPool: InjuryDefinition[];
 
-    const returnDate = new Date(currentDate);
+    // Likelihoods for each category
+    const muscularChance = 0.60;
+    const jointChance = 0.25;
+    const impactChance = 0.10;
+    // Severe chance is the remaining 0.05
 
-    // 60% chance of Muscular Injury
-    if (injuryRoll < 0.60) {
-        const severityRoll = Math.random();
-        const location = pickRandom(['Posterior da Coxa', 'Adutor', 'Panturrilha']);
-        if (severityRoll < 0.70) { // Grade 1 (70% of muscular)
-            injuryType = `Estiramento no ${location} (Grau 1)`;
-            durationDays = randInt(7, 21);
-        } else if (severityRoll < 0.95) { // Grade 2 (25% of muscular)
-            injuryType = `Lesão no ${location} (Grau 2)`;
-            durationDays = randInt(28, 56);
-        } else { // Grade 3 (5% of muscular)
-            injuryType = `Ruptura no ${location} (Grau 3)`;
-            durationDays = randInt(80, 100);
-        }
+    if (injuryCategoryRoll < muscularChance) {
+        injuryPool = MUSCULAR_INJURIES;
     } 
-    // 20% chance of Sprain
-    else if (injuryRoll < 0.80) {
-        const severityRoll = Math.random();
-        if (severityRoll < 0.60) { // Light (60% of sprains)
-            injuryType = 'Tornozelo Torcido';
-            durationDays = randInt(7, 10);
-        } else { // Moderate (40% of sprains)
-            injuryType = 'Entorse de Tornozelo';
-            durationDays = randInt(21, 42);
-        }
+    else if (injuryCategoryRoll < muscularChance + jointChance) {
+        injuryPool = JOINT_LIGAMENT_INJURIES;
     } 
-    // 15% chance of Impact/Bruise
-    else if (injuryRoll < 0.95) {
-        injuryType = 'Lesão por Contusão';
-        durationDays = randInt(2, 5);
+    else if (injuryCategoryRoll < muscularChance + jointChance + impactChance) {
+        injuryPool = IMPACT_INJURIES;
     } 
-    // 5% chance of Severe Injury
     else {
-        const severeTypeRoll = Math.random();
-        if (severeTypeRoll < 0.5) {
-            injuryType = 'Rompimento do Ligamento Cruzado Anterior';
-            durationDays = randInt(180, 270);
-        } else if (severeTypeRoll < 0.8) {
-            injuryType = 'Fratura na Perna';
-            durationDays = randInt(90, 150);
-        } else {
-            injuryType = 'Lesão no Menisco';
-            durationDays = randInt(60, 120);
-        }
+        injuryPool = SEVERE_INJURIES;
     }
     
+    const chosenInjury = pickRandom(injuryPool);
+    const durationDays = randInt(chosenInjury.minDays, chosenInjury.maxDays);
+    const returnDate = new Date(currentDate);
     returnDate.setDate(returnDate.getDate() + durationDays);
 
     return {
-        type: injuryType,
+        type: chosenInjury.type,
         returnDate,
     };
 };

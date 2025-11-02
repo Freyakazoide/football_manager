@@ -155,6 +155,8 @@ export interface PlayerSeasonStats {
 
 export type IndividualTrainingFocus = { type: 'attribute', attribute: keyof PlayerAttributes } | { type: 'role', role: PlayerRole } | null;
 
+export type SquadStatus = 'Titular' | 'Rodízio' | 'Rotação' | 'Jovem Promessa' | 'Excedente' | 'Base';
+
 export interface Player {
     id: number;
     clubId: number;
@@ -179,7 +181,8 @@ export interface Player {
     seasonYellowCards: number;
     promise?: { type: 'playing_time', deadline: Date } | null;
     individualTrainingFocus: IndividualTrainingFocus;
-    squadStatus: 'senior' | 'youth';
+    squadStatus: SquadStatus;
+    isTransferListed?: boolean;
 
     // --- NEW/UPDATED Player properties ---
     lastRenewalDate?: Date; // Cooldown for new negotiations
@@ -437,9 +440,30 @@ export interface LoanOffer {
 export interface ContractOffer {
     wage: number;
     signingBonus: number;
-    goalBonus: number;
     durationYears: number;
     releaseClause?: number;
+
+    // --- NEW CLAUSES ---
+    // Performance Bonuses
+    appearanceBonus?: number;
+    goalBonus?: number;
+    cleanSheetBonus?: number;
+    
+    // Achievement Bonuses
+    leagueTitleBonus?: number;
+    continentalQualificationBonus?: number;
+    relegationSurvivalBonus?: number;
+
+    // Contract Clauses
+    loyaltyBonus?: number;
+    annualSalaryIncrease?: number; // As a percentage
+    relegationReleaseClause?: number;
+    highestEarnerClause?: boolean;
+    playerPercentageOfNextSale?: number; // As a percentage
+    
+    // Future Options
+    clubExtensionOption?: number; // years
+    playerExtensionOption?: number; // years
 }
 
 export interface TransferNegotiation {

@@ -1,4 +1,4 @@
-import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType, SponsorshipDeal, Loan } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType, SponsorshipDeal, Loan, TransferOffer, LoanOffer, BoardRequestType } from '../types';
 import { Action } from './reducerTypes';
 import { runMatch, processPlayerDevelopment, processPlayerAging, processMonthlyFinances, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens, getUnitRatings, processPhilosophyReview } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
@@ -8,6 +8,7 @@ import { updatePlayerStatsFromMatchResult, getSeason } from './playerStatsServic
 import { generateInjury } from './injuryService';
 import { getRoleCategory, generateScheduleForCompetition } from './database';
 import { processAITransfers } from './AITransferService';
+import { BOARD_REQUESTS } from './boardRequests';
 
 export const initialState: GameState = {
     currentDate: new Date(2024, 7, 1), // July 1st, 2024
@@ -156,6 +157,11 @@ const handleMonthlyUpdates = (state: GameState): GameState => {
     }
     
     return newState;
+};
+
+// FIX: Added type guard for LoanOffer.
+const isLoanOffer = (offer: TransferOffer | LoanOffer | undefined): offer is LoanOffer => {
+    return !!offer && 'loanFee' in offer;
 };
 
 
@@ -896,6 +902,74 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 loans: newLoans,
             };
         }
+        case 'MAKE_BOARD_REQUEST': {
+            const { requestType } = action.payload;
+            const playerClubId = state.playerClubId!;
+            let club = { ...state.clubs[playerClubId] };
+            const request = BOARD_REQUESTS.find(r => r.type === requestType);
+        
+            if (!request) return state;
+        
+            // Double-check requirements server-side (reducer-side)
+            const cooldownDate = club.boardRequestCooldowns[request.type];
+            if (cooldownDate && new Date(cooldownDate) > state.currentDate) return state;
+            if (club.requestsThisMonth.count >= 2) return state;
+            if (request.requirements.minConfidence && club.managerConfidence < request.requirements.minConfidence) return state;
+            if (request.requirements.minReputation && club.reputation < request.requirements.minReputation) return state;
+            if (request.requirements.minBalance && club.balance < request.requirements.minBalance) return state;
+        
+            let newState = { ...state };
+            const newCooldown = new Date(state.currentDate);
+            newCooldown.setMonth(newCooldown.getMonth() + request.cooldownMonths);
+        
+            club.boardRequestCooldowns = { ...club.boardRequestCooldowns, [request.type]: newCooldown };
+            club.requestsThisMonth = { ...club.requestsThisMonth, count: club.requestsThisMonth.count + 1 };
+            
+            const successChance = 0.5 + ((club.managerConfidence - 50) / 100); // Range: 0 (at 0 confidence) to 1 (at 100 confidence)
+            const success = Math.random() < successChance;
+        
+            let headline = '';
+            let content = '';
+        
+            if (success) {
+                headline = `Diretoria Aprova: ${request.title}`;
+                content = `A diretoria aprovou seu pedido para "${request.title}". Eles ficaram impressionados com seu raciocínio.`;
+                club.balance -= request.cost;
+        
+                switch (request.type) {
+                    case BoardRequestType.INCREASE_TRANSFER_BUDGET:
+                        const increaseAmount = Math.max(50000, club.balance * 0.1);
+                        club.transferBudget += increaseAmount;
+                        content += `\n\nSeu orçamento de transferências foi aumentado em ${increaseAmount.toLocaleString()}.`;
+                        break;
+                    case BoardRequestType.INCREASE_WAGE_BUDGET:
+                        const wageIncrease = Math.max(1000, club.wageBudget * 0.1);
+                        club.wageBudget += wageIncrease;
+                        content += `\n\nSeu orçamento de salários foi aumentado em ${wageIncrease.toLocaleString()}/sem.`;
+                        break;
+                    case BoardRequestType.PRAISE_BOARD:
+                        club.managerConfidence = Math.min(100, club.managerConfidence + 5);
+                        content = `A diretoria agradece seu elogio público e seu relacionamento se fortaleceu.`;
+                        break;
+                    case BoardRequestType.REQUEST_MORE_TIME:
+                         club.managerConfidence = Math.min(100, club.managerConfidence + 15);
+                         content = `A diretoria concedeu a você um voto de confiança e lhe dará mais tempo para provar seu valor.`;
+                         break;
+                    default:
+                        content += ` As mudanças serão implementadas em breve.`
+                }
+        
+            } else {
+                headline = `Diretoria Rejeita: ${request.title}`;
+                content = `A diretoria rejeitou seu pedido para "${request.title}". Eles não estavam convencidos de que era a decisão certa para o clube neste momento.`;
+                club.managerConfidence = Math.max(0, club.managerConfidence - 5);
+            }
+            
+            newState.clubs = { ...newState.clubs, [playerClubId]: club };
+            newState = addNewsItem(newState, headline, content, 'board_request_response');
+            
+            return newState;
+        }
         // --- NEW TRANSFER SYSTEM ---
         case 'START_TRANSFER_NEGOTIATION': {
             const { playerId } = action.payload;
@@ -903,11 +977,39 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const newNegotiation: TransferNegotiation = {
                 id: state.nextNegotiationId,
                 playerId,
+                // FIX: Added missing 'type' property.
+                type: 'transfer',
                 sellingClubId: player.clubId,
                 buyingClubId: state.playerClubId!,
                 stage: 'club',
                 status: 'player_turn',
                 lastOfferBy: 'player', // Technically no offer yet, but player initiates
+                clubOfferHistory: [],
+                agentOfferHistory: [],
+                agreedFee: 0
+            };
+            return {
+                ...state,
+                transferNegotiations: {
+                    ...state.transferNegotiations,
+                    [state.nextNegotiationId]: newNegotiation,
+                },
+                nextNegotiationId: state.nextNegotiationId + 1,
+            };
+        }
+        // FIX: Added handler for START_LOAN_NEGOTIATION action.
+        case 'START_LOAN_NEGOTIATION': {
+            const { playerId } = action.payload;
+            const player = state.players[playerId];
+            const newNegotiation: TransferNegotiation = {
+                id: state.nextNegotiationId,
+                playerId,
+                type: 'loan',
+                sellingClubId: player.clubId,
+                buyingClubId: state.playerClubId!,
+                stage: 'club',
+                status: 'player_turn',
+                lastOfferBy: 'player',
                 clubOfferHistory: [],
                 agentOfferHistory: [],
                 agreedFee: 0
@@ -927,6 +1029,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             const newNegotiation: TransferNegotiation = {
                 id: state.nextNegotiationId,
                 playerId,
+                // FIX: Added missing 'type' property.
+                type: 'renewal',
                 sellingClubId: player.clubId,
                 buyingClubId: state.playerClubId!,
                 stage: 'agent', // Start at agent stage
@@ -971,7 +1075,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 stage: 'agent',
                 status: 'player_turn',
                 lastOfferBy: 'player',
-                agreedFee: lastOffer.fee,
+                // FIX: Safely access fee from TransferOffer or LoanOffer.
+                agreedFee: isLoanOffer(lastOffer) ? lastOffer.loanFee : lastOffer.fee,
             };
             return { ...state, transferNegotiations: newNegotiations };
         }
@@ -989,7 +1094,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 stage: 'agent',
                 status: 'ai_turn', // Now AI will simulate agent talks
                 lastOfferBy: 'player', // Player accepted the offer
-                agreedFee: lastOffer.fee,
+                // FIX: Safely access fee from TransferOffer or LoanOffer.
+                agreedFee: isLoanOffer(lastOffer) ? lastOffer.loanFee : lastOffer.fee,
             };
             return { ...state, transferNegotiations: newNegotiations };
         }
@@ -1096,28 +1202,59 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
 
             if (currentNeg.stage === 'club') {
                 const lastOffer = currentNeg.clubOfferHistory[currentNeg.clubOfferHistory.length - 1].offer;
-                const valueRatio = lastOffer.fee / player.marketValue;
-                const repDiffFactor = (state.clubs[currentNeg.buyingClubId].reputation - state.clubs[currentNeg.sellingClubId].reputation) / 100;
-                const acceptanceChance = Math.max(0.05, Math.min(0.95, (valueRatio - 0.2) + repDiffFactor));
+                
+                // FIX: Handle LoanOffer and TransferOffer separately.
+                if (isLoanOffer(lastOffer)) {
+                    // AI response to a loan offer
+                    const valueRatio = lastOffer.loanFee / (player.marketValue * 0.15); // loan fee relative to portion of market value
+                    const acceptanceChance = Math.max(0.1, Math.min(0.9, (valueRatio - 0.5) + (lastOffer.wageContribution / 200)));
 
-                if (Math.random() < acceptanceChance) {
-                    // AI accepts the club-to-club offer. Move to agent stage.
-                    currentNeg.stage = 'agent';
-                    currentNeg.agreedFee = lastOffer.fee;
-                    currentNeg.lastOfferBy = 'ai'; // The AI (seller) just accepted.
-                    // If player is buying, it's their turn to negotiate with agent.
-                    // If AI-to-AI, the buyer AI needs to act next, so keep status as ai_turn.
-                    currentNeg.status = isPlayerBuying ? 'player_turn' : 'ai_turn';
-                } else {
-                    // Counter offer
-                    const feeMultiplier = 1.1 + Math.random() * 0.3;
-                    const counterFee = Math.round((Math.max(lastOffer.fee, player.marketValue) * feeMultiplier) / 1000) * 1000;
-                    const counterOffer = { fee: counterFee, sellOnPercentage: Math.random() < 0.3 ? 15 : undefined };
-                    currentNeg.clubOfferHistory.push({ offer: counterOffer, by: 'ai' });
-                    currentNeg.lastOfferBy = 'ai';
-                    // If player is involved (buying or selling), it's their turn.
-                    // If AI-to-AI, the other AI needs to respond, so keep as ai_turn.
-                    currentNeg.status = isPlayerInvolved ? 'player_turn' : 'ai_turn';
+                    if (Math.random() < acceptanceChance) {
+                        // AI accepts the loan offer. Move to agent stage.
+                        currentNeg.stage = 'agent';
+                        currentNeg.agreedFee = lastOffer.loanFee;
+                        currentNeg.lastOfferBy = 'ai';
+                        currentNeg.status = isPlayerBuying ? 'player_turn' : 'ai_turn';
+                    } else {
+                        // Counter loan offer
+                        const feeMultiplier = 1.1 + Math.random() * 0.4;
+                        const counterLoanFee = Math.round((Math.max(lastOffer.loanFee, player.marketValue * 0.1) * feeMultiplier) / 1000) * 1000;
+                        const counterWage = Math.min(100, Math.max(lastOffer.wageContribution + 10, 50));
+                        
+                        const counterOffer: LoanOffer = {
+                            loanFee: counterLoanFee,
+                            wageContribution: counterWage,
+                            futureBuyOption: lastOffer.futureBuyOption ? Math.round(lastOffer.futureBuyOption * 1.1) : undefined,
+                        };
+
+                        currentNeg.clubOfferHistory.push({ offer: counterOffer, by: 'ai' });
+                        currentNeg.lastOfferBy = 'ai';
+                        currentNeg.status = isPlayerInvolved ? 'player_turn' : 'ai_turn';
+                    }
+                } else { // It's a TransferOffer
+                    const valueRatio = lastOffer.fee / player.marketValue;
+                    const repDiffFactor = (state.clubs[currentNeg.buyingClubId].reputation - state.clubs[currentNeg.sellingClubId].reputation) / 100;
+                    const acceptanceChance = Math.max(0.05, Math.min(0.95, (valueRatio - 0.2) + repDiffFactor));
+
+                    if (Math.random() < acceptanceChance) {
+                        // AI accepts the club-to-club offer. Move to agent stage.
+                        currentNeg.stage = 'agent';
+                        currentNeg.agreedFee = lastOffer.fee;
+                        currentNeg.lastOfferBy = 'ai'; // The AI (seller) just accepted.
+                        // If player is buying, it's their turn to negotiate with agent.
+                        // If AI-to-AI, the buyer AI needs to act next, so keep status as ai_turn.
+                        currentNeg.status = isPlayerBuying ? 'player_turn' : 'ai_turn';
+                    } else {
+                        // Counter offer
+                        const feeMultiplier = 1.1 + Math.random() * 0.3;
+                        const counterFee = Math.round((Math.max(lastOffer.fee, player.marketValue) * feeMultiplier) / 1000) * 1000;
+                        const counterOffer: TransferOffer = { fee: counterFee, sellOnPercentage: Math.random() < 0.3 ? 15 : undefined };
+                        currentNeg.clubOfferHistory.push({ offer: counterOffer, by: 'ai' });
+                        currentNeg.lastOfferBy = 'ai';
+                        // If player is involved (buying or selling), it's their turn.
+                        // If AI-to-AI, the other AI needs to respond, so keep as ai_turn.
+                        currentNeg.status = isPlayerInvolved ? 'player_turn' : 'ai_turn';
+                    }
                 }
             } else if (currentNeg.stage === 'agent') {
                 // --- SIMULATION FOR WHEN PLAYER IS SELLING ---

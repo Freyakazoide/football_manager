@@ -13,8 +13,13 @@ const ScoutingView: React.FC<ScoutingViewProps> = ({ gameState, dispatch, onPlay
     const [activeTab, setActiveTab] = useState<'new' | 'active' | 'reports'>('new');
     const [filters, setFilters] = useState<ScoutingFilters>({});
     const [description, setDescription] = useState('');
+
+    const playerClubId = gameState.playerClubId;
+    if (!playerClubId) return null;
+    const club = gameState.clubs[playerClubId];
+    if (!club) return null; // Defensive check
     
-    const headOfScoutingId = gameState.clubs[gameState.playerClubId!]?.departments.Scouting.chiefId;
+    const headOfScoutingId = club.departments.Scouting.chiefId;
     const headOfScouting = headOfScoutingId ? gameState.staff[headOfScoutingId] : null;
 
     const handleFilterChange = (key: keyof ScoutingFilters, value: any) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GameState, TransferNegotiation, TransferOffer, ContractOffer, Player, Club } from '../types';
+import { GameState, TransferNegotiation, TransferOffer, ContractOffer, Player, Club, LoanOffer } from '../types';
 import { Action } from '../services/reducerTypes';
 
 interface TransferNegotiationModalProps {
@@ -10,6 +10,10 @@ interface TransferNegotiationModalProps {
 }
 
 const formatCurrency = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
+
+const isLoanOffer = (offer: TransferOffer | LoanOffer): offer is LoanOffer => {
+    return 'loanFee' in offer;
+}
 
 // Painel para quando o JOGADOR está COMPRANDO um jogador
 const BuyingClubNegotiation: React.FC<{
@@ -29,7 +33,7 @@ const BuyingClubNegotiation: React.FC<{
         dispatch({ type: 'ACCEPT_CLUB_COUNTER', payload: { negotiationId: negotiation.id } });
     };
 
-    const lastAiOffer = negotiation.lastOfferBy === 'ai' ? negotiation.clubOfferHistory[negotiation.clubOfferHistory.length - 1]?.offer : null;
+    const lastAiOffer = negotiation.lastOfferBy === 'ai' ? negotiation.clubOfferHistory.findLast(o => o.by === 'ai')?.offer as TransferOffer | undefined : null;
 
     return (
         <div>
@@ -60,6 +64,67 @@ const BuyingClubNegotiation: React.FC<{
     );
 };
 
+const BuyingLoanNegotiation: React.FC<{
+    negotiation: TransferNegotiation;
+    player: Player;
+    dispatch: React.Dispatch<Action>;
+    balance: number;
+}> = ({ negotiation, player, dispatch, balance }) => {
+    const lastAiOffer = negotiation.lastOfferBy === 'ai' 
+        ? negotiation.clubOfferHistory.findLast(o => o.by === 'ai')?.offer as LoanOffer | undefined 
+        : undefined;
+
+    const [loanFee, setLoanFee] = useState(lastAiOffer?.loanFee ?? Math.round(player.marketValue * 0.1));
+    const [wageContribution, setWageContribution] = useState(lastAiOffer?.wageContribution ?? 50);
+    const [futureBuyOption, setFutureBuyOption] = useState(lastAiOffer?.futureBuyOption ?? 0);
+
+    const handleSubmitOffer = () => {
+        const offer: LoanOffer = {
+            loanFee,
+            wageContribution,
+            futureBuyOption: futureBuyOption > 0 ? futureBuyOption : undefined,
+        };
+        dispatch({ type: 'SUBMIT_CLUB_OFFER', payload: { negotiationId: negotiation.id, offer } });
+    };
+
+    const handleAcceptCounter = () => {
+        dispatch({ type: 'ACCEPT_CLUB_COUNTER', payload: { negotiationId: negotiation.id } });
+    };
+
+    return (
+        <div>
+            {lastAiOffer && isLoanOffer(lastAiOffer) && (
+                <div className="bg-yellow-900/50 p-4 rounded-lg mb-4 border border-yellow-600">
+                    <h4 className="font-bold text-yellow-300">Counter Offer Received!</h4>
+                    <p>Loan Fee: <span className="font-mono">{formatCurrency(lastAiOffer.loanFee)}</span></p>
+                    <p>Wage Contribution: <span className="font-mono">{lastAiOffer.wageContribution}%</span></p>
+                    {lastAiOffer.futureBuyOption && <p>Future Buy Option: <span className="font-mono">{formatCurrency(lastAiOffer.futureBuyOption)}</span></p>}
+                    <button onClick={handleAcceptCounter} className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded">
+                        Accept Offer
+                    </button>
+                </div>
+            )}
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-bold text-gray-300 mb-1">Taxa de Empréstimo (Adiantado)</label>
+                    <input type="number" step="10000" value={loanFee} onChange={e => setLoanFee(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-gray-300 mb-1">Contribuição Salarial ({wageContribution}%)</label>
+                    <input type="range" min="0" max="100" step="5" value={wageContribution} onChange={e => setWageContribution(Number(e.target.value))} className="w-full" />
+                </div>
+                 <div>
+                    <label className="block text-sm font-bold text-gray-300 mb-1">Opção de Compra Futura (Opcional)</label>
+                    <input type="number" step="100000" value={futureBuyOption} onChange={e => setFutureBuyOption(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
+                </div>
+            </div>
+            <button onClick={handleSubmitOffer} disabled={balance < loanFee} className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded disabled:bg-gray-600 disabled:cursor-not-allowed">
+                Enviar Oferta de Empréstimo
+            </button>
+        </div>
+    );
+};
+
 
 // Painel completamente redesenhado para quando o JOGADOR está VENDENDO
 const SellingClubNegotiation: React.FC<{
@@ -71,7 +136,7 @@ const SellingClubNegotiation: React.FC<{
     onClose: () => void;
 }> = ({ negotiation, player, buyingClub, dispatch, onCancel, onClose }) => {
     // Encontra a última oferta da IA
-    const latestAiOffer = negotiation.clubOfferHistory.filter(o => o.by === 'ai').slice(-1)[0]?.offer;
+    const latestAiOffer = negotiation.clubOfferHistory.filter(o => o.by === 'ai').slice(-1)[0]?.offer as TransferOffer | undefined;
     
     // Define uma contra-proposta inicial sensata (15% acima da oferta ou 20% acima do valor de mercado)
     const initialCounter = latestAiOffer ? latestAiOffer.fee * 1.15 : player.marketValue * 1.2;
@@ -133,7 +198,7 @@ const SellingClubNegotiation: React.FC<{
                            {negotiation.clubOfferHistory.map((hist, index) => (
                                <li key={index} className="flex justify-between">
                                    <span>{hist.by === 'ai' ? buyingClub.name : 'Você'} ofereceu:</span>
-                                   <span className="font-mono">{formatCurrency(hist.offer.fee)}</span>
+                                   <span className="font-mono">{!isLoanOffer(hist.offer) ? formatCurrency(hist.offer.fee) : `Loan (${formatCurrency(hist.offer.loanFee)})`}</span>
                                </li>
                            ))}
                         </ul>
@@ -264,7 +329,6 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
         );
     }
     
-    const isRenewal = negotiation.sellingClubId === negotiation.buyingClubId;
     const isPlayerSelling = negotiation.sellingClubId === gameState.playerClubId;
     const isPlayerBuying = negotiation.buyingClubId === gameState.playerClubId;
 
@@ -281,24 +345,34 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
     };
     
     const isWaitingForResponse = negotiation.status === 'ai_turn';
-    const mainTitle = isRenewal ? 'Contract Renewal' : isPlayerSelling ? 'Incoming Transfer Offer' : 'Outgoing Transfer Offer';
-    const subTitle = isRenewal ? `For ${player.name}` : `For ${player.name} from ${sellingClub.name}`;
+    const mainTitle = {
+        'transfer': isPlayerSelling ? 'Oferta de Transferência Recebida' : 'Negociação de Transferência',
+        'loan': 'Negociação de Empréstimo',
+        'renewal': 'Renovação de Contrato'
+    }[negotiation.type];
+    
+    const subTitle = negotiation.type === 'renewal' ? `Para ${player.name}` : `Para ${player.name} de ${sellingClub.name}`;
 
     const renderContent = () => {
         if (isWaitingForResponse) {
             return (
                 <div className="text-center p-8 bg-gray-700/50 rounded animate-pulse">
-                    <p className="font-semibold text-yellow-300 text-lg">Waiting for response from {isPlayerSelling ? buyingClub.name : sellingClub.name}...</p>
-                    <p className="text-sm text-gray-400 mt-2">Advance to the next day to receive a response.</p>
+                    <p className="font-semibold text-yellow-300 text-lg">Aguardando resposta de {isPlayerSelling ? buyingClub.name : sellingClub.name}...</p>
+                    <p className="text-sm text-gray-400 mt-2">Avance para o próximo dia para receber uma resposta.</p>
                 </div>
             );
         }
 
         if (negotiation.stage === 'club') {
             if (isPlayerBuying) {
-                return <BuyingClubNegotiation negotiation={negotiation} player={player} dispatch={dispatch} balance={buyingClub.balance} />;
+                if (negotiation.type === 'transfer') {
+                    return <BuyingClubNegotiation negotiation={negotiation} player={player} dispatch={dispatch} balance={buyingClub.balance} />;
+                }
+                if (negotiation.type === 'loan') {
+                    return <BuyingLoanNegotiation negotiation={negotiation} player={player} dispatch={dispatch} balance={buyingClub.balance} />;
+                }
             }
-            if (isPlayerSelling) {
+            if (isPlayerSelling && negotiation.type === 'transfer') {
                 return <SellingClubNegotiation negotiation={negotiation} player={player} buyingClub={buyingClub} dispatch={dispatch} onCancel={handleCancel} onClose={onClose} />;
             }
         }
@@ -307,7 +381,7 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
             if (isPlayerBuying) {
                 return (
                     <div>
-                        {!isRenewal && <p className="text-sm bg-green-900/50 p-2 rounded mb-4">Fee of <span className="font-bold">{formatCurrency(negotiation.agreedFee)}</span> agreed with {sellingClub.name}.</p>}
+                        {negotiation.type === 'transfer' && <p className="text-sm bg-green-900/50 p-2 rounded mb-4">Taxa de <span className="font-bold">{formatCurrency(negotiation.agreedFee)}</span> acordada com {sellingClub.name}.</p>}
                         <AgentNegotiation negotiation={negotiation} player={player} dispatch={dispatch} />
                     </div>
                 );
@@ -315,9 +389,9 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
             if (isPlayerSelling) {
                 return (
                     <div className="text-center p-8">
-                        <p className="font-semibold text-lg">A transfer fee has been agreed with {buyingClub.name}.</p>
+                        <p className="font-semibold text-lg">Uma taxa de transferência foi acordada com {buyingClub.name}.</p>
                         <p className="mt-2 text-gray-400">
-                            {player.name} is now negotiating personal terms with their new club. You will be notified of the outcome via an inbox message.
+                            {player.name} está agora a negociar os termos do contrato com o seu novo clube. Você será notificado do resultado através de uma mensagem na caixa de entrada.
                         </p>
                     </div>
                 );
@@ -349,7 +423,7 @@ const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ neg
                 {(isPlayerBuying || (isPlayerSelling && negotiation.stage === 'agent')) && !isWaitingForResponse && (
                     <div className="p-4 border-t border-gray-700">
                         <button onClick={handleCancel} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                            Walk Away From Negotiations
+                            Desistir das Negociações
                         </button>
                     </div>
                 )}

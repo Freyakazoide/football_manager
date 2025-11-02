@@ -139,6 +139,7 @@ const StaffView: React.FC<StaffViewProps> = ({ gameState, dispatch }) => {
     if (!playerClubId) return null;
 
     const club = gameState.clubs[playerClubId];
+    if (!club) return null; // Defensive check to prevent crash
 
     const unemployedStaff = useMemo(() => {
         return (Object.values(gameState.staff) as Staff[]).filter(s => s.clubId === null);

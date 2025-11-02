@@ -1,4 +1,4 @@
-import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType, BoardRequestType } from '../types';
+import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType, BoardRequestType, LoanOffer } from '../types';
 
 export type Action =
     // FIX: Removed 'pressConference' from Omit as it's no longer a property of GameState.
@@ -41,8 +41,9 @@ export type Action =
     | { type: 'START_NEW_SEASON' }
     // New Transfer Negotiation Actions
     | { type: 'START_TRANSFER_NEGOTIATION'; payload: { playerId: number } }
+    | { type: 'START_LOAN_NEGOTIATION'; payload: { playerId: number } }
     | { type: 'START_RENEWAL_NEGOTIATION'; payload: { playerId: number } }
-    | { type: 'SUBMIT_CLUB_OFFER'; payload: { negotiationId: number; offer: Omit<TransferOffer, 'fromClubId'> } }
+    | { type: 'SUBMIT_CLUB_OFFER'; payload: { negotiationId: number; offer: TransferOffer | LoanOffer } }
     | { type: 'ACCEPT_CLUB_COUNTER'; payload: { negotiationId: number } }
     | { type: 'SUBMIT_AGENT_OFFER'; payload: { negotiationId: number; offer: ContractOffer } }
     | { type: 'ACCEPT_AGENT_COUNTER'; payload: { negotiationId: number } }

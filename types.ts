@@ -185,6 +185,7 @@ export interface Player {
     lastRenewalDate?: Date; // Cooldown for new negotiations
     interactions: { topic: string, date: Date }[]; // For interaction cooldowns
     attributeChanges: { date: Date, attr: keyof PlayerAttributes, change: number }[]; // For training feedback
+    onLoan?: { fromClubId: number; until: Date; wageContribution: number };
 }
 
 export interface LineupPlayer {
@@ -315,7 +316,7 @@ export interface NewsItem {
     date: Date;
     headline: string;
     content: string;
-    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed' | 'board_report' | 'loan_update' | 'board_request_response';
+    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed' | 'board_report' | 'loan_update' | 'board_request_response' | 'loan_deal_completed';
     relatedEntityId?: number;
     isRead: boolean;
     matchStatsSummary?: Match;
@@ -427,6 +428,12 @@ export interface TransferOffer {
     playerToSwapId?: number; 
 }
 
+export interface LoanOffer {
+    loanFee: number;
+    wageContribution: number; // Percentage 0-100
+    futureBuyOption?: number;
+}
+
 export interface ContractOffer {
     wage: number;
     signingBonus: number;
@@ -438,6 +445,7 @@ export interface ContractOffer {
 export interface TransferNegotiation {
     id: number;
     playerId: number;
+    type: 'transfer' | 'loan' | 'renewal';
     sellingClubId: number;
     buyingClubId: number;
     stage: 'club' | 'agent';
@@ -446,9 +454,9 @@ export interface TransferNegotiation {
     // club_agreed: move to agent stage
     status: 'player_turn' | 'ai_turn' | 'completed' | 'cancelled_player' | 'cancelled_ai';
     lastOfferBy: 'player' | 'ai';
-    clubOfferHistory: { offer: TransferOffer, by: 'player' | 'ai' }[];
+    clubOfferHistory: { offer: TransferOffer | LoanOffer, by: 'player' | 'ai' }[];
     agentOfferHistory: { offer: ContractOffer, by: 'player' | 'ai' }[];
-    agreedFee: number;
+    agreedFee: number; // Used for transfer fee or loan fee
 }
 
 // --- NEW SPONSORSHIP TYPES ---

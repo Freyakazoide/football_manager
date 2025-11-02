@@ -1,4 +1,5 @@
 
+
 import React, { useState, useReducer, useEffect, useCallback, useRef } from 'react';
 import { GameState, View, Club, Player, Match, PlayerRole, TransferNegotiation, Tactics, MatchDayInfo } from './types';
 import { gameReducer, initialState } from './services/gameReducer';
@@ -144,7 +145,7 @@ const App: React.FC = () => {
 
     const handleGoForward = useCallback(() => {
         if (historyIndex < viewHistory.length - 1) {
-            setHistoryIndex(prev => prev - 1);
+            setHistoryIndex(prev => prev + 1);
         }
     }, [historyIndex, viewHistory.length]);
 
@@ -165,7 +166,21 @@ const App: React.FC = () => {
     };
     
     const handleStartNegotiation = (playerId: number) => {
+        const newNegotiationId = state.nextNegotiationId;
         dispatch({ type: 'START_TRANSFER_NEGOTIATION', payload: { playerId } });
+        setActiveNegotiationId(newNegotiationId);
+    };
+
+    const handleStartLoanNegotiation = (playerId: number) => {
+        const newNegotiationId = state.nextNegotiationId;
+        dispatch({ type: 'START_LOAN_NEGOTIATION', payload: { playerId } });
+        setActiveNegotiationId(newNegotiationId);
+    };
+    
+    const handleStartRenewalNegotiation = (playerId: number) => {
+        const newNegotiationId = state.nextNegotiationId;
+        dispatch({ type: 'START_RENEWAL_NEGOTIATION', payload: { playerId } });
+        setActiveNegotiationId(newNegotiationId);
     };
     
     const handlePromotePlayer = useCallback((playerId: number) => {
@@ -271,7 +286,14 @@ const App: React.FC = () => {
             case View.PLAYER_PROFILE:
                 const playerId = currentViewInfo.context?.playerId;
                 if (!playerId) return <SquadView gameState={state} onPlayerClick={handlePlayerClick} />;
-                return <PlayerProfileView playerId={playerId} gameState={state} dispatch={dispatch} onStartNegotiation={handleStartNegotiation} />;
+                return <PlayerProfileView 
+                    playerId={playerId} 
+                    gameState={state} 
+                    dispatch={dispatch} 
+                    onStartNegotiation={handleStartNegotiation}
+                    onStartLoanNegotiation={handleStartLoanNegotiation}
+                    onStartRenewalNegotiation={handleStartRenewalNegotiation}
+                />;
             default:
                 return <TeamView gameState={state} />;
         }

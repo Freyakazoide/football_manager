@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { GameState, Player, PlayerRole } from '../types';
 import { getSeason } from '../services/playerStatsService';
 import { ROLE_DEFINITIONS } from '../services/database';
@@ -70,7 +70,6 @@ const SkeletonRow = () => (
 );
 
 const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
-    const [positionFilter, setPositionFilter] = useState('All');
     const [showAlertsOnly, setShowAlertsOnly] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'name', direction: 'ascending' });
     
@@ -93,29 +92,47 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
             });
         
         // Filtering
-        if (positionFilter !== 'All') {
-            squadPlayers = squadPlayers.filter(p => getRoleCategory(p.naturalPosition) === positionFilter);
-        }
         if (showAlertsOnly) {
             squadPlayers = squadPlayers.filter(p => p.injury || p.suspension || p.seasonYellowCards > 0);
         }
         
-        // Sorting
-        squadPlayers.sort((a, b) => {
-            const aValue = a[sortConfig.key];
-            const bValue = b[sortConfig.key];
+        // Sorting helper
+        const sortPlayers = (players: (Player & { apps: number; avgRating: number; goals: number; assists: number })[]) => {
+            return [...players].sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
 
-            if (aValue < bValue) {
-                return sortConfig.direction === 'ascending' ? -1 : 1;
-            }
-            if (aValue > bValue) {
-                return sortConfig.direction === 'ascending' ? 1 : -1;
-            }
-            return 0;
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        };
+
+        // Grouping
+        const groupedPlayers: Record<'GK' | 'DEF' | 'MID' | 'FWD', (Player & { apps: number; avgRating: number; goals: number; assists: number })[]> = {
+            GK: [],
+            DEF: [],
+            MID: [],
+            FWD: [],
+        };
+
+        squadPlayers.forEach(player => {
+            const category = getRoleCategory(player.naturalPosition);
+            groupedPlayers[category].push(player);
         });
+        
+        // Sort within each group
+        groupedPlayers.GK = sortPlayers(groupedPlayers.GK);
+        groupedPlayers.DEF = sortPlayers(groupedPlayers.DEF);
+        groupedPlayers.MID = sortPlayers(groupedPlayers.MID);
+        groupedPlayers.FWD = sortPlayers(groupedPlayers.FWD);
 
-        return squadPlayers;
-    }, [gameState.players, gameState.playerClubId, gameState.currentDate, positionFilter, showAlertsOnly, sortConfig]);
+        return groupedPlayers;
+    }, [gameState.players, gameState.playerClubId, gameState.currentDate, showAlertsOnly, sortConfig]);
 
 
     const requestSort = (key: SortKey) => {
@@ -135,20 +152,19 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
             </th>
         );
     };
+    
+    const groupNames = {
+        GK: 'Goleiros',
+        DEF: 'Defensores',
+        MID: 'Meio-campistas',
+        FWD: 'Atacantes'
+    };
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
             <h2 className="text-2xl font-bold text-white mb-4">Elenco</h2>
             
             <div className="flex flex-col sm:flex-row gap-4 mb-4 p-3 bg-gray-900/50 rounded-lg">
-                <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-400">Posição:</span>
-                    <FilterButton label="Todos" onClick={() => setPositionFilter('All')} isActive={positionFilter === 'All'} />
-                    <FilterButton label="GOL" onClick={() => setPositionFilter('GK')} isActive={positionFilter === 'GK'} />
-                    <FilterButton label="DEF" onClick={() => setPositionFilter('DEF')} isActive={positionFilter === 'DEF'} />
-                    <FilterButton label="MEI" onClick={() => setPositionFilter('MID')} isActive={positionFilter === 'MID'} />
-                    <FilterButton label="ATA" onClick={() => setPositionFilter('FWD')} isActive={positionFilter === 'FWD'} />
-                </div>
                  <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-gray-400">Status:</span>
                     <FilterButton label="Mostrar Alertas" onClick={() => setShowAlertsOnly(!showAlertsOnly)} isActive={showAlertsOnly} />
@@ -172,8 +188,19 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                             <SortableHeader label="Valor" sortKey="marketValue" className="text-right" />
                         </tr>
                     </thead>
-                    <tbody>
-                        {processedSquad.map((player) => (
+                    {/* FIX: Replaced Object.entries with a type-safe iteration using Object.keys to fix TypeScript errors related to `players` being of type 'unknown'. */}
+                    {(Object.keys(processedSquad) as Array<keyof typeof processedSquad>).map((groupKey) => {
+                        const players = processedSquad[groupKey];
+                        return (
+                        <tbody key={groupKey}>
+                            {players.length > 0 && (
+                                <tr className="bg-gray-900/70">
+                                    <th colSpan={11} className="p-2 text-left text-green-400 font-bold text-sm">
+                                        {groupNames[groupKey]}
+                                    </th>
+                                </tr>
+                            )}
+                            {players.map((player) => (
                             <tr
                                 key={player.id}
                                 className={`border-b border-gray-700 hover:bg-gray-700 cursor-pointer ${(player.injury || player.suspension) ? 'opacity-60' : ''}`}
@@ -201,9 +228,10 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                                     {player.marketValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}
                                 </td>
                             </tr>
-                        ))
-                        }
-                    </tbody>
+                        ))}
+                        </tbody>
+                        );
+                    })}
                 </table>
             </div>
         </div>

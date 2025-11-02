@@ -1,3 +1,5 @@
+
+
 import React, { useState, useMemo } from 'react';
 import { GameState, Player, PlayerAttributes, PlayerRole } from '../types';
 import { Action } from '../services/reducerTypes';
@@ -8,6 +10,8 @@ interface PlayerProfileViewProps {
     gameState: GameState;
     dispatch: React.Dispatch<Action>;
     onStartNegotiation: (playerId: number) => void;
+    onStartLoanNegotiation: (playerId: number) => void;
+    onStartRenewalNegotiation: (playerId: number) => void;
 }
 
 const AttributeBar: React.FC<{ label: string, value: number, isScouted: boolean, change: number }> = ({ label, value, isScouted, change }) => {
@@ -122,7 +126,7 @@ const PositionalFamiliarityPitch: React.FC<{ player: Player }> = ({ player }) =>
     );
 };
 
-const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameState, dispatch, onStartNegotiation }) => {
+const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameState, dispatch, onStartNegotiation, onStartLoanNegotiation, onStartRenewalNegotiation }) => {
     const player = gameState.players[playerId];
     if (!player) return <div>Jogador não encontrado.</div>;
     
@@ -155,10 +159,6 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     const praiseCooldown = getInteractionCooldown('praise');
     const criticizeCooldown = getInteractionCooldown('criticize');
     const promiseCooldown = getInteractionCooldown('promise');
-    
-    const handleStartRenewal = () => {
-        dispatch({ type: 'START_RENEWAL_NEGOTIATION', payload: { playerId: player.id } });
-    };
 
     const isRenewalOnCooldown = useMemo(() => {
         if (!player.lastRenewalDate) return false;
@@ -175,106 +175,132 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
         { title: 'Físico', attrs: ['pace', 'stamina', 'strength', 'naturalFitness'] },
     ];
     
-    const thirtyDaysAgo = new Date(gameState.currentDate);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentChanges = player.attributeChanges.filter(c => new Date(c.date) > thirtyDaysAgo);
+    const renderAttributes = () => {
+        const thirtyDaysAgo = new Date(gameState.currentDate);
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const recentChanges = player.attributeChanges.filter(c => new Date(c.date) > thirtyDaysAgo);
 
-    const renderAttributes = () => (
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-8">
-                {attributeGroups.map(group => (
-                    <div key={group.title}>
-                        <h3 className="text-lg font-semibold text-green-400 mb-3">{group.title}</h3>
-                        <div className="space-y-2">
-                            {group.attrs.map(attr => {
-                                const change = recentChanges.find(c => c.attr === attr)?.change || 0;
-                                return <AttributeBar key={attr} label={attr} value={player.attributes[attr]} isScouted={areAttributesFullyScouted} change={change} />
-                            })}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            <div className="space-y-6 lg:col-span-1">
-                 {(player.injury || player.suspension) && (
-                    <div className={`p-3 rounded-lg ${player.injury ? 'bg-red-900/50 border-red-500' : 'bg-yellow-900/50 border-yellow-500'} border`}>
-                         <h3 className="text-lg font-semibold text-red-400 mb-2">{player.injury ? 'Lesionado' : 'Suspenso'}</h3>
-                         <div className="text-sm space-y-1">
-                            {player.injury && <p>{player.injury.type}</p>}
-                            <p>Retorno esperado: <span className="font-semibold">{(player.injury?.returnDate || player.suspension?.returnDate)?.toLocaleDateString()}</span></p>
-                         </div>
-                    </div>
-                )}
-                <div>
-                   <h3 className="text-lg font-semibold text-green-400 mb-2">Status</h3>
-                   <div className="text-sm space-y-3">
-                       <StatusProgressBar label="Moral" value={player.morale} />
-                       <StatusProgressBar label="Satisfação" value={player.satisfaction} />
-                       <StatusProgressBar label="Cond. Físico" value={player.matchFitness} />
-                   </div>
-                </div>
-                 <div>
-                   <h3 className="text-lg font-semibold text-green-400 mb-2">Contrato</h3>
-                   <div className="text-sm space-y-1">
-                        <p>Salário: <span className="font-semibold">{formatCurrency(player.wage)}/sem</span></p>
-                        <p>Expira em: <span className="font-semibold">{player.contractExpires.toLocaleDateString()}</span></p>
-                   </div>
-                </div>
-                 <div>
-                   <h3 className="text-lg font-semibold text-green-400 mb-2">Valor</h3>
-                   <div className="text-sm space-y-1">
-                        <p>Valor de Mercado: <span className="font-semibold">{formatCurrency(player.marketValue)}</span></p>
-                   </div>
-                </div>
-
-                {isTransferTarget && (
-                <div className="bg-gray-700 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-green-400 mb-2">Transferência</h3>
-                    <button
-                        onClick={() => onStartNegotiation(player.id)}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded"
-                    >
-                        Iniciar Negociação
-                    </button>
-                </div>
-                )}
-                {!isTransferTarget && (
-                    <>
-                        <div className="bg-gray-700 p-4 rounded-lg">
-                            <h3 className="text-lg font-semibold text-green-400 mb-2">Renovação de Contrato</h3>
-                             <button 
-                                onClick={handleStartRenewal} 
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded disabled:bg-gray-600 disabled:cursor-not-allowed"
-                                disabled={isRenewalOnCooldown}
-                                title={isRenewalOnCooldown ? "Você renovou o contrato com este jogador recentemente." : "Negociar um novo contrato"}
-                            >
-                                {isRenewalOnCooldown ? 'Renovação em Cooldown' : 'Oferecer Novo Contrato'}
-                            </button>
-                        </div>
-
-                        <div className="bg-gray-700 p-4 rounded-lg">
-                            <h3 className="text-lg font-semibold text-green-400 mb-3">Interagir com Jogador</h3>
-                             <div className="grid grid-cols-1 gap-2">
-                                <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'praise' } })} disabled={praiseCooldown.onCooldown} className="bg-gray-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
-                                    {praiseCooldown.onCooldown ? `Elogiar (Aguarde ${praiseCooldown.remainingDays}d)` : 'Elogiar Jogador'}
-                                </button>
-                                <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'criticize' } })} disabled={criticizeCooldown.onCooldown} className="bg-gray-600 hover:bg-orange-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
-                                    {criticizeCooldown.onCooldown ? `Criticar (Aguarde ${criticizeCooldown.remainingDays}d)` : 'Criticar Jogador'}
-                                </button>
-                                <button 
-                                    onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'promise' } })}
-                                    disabled={!!player.promise || promiseCooldown.onCooldown}
-                                    className="bg-gray-600 hover:bg-yellow-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
-                                >
-                                    {player.promise ? 'Promessa Ativa' : promiseCooldown.onCooldown ? `Prometer (Aguarde ${promiseCooldown.remainingDays}d)` : 'Prometer Tempo de Jogo'}
-                                </button>
+        return (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-8">
+                    {attributeGroups.map(group => (
+                        <div key={group.title}>
+                            <h3 className="text-lg font-semibold text-green-400 mb-3">{group.title}</h3>
+                            <div className="space-y-2">
+                                {group.attrs.map(attr => {
+                                    const change = recentChanges.find(c => c.attr === attr)?.change || 0;
+                                    return <AttributeBar key={attr} label={attr} value={player.attributes[attr]} isScouted={areAttributesFullyScouted} change={change} />
+                                })}
                             </div>
                         </div>
-                    </>
-                )}
+                    ))}
+                </div>
+
+                <div className="space-y-6 lg:col-span-1">
+                    {(player.injury || player.suspension) && (
+                        <div className={`p-3 rounded-lg ${player.injury ? 'bg-red-900/50 border-red-500' : 'bg-yellow-900/50 border-yellow-500'} border`}>
+                            <h3 className="text-lg font-semibold text-red-400 mb-2">{player.injury ? 'Lesionado' : 'Suspenso'}</h3>
+                            <div className="text-sm space-y-1">
+                                {player.injury && <p>{player.injury.type}</p>}
+                                <p>Retorno esperado: <span className="font-semibold">{(player.injury?.returnDate || player.suspension?.returnDate)?.toLocaleDateString()}</span></p>
+                            </div>
+                        </div>
+                    )}
+                    <div>
+                        <h3 className="text-lg font-semibold text-green-400 mb-2">Status</h3>
+                        <div className="text-sm space-y-3">
+                            <StatusProgressBar label="Moral" value={player.morale} />
+                            <StatusProgressBar label="Satisfação" value={player.satisfaction} />
+                            <StatusProgressBar label="Cond. Físico" value={player.matchFitness} />
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-green-400 mb-2">Alterações de Treino (30d)</h3>
+                        <div className="text-sm space-y-2 bg-gray-700/50 p-3 rounded-lg max-h-32 overflow-y-auto">
+                            {recentChanges.length > 0 ? (
+                            [...recentChanges].reverse().map((change, index) => (
+                                <div key={index} className="flex justify-between items-center">
+                                <span className="capitalize flex items-center text-gray-300">
+                                    {change.change > 0 ? <span className="text-green-400 mr-2 text-xs">▲</span> : <span className="text-red-400 mr-2 text-xs">▼</span>}
+                                    {change.attr.replace(/([A-Z])/g, ' $1')}
+                                </span>
+                                <span className="text-gray-500 text-xs">{new Date(change.date).toLocaleDateString('pt-BR')}</span>
+                                </div>
+                            ))
+                            ) : (
+                            <p className="text-gray-500 text-xs text-center p-4">Nenhuma alteração nos últimos 30 dias.</p>
+                            )}
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-green-400 mb-2">Contrato</h3>
+                        <div className="text-sm space-y-1">
+                            <p>Salário: <span className="font-semibold">{formatCurrency(player.wage)}/sem</span></p>
+                            <p>Expira em: <span className="font-semibold">{player.contractExpires.toLocaleDateString()}</span></p>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-green-400 mb-2">Valor</h3>
+                        <div className="text-sm space-y-1">
+                            <p>Valor de Mercado: <span className="font-semibold">{formatCurrency(player.marketValue)}</span></p>
+                        </div>
+                    </div>
+
+                    {isTransferTarget && (
+                    <div className="bg-gray-700 p-4 rounded-lg space-y-2">
+                        <h3 className="text-lg font-semibold text-green-400 mb-2">Abordagem</h3>
+                        <button
+                            onClick={() => onStartNegotiation(player.id)}
+                            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded"
+                        >
+                            Iniciar Negociação de Transferência
+                        </button>
+                        <button
+                            onClick={() => onStartLoanNegotiation(player.id)}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded"
+                        >
+                            Fazer Oferta de Empréstimo
+                        </button>
+                    </div>
+                    )}
+                    {!isTransferTarget && (
+                        <>
+                            <div className="bg-gray-700 p-4 rounded-lg">
+                                <h3 className="text-lg font-semibold text-green-400 mb-2">Renovação de Contrato</h3>
+                                <button 
+                                    onClick={() => onStartRenewalNegotiation(player.id)} 
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded disabled:bg-gray-600 disabled:cursor-not-allowed"
+                                    disabled={isRenewalOnCooldown}
+                                    title={isRenewalOnCooldown ? "Você renovou o contrato com este jogador recentemente." : "Negociar um novo contrato"}
+                                >
+                                    {isRenewalOnCooldown ? 'Renovação em Cooldown' : 'Oferecer Novo Contrato'}
+                                </button>
+                            </div>
+
+                            <div className="bg-gray-700 p-4 rounded-lg">
+                                <h3 className="text-lg font-semibold text-green-400 mb-3">Interagir com Jogador</h3>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'praise' } })} disabled={praiseCooldown.onCooldown} className="bg-gray-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                        {praiseCooldown.onCooldown ? `Elogiar (Aguarde ${praiseCooldown.remainingDays}d)` : 'Elogiar Jogador'}
+                                    </button>
+                                    <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'criticize' } })} disabled={criticizeCooldown.onCooldown} className="bg-gray-600 hover:bg-orange-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                        {criticizeCooldown.onCooldown ? `Criticar (Aguarde ${criticizeCooldown.remainingDays}d)` : 'Criticar Jogador'}
+                                    </button>
+                                    <button 
+                                        onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'promise' } })}
+                                        disabled={!!player.promise || promiseCooldown.onCooldown}
+                                        className="bg-gray-600 hover:bg-yellow-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
+                                    >
+                                        {player.promise ? 'Promessa Ativa' : promiseCooldown.onCooldown ? `Prometer (Aguarde ${promiseCooldown.remainingDays}d)` : 'Prometer Tempo de Jogo'}
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
-        </div>
-    );
+        )
+    };
 
     const renderHistory = () => (
         <div className="overflow-x-auto">

@@ -9,7 +9,7 @@ interface TransfersViewProps {
 }
 
 const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick, onOpenNegotiation }) => {
-    const [activeTab, setActiveTab] = useState<'market' | 'negotiations'>('market');
+    const [activeTab, setActiveTab] = useState<'market' | 'loan_market' | 'negotiations'>('market');
     const [searchTerm, setSearchTerm] = useState('');
     const [positionFilter, setPositionFilter] = useState('All');
 
@@ -23,12 +23,55 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick,
             return nameMatch && positionMatch && notOwnPlayer;
         });
     }, [allPlayers, searchTerm, positionFilter, gameState.playerClubId]);
+    
+    const loanMarketPlayers = useMemo(() => {
+        return allPlayers.filter(player => {
+            const nameMatch = player.name.toLowerCase().includes(searchTerm.toLowerCase());
+            const positionMatch = positionFilter === 'All' || getRoleCategory(player.naturalPosition) === positionFilter;
+            const notOwnPlayer = player.clubId !== gameState.playerClubId;
+            const isYoung = player.age <= 24;
+            return nameMatch && positionMatch && notOwnPlayer && isYoung;
+        });
+    }, [allPlayers, searchTerm, positionFilter, gameState.playerClubId]);
 
     const activeNegotiations = useMemo(() =>
         (Object.values(gameState.transferNegotiations) as TransferNegotiation[]).filter((n) =>
             (n.buyingClubId === gameState.playerClubId || n.sellingClubId === gameState.playerClubId) &&
             !['completed', 'cancelled_player', 'cancelled_ai'].includes(n.status))
     , [gameState.transferNegotiations, gameState.playerClubId]);
+    
+    const renderPlayerTable = (players: Player[]) => (
+        <div className="overflow-x-auto">
+            <table className="w-full text-left">
+                <thead className="border-b-2 border-gray-700 text-gray-400">
+                    <tr>
+                        <th className="p-3">Nome</th>
+                        <th className="p-3">Posição</th>
+                        <th className="p-3">Idade</th>
+                        <th className="p-3">Clube</th>
+                        <th className="p-3 text-right">Valor de Mercado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {players.slice(0, 100).map(player => (
+                        <tr
+                            key={player.id}
+                            className="border-b border-gray-700 hover:bg-gray-700 cursor-pointer"
+                            onClick={() => onPlayerClick(player)}
+                        >
+                            <td className="p-3 font-semibold">{player.name}</td>
+                            <td className="p-3">{player.naturalPosition}</td>
+                            <td className="p-3">{player.age}</td>
+                            <td className="p-3">{gameState.clubs[player.clubId]?.name}</td>
+                            <td className="p-3 text-right">
+                                {player.marketValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
 
     const renderMarket = () => (
         <>
@@ -45,43 +88,14 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick,
                     onChange={(e) => setPositionFilter(e.target.value)}
                     className="bg-gray-700 text-white p-2 rounded"
                 >
-                    <option>Todos</option>
+                    <option value="All">Todas</option>
                     <option value="GK">GOL</option>
                     <option value="DEF">DEF</option>
                     <option value="MID">MEI</option>
                     <option value="FWD">ATA</option>
                 </select>
             </div>
-            <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                    <thead className="border-b-2 border-gray-700 text-gray-400">
-                        <tr>
-                            <th className="p-3">Nome</th>
-                            <th className="p-3">Posição</th>
-                            <th className="p-3">Idade</th>
-                            <th className="p-3">Clube</th>
-                            <th className="p-3 text-right">Valor de Mercado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredPlayers.slice(0, 100).map(player => (
-                            <tr
-                                key={player.id}
-                                className="border-b border-gray-700 hover:bg-gray-700 cursor-pointer"
-                                onClick={() => onPlayerClick(player)}
-                            >
-                                <td className="p-3 font-semibold">{player.name}</td>
-                                <td className="p-3">{player.naturalPosition}</td>
-                                <td className="p-3">{player.age}</td>
-                                <td className="p-3">{gameState.clubs[player.clubId]?.name}</td>
-                                <td className="p-3 text-right">
-                                    {player.marketValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            {renderPlayerTable(activeTab === 'market' ? filteredPlayers : loanMarketPlayers)}
         </>
     );
 
@@ -91,11 +105,16 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick,
                 const player = gameState.players[neg.playerId];
                 const isPlayerBuying = neg.buyingClubId === gameState.playerClubId;
                 const otherClub = gameState.clubs[isPlayerBuying ? neg.sellingClubId : neg.buyingClubId];
+                let typeText = neg.type.charAt(0).toUpperCase() + neg.type.slice(1);
+                if (neg.type === 'loan') typeText = "Empréstimo";
+                if (neg.type === 'renewal') typeText = "Renovação";
+                if (neg.type === 'transfer') typeText = "Transferência";
+
                 return (
                     <div key={neg.id} onClick={() => onOpenNegotiation(neg.id)} className="p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700">
                         <div className="flex justify-between items-center">
                             <div>
-                                <p className="font-bold text-lg">{player.name}</p>
+                                <p className="font-bold text-lg">{player.name} <span className="text-xs font-normal text-gray-400">({typeText})</span></p>
                                 <p className="text-sm text-gray-400">
                                     {isPlayerBuying ? 'Oferta enviada para' : 'Oferta recebida de'} {otherClub.name}
                                 </p>
@@ -122,12 +141,15 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick,
                 <button onClick={() => setActiveTab('market')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'market' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
                     Mercado
                 </button>
+                 <button onClick={() => setActiveTab('loan_market')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'loan_market' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
+                    Mercado de Empréstimos
+                </button>
                 <button onClick={() => setActiveTab('negotiations')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'negotiations' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
                     Negociações <span className="bg-green-600 text-white text-xs font-bold rounded-full px-2 ml-1">{activeNegotiations.length}</span>
                 </button>
             </div>
             
-            {activeTab === 'market' ? renderMarket() : renderNegotiations()}
+            {activeTab === 'negotiations' ? renderNegotiations() : renderMarket()}
         </div>
     );
 };

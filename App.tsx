@@ -24,6 +24,7 @@ import StaffView from './components/StaffView';
 import BoardView from './components/BoardView';
 import AcademyView from './components/AcademyView';
 import SeasonReviewModal from './components/SeasonReviewModal';
+import PressConferenceModal from './components/PressConferenceModal';
 
 const roleOrder: Record<PlayerRole, number> = {
     // GK
@@ -257,7 +258,7 @@ const App: React.FC = () => {
             case View.CALENDAR:
                 return <CalendarView gameState={state} onMatchClick={handleMatchClick} />;
             case View.FINANCES:
-                return <FinancesView gameState={state} />;
+                return <FinancesView gameState={state} dispatch={dispatch} />;
             case View.TRANSFERS:
                 return <TransfersView gameState={state} onPlayerClick={handlePlayerClick} onOpenNegotiation={handleOpenNegotiation} />;
             case View.NEWS:
@@ -323,6 +324,7 @@ const App: React.FC = () => {
                     {renderView()}
                 </main>
             </div>
+            {state.pressConference && <PressConferenceModal gameState={state} dispatch={dispatch} />}
             {state.seasonReviewData && <SeasonReviewModal reviewData={state.seasonReviewData} gameState={state} onContinue={handleStartNewSeason} />}
             {state.matchDayFixtures && <MatchDayModal fixtures={state.matchDayFixtures} gameState={state} dispatch={dispatch} onGoToTactics={handleGoToTactics} />}
             {state.matchDayResults && <MatchResultsModal results={state.matchDayResults} gameState={state} onClose={closeMatchResultsModal} />}

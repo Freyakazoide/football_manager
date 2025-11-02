@@ -1,6 +1,6 @@
-import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType, SponsorshipDeal } from '../types';
 import { Action } from './reducerTypes';
-import { runMatch, processPlayerDevelopment, processPlayerAging, processMonthlyFinances, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens, getUnitRatings } from './simulationService';
+import { runMatch, processPlayerDevelopment, processPlayerAging, processMonthlyFinances, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens, getUnitRatings, processPhilosophyReview } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
 import { generateNarrativeReport } from './newsGenerator';
 import { generateAITactics } from './aiTacticsService';
@@ -29,6 +29,9 @@ export const initialState: GameState = {
     seasonReviewData: null,
     transferNegotiations: {},
     nextNegotiationId: 1,
+    pressConference: null,
+    sponsors: {},
+    sponsorshipDeals: [],
 };
 
 const getDepartmentUpgradeCost = (level: number) => {
@@ -48,6 +51,13 @@ const rehydratePlayers = (players: Record<number, Player>): Record<number, Playe
     }
     return players;
 }
+
+const rehydrateSponsorshipDeals = (deals: SponsorshipDeal[]): SponsorshipDeal[] => {
+    deals.forEach(d => {
+        if (d.expires) d.expires = new Date(d.expires);
+    });
+    return deals;
+};
 
 const rehydrateAssignments = (assignments: ScoutingAssignment[]): ScoutingAssignment[] => {
     assignments.forEach(a => {
@@ -123,7 +133,7 @@ const handleMonthlyUpdates = (state: GameState): GameState => {
     }
 
     // 3. Process Monthly Finances (Income & Expenses)
-    newState.clubs = processMonthlyFinances(newState.clubs, newState.players, newState.staff);
+    newState.clubs = processMonthlyFinances(newState.clubs, newState.players, newState.staff, newState.sponsorshipDeals);
 
     // 4. Handle yearly aging
     if (newState.currentDate.getMonth() === 0) { // New year
@@ -157,11 +167,12 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             return {
                 ...state,
                 playerClubId: playerClubId,
-                players: rehydratePlayers(newPlayers)
+                players: rehydratePlayers(newPlayers),
+                sponsorshipDeals: rehydrateSponsorshipDeals(state.sponsorshipDeals),
             };
         }
         case 'ADVANCE_DAY': {
-            if (state.liveMatch || state.seasonReviewData) return state; // Can't advance day during a match or season review
+            if (state.liveMatch || state.seasonReviewData || state.pressConference) return state; // Can't advance day during a match or season review or press conference
 
             const isSeasonOver = state.schedule.length > 0 && state.schedule.every(m => m.homeScore !== undefined);
             if (isSeasonOver) {
@@ -192,20 +203,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     awards,
                     prizeMoney,
                 };
-
-                // --- NEW: Update manager confidence based on objective ---
-                let newConfidence = playerClub.managerConfidence;
-                if (playerClub.boardObjective?.type === 'league_finish') {
-                    const finalPosition = finalTable.findIndex(e => e.clubId === state.playerClubId!) + 1;
-                    if (finalPosition <= playerClub.boardObjective.position) {
-                        newConfidence = Math.min(100, newConfidence + 20); // Objective met
-                    } else {
-                        newConfidence = Math.max(0, newConfidence - 30); // Objective failed
-                    }
-                }
-                const newClubs = { ...state.clubs, [state.playerClubId!]: { ...playerClub, managerConfidence: newConfidence }};
-
-                return { ...state, clubs: newClubs, seasonReviewData };
+                return { ...state, seasonReviewData };
             }
 
             const newDate = new Date(state.currentDate);
@@ -428,13 +426,17 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         });
                     }
                 }
-                newState.leagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
+                newState.leagueTable.sort((a, b) => b.points - a.points || b.goalDifference - b.goalDifference || b.goalsFor - a.goalsFor);
                 
                 const content = roundResults.map(r => `${newState.clubs[r.homeTeamId].name} ${r.homeScore} - ${r.awayScore} ${newState.clubs[r.awayTeamId].name}`).join('\n');
                 newState = addNewsItem(newState, "League Round-up", `Here are the results from around the league:\n\n${content}`, 'round_summary');
             }
 
             if (playerMatchToday) {
+                if (!playerMatchToday.preMatchPressConferenceDone) {
+                    return { ...newState, pressConference: { matchId: playerMatchToday.id, questions: [], currentQuestionIndex: 0, outcomes: [] } };
+                }
+                
                 newState.matchDayFixtures = {
                     playerMatch: {
                         match: playerMatchToday,
@@ -453,13 +455,36 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             return newState;
         }
         case 'START_NEW_SEASON': {
-            const tempState = { ...state };
+            let tempState = { ...state };
             const playerClubId = tempState.playerClubId!;
+            const playerClub = { ...tempState.clubs[playerClubId] };
+            let confidenceChange = 0;
 
-            // 1. Award Prize Money (immutable)
+            // 1. Review performance against objectives and philosophies
+            if (playerClub.boardObjective?.type === 'league_finish') {
+                const finalPosition = tempState.seasonReviewData!.finalTable.findIndex(e => e.clubId === playerClubId)! + 1;
+                if (finalPosition <= playerClub.boardObjective.position) {
+                    confidenceChange += 20;
+                } else {
+                    confidenceChange -= 30;
+                }
+            }
+
+            const season = getSeason(tempState.currentDate);
+            const { confidenceChange: philosophyConfidenceChange, report: philosophyReport } = processPhilosophyReview(playerClub, tempState, season);
+            confidenceChange += philosophyConfidenceChange;
+            
+            if (philosophyReport.length > 0) {
+                 tempState = addNewsItem(tempState, "Board Review: Club Philosophies", "The board has reviewed your performance against the club's long-term philosophies:\n\n" + philosophyReport.join('\n'), 'board_report');
+            }
+            
+            playerClub.managerConfidence = Math.max(0, Math.min(100, playerClub.managerConfidence + confidenceChange));
+            tempState.clubs = { ...tempState.clubs, [playerClubId]: playerClub };
+
+            // 2. Award Prize Money
             const clubsWithPrizeMoney = awardPrizeMoney(tempState.clubs, tempState.leagueTable);
 
-            // 2. Process Promotions & Relegations (immutable)
+            // 3. Process Promotions & Relegations
             const { promotedClubIds, relegatedClubIds } = tempState.seasonReviewData!;
             const clubsAfterPromotion = Object.keys(clubsWithPrizeMoney).reduce((acc, clubIdStr) => {
                 const clubId = Number(clubIdStr);
@@ -474,39 +499,39 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 return acc;
             }, {} as Record<number, Club>);
             
-            // 3. Process Aging and Retirements (immutable)
+            // 4. Process Aging and Retirements
             const { players: agedPlayers, retiredPlayers } = processPlayerAging(tempState.players);
             
-            // 4. Generate Regens (Youth Intake)
+            // 5. Generate Regens (Youth Intake)
             const regens = generateRegens(clubsAfterPromotion, retiredPlayers.length, agedPlayers, playerClubId, tempState.staff);
             const playersWithRegens = regens.reduce((acc, regen) => {
                 acc[regen.id] = regen;
                 return acc;
             }, { ...agedPlayers });
 
-            // 8. Reset season-specific player data (immutable)
+            // 6. Reset season-specific player data
             const finalPlayersState = Object.values(playersWithRegens).reduce((acc, player) => {
                 acc[player.id] = { ...player, seasonYellowCards: 0 };
                 return acc;
             }, {} as Record<number, Player>);
 
-            // 5. Reset league table for the new season's top division
+            // 7. Reset league table for the new season's top division
             const newLeagueClubs = Object.values(clubsAfterPromotion).filter(c => c.competitionId === 1);
             const newLeagueTable: LeagueEntry[] = newLeagueClubs.map(c => ({
                 clubId: c.id, played: 0, wins: 0, draws: 0, losses: 0, 
                 goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0,
             }));
 
-            // 6. Set date to next season's start
+            // 8. Set date to next season's start
             const newStartDate = new Date(tempState.currentDate);
             newStartDate.setFullYear(newStartDate.getFullYear() + 1);
             newStartDate.setMonth(7); // August
             newStartDate.setDate(10);
 
-            // 7. Generate new schedule
+            // 9. Generate new schedule
             const newSchedule = generateScheduleForCompetition(newLeagueClubs, newStartDate);
             
-            // --- NEW: Generate Board Objectives and Reset Confidence ---
+            // 10. Generate Board Objectives
             const clubsWithObjectives = Object.values(clubsAfterPromotion).reduce((acc, club) => {
                 const newClub = { ...club };
                 let objective;
@@ -519,12 +544,17 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                     objective = { type: 'league_finish' as const, position: leagueSize - 3, description: 'Avoid relegation.' };
                 }
                 newClub.boardObjective = objective;
-                newClub.managerConfidence = 100; // Reset confidence for new season
+                
+                // Reset confidence for AI clubs, player club confidence persists
+                if (newClub.id !== playerClubId) {
+                    newClub.managerConfidence = 100;
+                }
+                
                 acc[newClub.id] = newClub;
                 return acc;
             }, {} as Record<number, Club>);
 
-            // 9. Return the final, assembled state
+            // 11. Return the final, assembled state
             return {
                 ...tempState,
                 clubs: clubsWithObjectives,
@@ -759,6 +789,20 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             };
 
             return { ...state, staff: newStaff, clubs: newClubs };
+        }
+        case 'ADJUST_BUDGETS': {
+            if (!state.playerClubId) return state;
+            const { transferBudget, wageBudget } = action.payload;
+            const club = state.clubs[state.playerClubId];
+            const newClubs = {
+                ...state.clubs,
+                [state.playerClubId]: {
+                    ...club,
+                    transferBudget,
+                    wageBudget,
+                }
+            };
+            return { ...state, clubs: newClubs };
         }
         // --- NEW TRANSFER SYSTEM ---
         case 'START_TRANSFER_NEGOTIATION': {
@@ -1456,7 +1500,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             if (scheduleIndex !== -1) newSchedule[scheduleIndex] = finalResult;
             
             const newLeagueTable = updateLeagueTableForMatch(state.leagueTable, finalResult);
-            newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
+            newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - b.goalDifference || b.goalsFor - a.goalsFor);
             
             const aiResultsToday = state.schedule.filter(m => new Date(m.date).toDateString() === new Date(finalResult.date).toDateString() && m.id !== finalResult.id && m.homeScore !== undefined);
 
@@ -1470,6 +1514,73 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 leagueTable: newLeagueTable,
                 players: statsUpdatedPlayers,
                 matchDayResults: { playerResult: finalResult, aiResults: aiResultsToday }
+            };
+        }
+        case 'SET_PRESS_CONFERENCE_QUESTIONS': {
+            if (!state.pressConference) return state;
+            return {
+                ...state,
+                pressConference: {
+                    ...state.pressConference,
+                    questions: action.payload.questions,
+                }
+            };
+        }
+        case 'SUBMIT_PRESS_CONFERENCE_ANSWER': {
+            if (!state.pressConference) return state;
+
+            const { question, answer, narrative, teamMoraleEffect } = action.payload;
+            let newState = { ...state };
+            
+            newState = addNewsItem(newState, "Press Conference Report", `In response to the question, "${question}", the media reports: ${narrative}`, 'interaction_praise');
+
+            const newPlayers = JSON.parse(JSON.stringify(newState.players));
+            for (const pId in newPlayers) {
+                if (newPlayers[pId].clubId === newState.playerClubId) {
+                    newPlayers[pId].morale = Math.max(0, Math.min(100, newPlayers[pId].morale + teamMoraleEffect));
+                }
+            }
+
+            return {
+                ...newState,
+                players: newPlayers,
+                pressConference: {
+                    ...newState.pressConference,
+                    currentQuestionIndex: newState.pressConference.currentQuestionIndex + 1,
+                    outcomes: [...newState.pressConference.outcomes, { question, answer, narrative, teamMoraleEffect }],
+                }
+            };
+        }
+        case 'END_PRESS_CONFERENCE': {
+            if (!state.pressConference) return state;
+
+            const matchId = state.pressConference.matchId;
+            const newSchedule = [...state.schedule];
+            const matchIndex = newSchedule.findIndex(m => m.id === matchId);
+
+            if (matchIndex === -1) {
+                return { ...state, pressConference: null }; // Failsafe
+            }
+
+            newSchedule[matchIndex] = { ...newSchedule[matchIndex], preMatchPressConferenceDone: true };
+            
+            const playerMatchToday = newSchedule[matchIndex];
+            const aiMatches = state.schedule.filter(m =>
+                new Date(m.date).toDateString() === new Date(state.currentDate).toDateString() && m.homeScore === undefined && m.id !== matchId
+            );
+
+            return {
+                ...state,
+                schedule: newSchedule,
+                pressConference: null,
+                matchDayFixtures: {
+                    playerMatch: {
+                        match: playerMatchToday,
+                        homeTeam: state.clubs[playerMatchToday.homeTeamId],
+                        awayTeam: state.clubs[playerMatchToday.awayTeamId],
+                    },
+                    aiMatches,
+                }
             };
         }
         default:

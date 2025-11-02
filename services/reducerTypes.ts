@@ -1,7 +1,7 @@
 import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType } from '../types';
 
 export type Action =
-    | { type: 'INITIALIZE_GAME'; payload: Omit<GameState, 'playerClubId' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData' | 'transferNegotiations' | 'nextNegotiationId'> }
+    | { type: 'INITIALIZE_GAME'; payload: Omit<GameState, 'playerClubId' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData' | 'transferNegotiations' | 'nextNegotiationId' | 'pressConference'> }
     | { type: 'SELECT_PLAYER_CLUB'; payload: number }
     | { type: 'ADVANCE_DAY' }
     | { type: 'UPDATE_TACTICS'; payload: Tactics }
@@ -29,10 +29,12 @@ export type Action =
     // Training & Scouting
     | { type: 'UPDATE_TRAINING_SETTINGS'; payload: { teamFocus: TeamTrainingFocus, individualFocuses: Record<number, IndividualTrainingFocus> } }
     | { type: 'CREATE_SCOUTING_ASSIGNMENT'; payload: Omit<ScoutingAssignment, 'id' | 'isComplete' | 'reportPlayerIds'> }
-    // Staff Management
+    // Staff & Finances
     | { type: 'HIRE_STAFF'; payload: { staffId: number, department: DepartmentType } }
     | { type: 'FIRE_STAFF'; payload: { staffId: number } }
     | { type: 'UPGRADE_DEPARTMENT'; payload: { department: DepartmentType } }
+    // FIX: Corrected typo from ADJUST_BUGETS to ADJUST_BUDGETS
+    | { type: 'ADJUST_BUDGETS'; payload: { transferBudget: number, wageBudget: number } }
     // Season Logic
     | { type: 'START_NEW_SEASON' }
     // New Transfer Negotiation Actions
@@ -46,4 +48,8 @@ export type Action =
     | { type: 'PROCESS_AI_NEGOTIATION_RESPONSE'; payload: { negotiationId: number } }
     // Actions for selling players
     | { type: 'ACCEPT_INCOMING_CLUB_OFFER'; payload: { negotiationId: number } }
-    | { type: 'SUBMIT_COUNTER_OFFER'; payload: { negotiationId: number; offer: TransferOffer } };
+    | { type: 'SUBMIT_COUNTER_OFFER'; payload: { negotiationId: number; offer: TransferOffer } }
+    // Press Conference Actions
+    | { type: 'SET_PRESS_CONFERENCE_QUESTIONS'; payload: { questions: string[] } }
+    | { type: 'SUBMIT_PRESS_CONFERENCE_ANSWER'; payload: { question: string; answer: string; narrative: string; teamMoraleEffect: number } }
+    | { type: 'END_PRESS_CONFERENCE' };

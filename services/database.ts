@@ -1,6 +1,7 @@
 
 
-import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantManagerAttributes, HeadOfScoutingAttributes, HeadOfPhysiotherapyAttributes, HeadOfPerformanceAttributes, Competition, DepartmentType } from '../types';
+import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantManagerAttributes, HeadOfScoutingAttributes, HeadOfPhysiotherapyAttributes, HeadOfPerformanceAttributes, Competition, DepartmentType, Sponsor, SponsorshipDeal, ClubPhilosophy } from '../types';
+import { SPONSOR_DATA } from './sponsors';
 
 const FIRST_NAMES = ['John', 'Paul', 'Mike', 'Leo', 'Chris', 'David', 'Alex', 'Ben', 'Sam', 'Tom', 'Dan', 'Matt'];
 const LAST_NAMES = ['Smith', 'Jones', 'Williams', 'Brown', 'Davis', 'Miller', 'Wilson', 'Moore', 'Taylor', 'Martin'];
@@ -263,12 +264,15 @@ export const generateScheduleForCompetition = (clubsInCompetition: Club[], start
 };
 
 
-export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData' | 'transferNegotiations' | 'nextNegotiationId'> => {
+// FIX: The Omit type was missing 'pressConference', causing a type error on the return statement.
+export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData' | 'transferNegotiations' | 'nextNegotiationId' | 'pressConference'> => {
     const clubs: Record<number, Club> = {};
     const players: Record<number, Player> = {};
     const staff: Record<number, Staff> = {};
     const competitions: Record<number, Competition> = {};
     const leagueTable: LeagueEntry[] = [];
+    const sponsors: Record<number, Sponsor> = {};
+    const sponsorshipDeals: SponsorshipDeal[] = [];
     let playerIdCounter = 1;
     let staffIdCounter = 1;
     const NUM_CLUBS = 20;
@@ -278,6 +282,9 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
     // Create Competitions
     competitions[1] = { id: 1, name: 'Premier Division', level: 1 };
     competitions[2] = { id: 2, name: 'Championship', level: 2 };
+    
+    // Create Sponsors
+    SPONSOR_DATA.forEach(s => sponsors[s.id] = s);
 
     // Generate Staff Pool
     const staffRolesToGenerate = [StaffRole.AssistantManager, StaffRole.HeadOfPerformance, StaffRole.HeadOfPhysiotherapy, StaffRole.HeadOfScouting];
@@ -310,12 +317,32 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
         };
         const competitionId = i <= 10 ? 1 : 2; // First 10 clubs in Premier Division
         const reputation = competitionId === 1 ? randInt(70, 90) : randInt(50, 69);
+        const balance = randInt(5_000_000, 20_000_000);
+        
+        const philosophies: ClubPhilosophy[] = [];
+        if (reputation > 75) {
+            philosophies.push({ type: 'play_attacking_football', description: 'Play attacking, entertaining football.' });
+            if (Math.random() < 0.5) {
+                philosophies.push({ type: 'sign_high_reputation', description: 'Sign high-reputation players.', parameters: { minReputation: 80 } });
+            }
+        } else if (reputation < 65) {
+            philosophies.push({ type: 'develop_youth', description: 'Develop players through the youth system.' });
+            philosophies.push({ type: 'sign_young_players', description: 'Sign players aged 23 or younger for the first team.', parameters: { maxAge: 23 } });
+        } else {
+            if (Math.random() < 0.5) {
+                philosophies.push({ type: 'play_attacking_football', description: 'Play attacking, entertaining football.' });
+            }
+            philosophies.push({ type: 'sign_young_players', description: 'Sign players aged 23 or younger for the first team.', parameters: { maxAge: 23 } });
+        }
+
         clubs[i] = {
             id: i,
             name: `${pickRandom(CITIES)} ${pickRandom(CLUB_NAMES)}`,
             country: pickRandom(COUNTRIES),
             reputation,
-            balance: randInt(5_000_000, 20_000_000),
+            balance: balance,
+            transferBudget: Math.floor(balance * 0.4),
+            wageBudget: 150000,
             tactics: initialTactics,
             trainingFocus: 'Balanced',
             departments: {
@@ -324,10 +351,10 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
                 [DepartmentType.Scouting]: { level: 1, chiefId: null },
                 [DepartmentType.Performance]: { level: 1, chiefId: null },
             },
-            staffWageBudget: 25000,
             competitionId,
             managerConfidence: 100,
             boardObjective: null,
+            philosophies,
         };
 
         if (competitionId === 1) {
@@ -337,6 +364,55 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             });
         }
     }
+
+    // Assign Sponsorship Deals
+    Object.values(clubs).forEach(club => {
+        const availableSponsors = Object.values(sponsors);
+        
+        const findSponsor = (type: 'Main Shirt' | 'Kit Supplier' | 'Stadium Naming Rights') => {
+            const candidates = availableSponsors.filter(s => {
+                if (s.preferredType !== type) return false;
+                // Check if already taken
+                if (sponsorshipDeals.some(d => d.sponsorId === s.id && d.type === type)) return false;
+
+                const rep = club.reputation;
+                return s.guidelines.every(g => {
+                    if (g.type === 'min_reputation') return rep >= g.value;
+                    if (g.type === 'max_reputation') return rep <= g.value;
+                    if (g.type === 'country') return club.country === g.value;
+                    return true;
+                });
+            });
+            return pickRandom(candidates);
+        };
+
+        const createDeal = (sponsor: Sponsor) => {
+            const repModifier = (club.reputation - 50) / 50; // -1 to 1 based on 0-100 rep
+            const valueRange = sponsor.baseAnnualValue[1] - sponsor.baseAnnualValue[0];
+            const value = sponsor.baseAnnualValue[0] + valueRange * Math.max(0, Math.min(1, 0.5 + repModifier / 2));
+            const expires = new Date();
+            expires.setFullYear(expires.getFullYear() + randInt(2, 5));
+            sponsorshipDeals.push({
+                sponsorId: sponsor.id,
+                clubId: club.id,
+                type: sponsor.preferredType,
+                annualValue: Math.round(value / 1000) * 1000,
+                expires,
+            });
+        };
+
+        const shirtSponsor = findSponsor('Main Shirt');
+        if (shirtSponsor) createDeal(shirtSponsor);
+
+        const kitSponsor = findSponsor('Kit Supplier');
+        if (kitSponsor) createDeal(kitSponsor);
+
+        if (club.reputation > 65) {
+            const stadiumSponsor = findSponsor('Stadium Naming Rights');
+            if (stadiumSponsor) createDeal(stadiumSponsor);
+        }
+    });
+
 
     // Assign staff chiefs to AI clubs
     const availableStaff = (role: StaffRole) => Object.values(staff).find(s => s.role === role && s.clubId === null);
@@ -497,5 +573,5 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
     const startDate = new Date(2024, 7, 10); // Season starts in August
     const schedule = generateScheduleForCompetition(clubsInPremierDivision, startDate);
     
-    return { clubs, players, staff, competitions, schedule, leagueTable, scoutingAssignments: [], nextScoutAssignmentId: 1 };
+    return { clubs, players, staff, competitions, schedule, leagueTable, scoutingAssignments: [], nextScoutAssignmentId: 1, sponsors, sponsorshipDeals };
 };

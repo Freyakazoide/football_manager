@@ -177,22 +177,27 @@ export interface Tactics {
 
 export type TeamTrainingFocus = 'Balanced' | 'Attacking' | 'Defending' | 'Tactical' | 'Physical' | 'Set Pieces';
 
+export type ClubPhilosophy =
+    | { type: 'sign_young_players'; description: string; parameters: { maxAge: number } }
+    | { type: 'play_attacking_football'; description: string; }
+    | { type: 'develop_youth'; description: string; }
+    | { type: 'sign_high_reputation'; description: string; parameters: { minReputation: number } };
+
 export interface Club {
     id: number;
     name: string;
     country: string;
     reputation: number;
     balance: number;
+    transferBudget: number;
+    wageBudget: number;
     tactics: Tactics;
     trainingFocus: TeamTrainingFocus;
-    // --- UPDATED Staff structure ---
     departments: Record<DepartmentType, StaffDepartment>;
-    staffWageBudget: number;
-    // --- REMOVED old staffIds ---
     competitionId: number;
-    // --- NEW BOARD ---
     managerConfidence: number; // 0-100
     boardObjective: { type: 'league_finish', position: number, description: string } | null;
+    philosophies: ClubPhilosophy[];
 }
 
 
@@ -240,6 +245,7 @@ export interface Match {
     awayLineup?: (LineupPlayer | null)[]; // for match report
     disciplinaryEvents?: { playerId: number, type: 'yellow' | 'red' }[];
     injuryEvents?: { playerId: number, type: string, returnDate: Date }[];
+    preMatchPressConferenceDone?: boolean;
 }
 
 export interface NewsItem {
@@ -247,7 +253,7 @@ export interface NewsItem {
     date: Date;
     headline: string;
     content: string;
-    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed';
+    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed' | 'board_report';
     relatedEntityId?: number;
     isRead: boolean;
     matchStatsSummary?: Match;
@@ -383,6 +389,40 @@ export interface TransferNegotiation {
     agreedFee: number;
 }
 
+export interface PressConference {
+    matchId: number;
+    questions: string[];
+    currentQuestionIndex: number;
+    outcomes: { question: string; answer: string; narrative: string; teamMoraleEffect: number }[];
+}
+
+// --- NEW SPONSORSHIP TYPES ---
+export type SponsorType = 'Main Shirt' | 'Kit Supplier' | 'Stadium Naming Rights' | 'Training Ground';
+
+export type SponsorGuideline =
+    | { type: 'min_reputation', value: number }
+    | { type: 'max_reputation', value: number }
+    | { type: 'country', value: string }
+    | { type: 'prefers_champions' }
+    | { type: 'prefers_underdogs' };
+
+export interface Sponsor {
+    id: number;
+    name: string;
+    tier: 1 | 2 | 3 | 4; // 1 = Global, 4 = Local
+    guidelines: SponsorGuideline[];
+    baseAnnualValue: [number, number]; // min/max range
+    preferredType: SponsorType;
+}
+
+export interface SponsorshipDeal {
+    sponsorId: number;
+    clubId: number;
+    type: SponsorType;
+    annualValue: number;
+    expires: Date;
+}
+
 
 export interface GameState {
     currentDate: Date;
@@ -404,4 +444,7 @@ export interface GameState {
     seasonReviewData: SeasonReviewData | null;
     transferNegotiations: Record<number, TransferNegotiation>;
     nextNegotiationId: number;
+    pressConference: PressConference | null;
+    sponsors: Record<number, Sponsor>;
+    sponsorshipDeals: SponsorshipDeal[];
 }

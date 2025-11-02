@@ -1,9 +1,33 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes, SponsorshipDeal, NewsItem } from '../types';
 import { getRoleCategory, ALL_ROLES } from './database';
 import { generateInjury } from './injuryService';
+import { getSeason } from './playerStatsService';
 
 const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+const ATTRIBUTE_KEYS: (keyof PlayerAttributes)[] = [
+    'passing', 'dribbling', 'shooting', 'tackling', 'heading', 'crossing',
+    'aggression', 'creativity', 'positioning', 'teamwork', 'workRate',
+    'pace', 'stamina', 'strength', 'naturalFitness'
+];
+
+export const getOverallRating = (p: Player): number => {
+    const attrs = p.attributes;
+    const keyAttrs = attrs.shooting + attrs.passing + attrs.tackling + attrs.dribbling + attrs.pace + attrs.positioning + attrs.workRate + attrs.creativity + attrs.stamina;
+    return keyAttrs / 9;
+};
+
+const getAttributesForRole = (role: PlayerRole): (keyof PlayerAttributes)[] => {
+    const category = getRoleCategory(role);
+    switch(category) {
+        case 'GK': return ['positioning', 'strength', 'pace'];
+        case 'DEF': return ['tackling', 'heading', 'positioning', 'strength', 'pace'];
+        case 'MID': return ['passing', 'creativity', 'teamwork', 'dribbling', 'workRate', 'positioning', 'tackling'];
+        case 'FWD': return ['shooting', 'dribbling', 'pace', 'creativity', 'positioning', 'heading', 'strength'];
+        default: return [];
+    }
+};
 
 const getPositionalModifier = (familiarity: number): number => 0.5 + (familiarity / 200);
 
@@ -215,75 +239,104 @@ const getTrainingFocusAttributes = (focus: TeamTrainingFocus): (keyof PlayerAttr
 };
 
 export const processPlayerDevelopment = (players: Record<number, Player>, clubs: Record<number, Club>, staff: Record<number, Staff>, currentDate: Date): Record<number, Player> => {
-    const newPlayersState: Record<number, Player> = {}; // The new state to return
+    const newPlayersState: Record<number, Player> = {};
+    const season = getSeason(currentDate);
 
     for (const pId in players) {
-        const player = { // Create a shallow clone of the player
+        // Clone player and attributes for safe modification
+        const player = {
             ...players[pId],
-            attributes: { ...players[pId].attributes }, // Deep clone attributes
+            attributes: { ...players[pId].attributes },
             positionalFamiliarity: { ...players[pId].positionalFamiliarity },
             attributeChanges: [...players[pId].attributeChanges],
         };
 
         const club = clubs[player.clubId];
-        const performanceChiefId = club.departments[DepartmentType.Performance].chiefId;
-        const performanceChief = performanceChiefId ? staff[performanceChiefId] as Staff & { attributes: HeadOfPerformanceAttributes } : null;
-        
-        const teamFocus = club.trainingFocus;
-        const individualFocus = player.individualTrainingFocus;
-
-        // Handle individual role training
-        if (individualFocus?.type === 'role' && Math.random() < 0.5) { // 50% chance to improve role familiarity each month
-            const roleToTrain = individualFocus.role;
-            if (player.positionalFamiliarity[roleToTrain] < 100) {
-                player.positionalFamiliarity[roleToTrain] = Math.min(100, player.positionalFamiliarity[roleToTrain] + 2);
-            }
+        if (!club) {
+            newPlayersState[pId] = player;
+            continue;
         }
 
-        // Handle attribute development
-        if (player.age < 29 && Math.random() < 0.2) { // 20% chance of development per month
-            const potentialFactor = player.potential / 100;
-            if (Math.random() < potentialFactor) {
-                const attrs = Object.keys(player.attributes) as (keyof PlayerAttributes)[];
-                let attrToImprove = attrs[Math.floor(Math.random() * attrs.length)];
+        const performanceChiefId = club.departments[DepartmentType.Performance].chiefId;
+        const performanceChief = performanceChiefId ? staff[performanceChiefId] as Staff & { attributes: HeadOfPerformanceAttributes } : null;
 
-                let improvementChance = 1.0;
+        // --- 1. Get Match Performance ---
+        const seasonStats = player.history.find(h => h.season === season);
+        const avgRating = (seasonStats && seasonStats.apps > 0) ? (seasonStats.ratingPoints / seasonStats.apps) : 6.8; // Assume average if no games played
+
+        // --- 2. Positional Familiarity ---
+        if (player.individualTrainingFocus?.type === 'role' && Math.random() < 0.6) { // Increased chance
+            const roleToTrain = player.individualTrainingFocus.role;
+            if (player.positionalFamiliarity[roleToTrain] < 100) {
+                player.positionalFamiliarity[roleToTrain] = Math.min(100, player.positionalFamiliarity[roleToTrain] + randInt(2, 4));
+            }
+        }
+        
+        // --- 3. Attribute Development ---
+        const age = player.age;
+        let developmentChance = 0;
+        if (age < 20) developmentChance = 0.35;      // 35% base chance for multiple improvements for teens
+        else if (age < 24) developmentChance = 0.25; // 25% for young adults
+        else if (age < 29) developmentChance = 0.15; // 15% for peak age players
+
+        if (Math.random() < developmentChance) {
+            const potentialGap = Math.max(0, player.potential - getOverallRating(player));
+            const numImprovements = randInt(1, 3); // 1-3 attribute improvements per development tick
+
+            for (let i = 0; i < numImprovements; i++) {
+                if (potentialGap <= 0) break; // Stop if player has reached potential
+
+                // Determine which attributes to improve
+                let weightedAttributes: (keyof PlayerAttributes)[] = [];
                 
-                // Boost chance based on Head of Performance
-                if (performanceChief) {
-                    improvementChance *= (1 + (performanceChief.attributes.fitnessCoaching / 200)); // Max 50% boost
+                // Add attributes from individual focus (highest weight)
+                if (player.individualTrainingFocus?.type === 'attribute') {
+                    weightedAttributes.push(...Array(10).fill(player.individualTrainingFocus.attribute));
+                } else if (player.individualTrainingFocus?.type === 'role') {
+                    weightedAttributes.push(...getAttributesForRole(player.individualTrainingFocus.role));
                 }
 
-                // Boost chance based on team focus
-                const focusAttrs = getTrainingFocusAttributes(teamFocus);
-                if (focusAttrs.includes(attrToImprove)) {
-                    improvementChance *= 1.5;
-                }
+                // Add attributes from team focus (medium weight)
+                weightedAttributes.push(...getTrainingFocusAttributes(club.trainingFocus));
+                
+                // Add some random attributes (low weight)
+                weightedAttributes.push(ATTRIBUTE_KEYS[randInt(0, ATTRIBUTE_KEYS.length - 1)]);
+                
+                const attrToImprove = pickRandom(weightedAttributes);
 
-                // Greatly boost chance based on individual focus
-                if (individualFocus?.type === 'attribute' && individualFocus.attribute === attrToImprove) {
-                    improvementChance *= 2.5;
-                }
+                let improvementModifier = 1.0;
+                // Performance bonus
+                if (avgRating > 7.2) improvementModifier *= 1.5;
+                if (avgRating < 6.5) improvementModifier *= 0.7;
+                // Staff bonus
+                if (performanceChief) improvementModifier *= (1 + (performanceChief.attributes.fitnessCoaching / 200));
 
-                if (Math.random() < improvementChance && player.attributes[attrToImprove] < 99) {
+                if (Math.random() < improvementModifier && player.attributes[attrToImprove] < 99) {
                     player.attributes[attrToImprove] += 1;
                     player.attributeChanges.push({ date: new Date(currentDate), attr: attrToImprove, change: 1 });
                 }
             }
         }
 
-        // Handle attribute decline
-        if (player.age > 30 && Math.random() < 0.2) { // 20% chance of decline per month
-            const ageFactor = (player.age - 30) / 10;
-            if (Math.random() < ageFactor) {
-                const physicalAttrs: (keyof PlayerAttributes)[] = ['pace', 'stamina', 'strength'];
-                const attrToDecline = physicalAttrs[Math.floor(Math.random() * physicalAttrs.length)];
-                if (player.attributes[attrToDecline] > 30) {
-                    player.attributes[attrToDecline] -= 1;
-                    player.attributeChanges.push({ date: new Date(currentDate), attr: attrToDecline, change: -1 });
+        // --- 4. Attribute Decline ---
+        if (age > 28) {
+            const declineChance = (age - 28) * 0.02; // Starts at 2% at age 29, increases
+            if (Math.random() < declineChance) {
+                const physicalAttrs: (keyof PlayerAttributes)[] = ['pace', 'stamina', 'strength', 'naturalFitness'];
+                const mentalAttrs: (keyof PlayerAttributes)[] = ['workRate', 'aggression'];
+
+                const declinePool = Math.random() < 0.8 ? physicalAttrs : mentalAttrs; // 80% chance of physical decline
+                const attrToDecline = pickRandom(declinePool);
+
+                const naturalFitnessModifier = 1 - (player.attributes.naturalFitness / 200); // High fitness reduces chance
+                
+                if (Math.random() < naturalFitnessModifier && player.attributes[attrToDecline] > 30) {
+                     player.attributes[attrToDecline] -= 1;
+                     player.attributeChanges.push({ date: new Date(currentDate), attr: attrToDecline, change: -1 });
                 }
             }
         }
+
         newPlayersState[pId] = player;
     }
     return newPlayersState;
@@ -393,9 +446,11 @@ const getDepartmentMaintenanceCost = (level: number) => {
     return [0, 1000, 3000, 7500, 15000, 25000][level] || 0;
 }
 
-const getMonthlyIncome = (club: Club, players: Player[]): number => {
-    // 1. Sponsorship Money based on club reputation
-    const sponsorMoney = club.reputation * 10000; // e.g., 80 rep = $800,000/month
+const getMonthlyIncome = (club: Club, players: Player[], sponsorshipDeals: SponsorshipDeal[]): number => {
+    // 1. Sponsorship Money from active deals
+    const monthlySponsorIncome = sponsorshipDeals
+        .filter(d => d.clubId === club.id)
+        .reduce((sum, deal) => sum + (deal.annualValue / 12), 0);
 
     // 2. Ticket Sales based on reputation and average player morale
     const avgPlayerMorale = players.length > 0
@@ -405,10 +460,10 @@ const getMonthlyIncome = (club: Club, players: Player[]): number => {
     const ticketSalesPerMatch = (club.reputation * 200) + (avgPlayerMorale * 100);
     const ticketSales = ticketSalesPerMatch * 2; 
 
-    return sponsorMoney + ticketSales;
+    return monthlySponsorIncome + ticketSales;
 };
 
-export const processMonthlyFinances = (clubs: Record<number, Club>, players: Record<number, Player>, staff: Record<number, Staff>): Record<number, Club> => {
+export const processMonthlyFinances = (clubs: Record<number, Club>, players: Record<number, Player>, staff: Record<number, Staff>, sponsorshipDeals: SponsorshipDeal[]): Record<number, Club> => {
     return Object.values(clubs).reduce((acc, club) => {
         // --- EXPENSES ---
         const clubPlayers = (Object.values(players) as Player[]).filter(p => p.clubId === club.id);
@@ -424,7 +479,7 @@ export const processMonthlyFinances = (clubs: Record<number, Club>, players: Rec
         const totalMonthlyBill = playerWages + staffWages + maintenanceCost;
 
         // --- INCOME ---
-        const totalMonthlyIncome = getMonthlyIncome(club, clubPlayers);
+        const totalMonthlyIncome = getMonthlyIncome(club, clubPlayers, sponsorshipDeals);
         
         acc[club.id] = {
             ...club,
@@ -494,4 +549,88 @@ export const recalculateMarketValue = (player: Player): number => {
     if (player.age < 22) value *= 1.5;
     if (player.age > 32) value *= 0.5;
     return Math.max(0, Math.round(value / 1000) * 1000);
+};
+
+export const processPhilosophyReview = (
+    club: Club,
+    gameState: GameState,
+    season: string
+): { confidenceChange: number; report: string[] } => {
+    let confidenceChange = 0;
+    const report: string[] = [];
+    const { players, news, schedule } = gameState;
+    const seasonStartDate = new Date(season.split('/')[0]);
+
+    for (const philosophy of club.philosophies) {
+        switch (philosophy.type) {
+            case 'play_attacking_football': {
+                const matchesPlayed = schedule.filter(m => (m.homeTeamId === club.id || m.awayTeamId === club.id) && m.homeScore !== undefined);
+                if (matchesPlayed.length > 0) {
+                    const goalsScored = matchesPlayed.reduce((sum, match) => {
+                        return sum + (match.homeTeamId === club.id ? match.homeScore! : match.awayScore!);
+                    }, 0);
+                    const avgGoals = goalsScored / matchesPlayed.length;
+                    if (avgGoals > 1.8) {
+                        confidenceChange += 5;
+                        report.push(`✅ The board is pleased with the team's attacking style, averaging ${avgGoals.toFixed(2)} goals per game.`);
+                    } else if (avgGoals < 1.2) {
+                        confidenceChange -= 5;
+                        report.push(`❌ The board is concerned by the lack of goals, with the team only averaging ${avgGoals.toFixed(2)} per game.`);
+                    } else {
+                        report.push(`- The team's attacking output was satisfactory.`);
+                    }
+                }
+                break;
+            }
+            case 'sign_young_players': {
+                const newSigningsNews = news.filter(n =>
+                    n.type === 'transfer_completed' &&
+                    n.content.includes(`joins ${club.name}`) &&
+                    new Date(n.date) > seasonStartDate
+                );
+                let youngSignings = 0;
+                const totalSignings = newSigningsNews.length;
+
+                newSigningsNews.forEach(item => {
+                    const player = players[item.relatedEntityId!];
+                    if (player && player.age <= philosophy.parameters.maxAge) {
+                        youngSignings++;
+                    }
+                });
+
+                if (totalSignings > 0) {
+                    const ratio = youngSignings / totalSignings;
+                    if (ratio >= 0.75) {
+                        confidenceChange += 5;
+                        report.push(`✅ The board is delighted with the focus on signing young players (${youngSignings}/${totalSignings}).`);
+                    } else if (ratio < 0.25) {
+                        confidenceChange -= 5;
+                        report.push(`❌ The board feels the club has strayed from its philosophy of signing young talent (${youngSignings}/${totalSignings}).`);
+                    } else {
+                        report.push(`- The club's transfer business included a mix of ages.`);
+                    }
+                } else {
+                    report.push(`- No new players were signed this season.`);
+                }
+                break;
+            }
+            case 'develop_youth': {
+                const promotionsNews = news.filter(n =>
+                    n.type === 'youth_player_promoted' &&
+                    new Date(n.date) > seasonStartDate
+                );
+                const promotionsCount = promotionsNews.length;
+                if (promotionsCount >= 2) {
+                    confidenceChange += 5;
+                    report.push(`✅ The board is happy to see ${promotionsCount} players promoted from the academy this season.`);
+                } else {
+                    confidenceChange -= 3;
+                    report.push(`❌ The board would like to see more players given a chance from the youth academy.`);
+                }
+                break;
+            }
+        }
+    }
+
+    return { confidenceChange: Math.min(20, Math.max(-20, confidenceChange)), report };
 };

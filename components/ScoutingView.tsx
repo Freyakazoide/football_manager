@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { GameState, Player, PlayerAttributes, ScoutingFilters, Staff, StaffRole } from '../types';
+import { GameState, Player, PlayerAttributes, ScoutingFilters, Staff, StaffRole, DepartmentType } from '../types';
 import { Action } from '../services/reducerTypes';
 import { getRoleCategory } from '../services/database';
 
@@ -19,7 +19,7 @@ const ScoutingView: React.FC<ScoutingViewProps> = ({ gameState, dispatch, onPlay
     const club = gameState.clubs[playerClubId];
     if (!club) return null; // Defensive check
     
-    const headOfScoutingId = club.departments.Scouting.chiefId;
+    const headOfScoutingId = club.departments[DepartmentType.Scouting].chiefId;
     const headOfScouting = headOfScoutingId ? gameState.staff[headOfScoutingId] : null;
 
     const handleFilterChange = (key: keyof ScoutingFilters, value: any) => {

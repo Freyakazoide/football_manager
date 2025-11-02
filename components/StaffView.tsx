@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { GameState, Staff, StaffRole, DepartmentType, StaffAttributes } from '../types';
 import { Action } from '../services/reducerTypes';
@@ -151,10 +149,10 @@ const StaffView: React.FC<StaffViewProps> = ({ gameState, dispatch }) => {
     };
 
     const hiredChiefs = useMemo(() => ({
-        [DepartmentType.Coaching]: club.departments.Coaching.chiefId,
-        [DepartmentType.Medical]: club.departments.Medical.chiefId,
-        [DepartmentType.Scouting]: club.departments.Scouting.chiefId,
-        [DepartmentType.Performance]: club.departments.Performance.chiefId,
+        [DepartmentType.Coaching]: club.departments[DepartmentType.Coaching].chiefId,
+        [DepartmentType.Medical]: club.departments[DepartmentType.Medical].chiefId,
+        [DepartmentType.Scouting]: club.departments[DepartmentType.Scouting].chiefId,
+        [DepartmentType.Performance]: club.departments[DepartmentType.Performance].chiefId,
     }), [club.departments]);
     
     const renderCurrentStaff = () => (

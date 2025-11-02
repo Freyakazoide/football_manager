@@ -102,8 +102,8 @@ const processClubTransferLogic = (
         let newNewsItem: NewsItem | null = null;
         if (target.clubId === gameState.playerClubId) {
             newNegotiation.status = 'player_turn';
-            const headline = `Transfer Offer for ${target.name}`;
-            const content = `${club.name} have submitted a transfer offer of ${initialOfferFee.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })} for your player, ${target.name}. You can respond to this offer from the Transfers screen.`;
+            const headline = `Oferta de Transferência por ${target.name}`;
+            const content = `${club.name} enviou uma oferta de transferência de ${initialOfferFee.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })} pelo seu jogador, ${target.name}. Você pode responder a esta oferta na tela de Transferências.`;
             newNewsItem = {
                 id: acc.nextNewsId,
                 date: new Date(gameState.currentDate),

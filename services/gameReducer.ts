@@ -1,4 +1,4 @@
-import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType, SponsorshipDeal } from '../types';
+import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType, SponsorshipDeal, Loan } from '../types';
 import { Action } from './reducerTypes';
 import { runMatch, processPlayerDevelopment, processPlayerAging, processMonthlyFinances, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens, getUnitRatings, processPhilosophyReview } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
@@ -29,9 +29,12 @@ export const initialState: GameState = {
     seasonReviewData: null,
     transferNegotiations: {},
     nextNegotiationId: 1,
-    pressConference: null,
     sponsors: {},
     sponsorshipDeals: [],
+    // FIX: Add missing properties for banking system to conform to GameState type.
+    banks: {},
+    loans: [],
+    nextLoanId: 1,
 };
 
 const getDepartmentUpgradeCost = (level: number) => {
@@ -66,6 +69,12 @@ const rehydrateAssignments = (assignments: ScoutingAssignment[]): ScoutingAssign
     return assignments;
 };
 
+const rehydrateLoans = (loans: Loan[]): Loan[] => {
+    loans.forEach(l => {
+        if (l.startDate) l.startDate = new Date(l.startDate);
+    });
+    return loans;
+};
 
 const addNewsItem = (state: GameState, headline: string, content: string, type: NewsItem['type'], relatedEntityId?: number, matchStatsSummary?: Match): GameState => {
     const newNewsItem: NewsItem = {
@@ -133,7 +142,10 @@ const handleMonthlyUpdates = (state: GameState): GameState => {
     }
 
     // 3. Process Monthly Finances (Income & Expenses)
-    newState.clubs = processMonthlyFinances(newState.clubs, newState.players, newState.staff, newState.sponsorshipDeals);
+    // FIX: The signature of processMonthlyFinances was updated to accept the entire game state.
+    // The call is updated accordingly, and the returned partial state is merged.
+    const financialUpdates = processMonthlyFinances(newState);
+    newState = { ...newState, ...financialUpdates };
 
     // 4. Handle yearly aging
     if (newState.currentDate.getMonth() === 0) { // New year
@@ -169,10 +181,12 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 playerClubId: playerClubId,
                 players: rehydratePlayers(newPlayers),
                 sponsorshipDeals: rehydrateSponsorshipDeals(state.sponsorshipDeals),
+                loans: rehydrateLoans(state.loans),
             };
         }
         case 'ADVANCE_DAY': {
-            if (state.liveMatch || state.seasonReviewData || state.pressConference) return state; // Can't advance day during a match or season review or press conference
+            // FIX: Removed reference to 'pressConference' which has been deprecated.
+            if (state.liveMatch || state.seasonReviewData) return state; // Can't advance day during a match or season review or press conference
 
             const isSeasonOver = state.schedule.length > 0 && state.schedule.every(m => m.homeScore !== undefined);
             if (isSeasonOver) {
@@ -426,17 +440,14 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         });
                     }
                 }
-                newState.leagueTable.sort((a, b) => b.points - a.points || b.goalDifference - b.goalDifference || b.goalsFor - a.goalsFor);
+                newState.leagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
                 
                 const content = roundResults.map(r => `${newState.clubs[r.homeTeamId].name} ${r.homeScore} - ${r.awayScore} ${newState.clubs[r.awayTeamId].name}`).join('\n');
                 newState = addNewsItem(newState, "League Round-up", `Here are the results from around the league:\n\n${content}`, 'round_summary');
             }
 
             if (playerMatchToday) {
-                if (!playerMatchToday.preMatchPressConferenceDone) {
-                    return { ...newState, pressConference: { matchId: playerMatchToday.id, questions: [], currentQuestionIndex: 0, outcomes: [] } };
-                }
-                
+                // FIX: Removed press conference logic, proceeding directly to match day fixtures.
                 newState.matchDayFixtures = {
                     playerMatch: {
                         match: playerMatchToday,
@@ -803,6 +814,87 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 }
             };
             return { ...state, clubs: newClubs };
+        }
+        case 'REQUEST_LOAN': {
+            const { bankId, amount, termMonths } = action.payload;
+            const playerClubId = state.playerClubId!;
+            const club = state.clubs[playerClubId];
+            const bank = state.banks[bankId];
+
+            if (!bank || club.reputation < bank.minReputation || amount > bank.maxLoanAmount || termMonths < bank.termMonthsRange[0] || termMonths > bank.termMonthsRange[1]) {
+                return state; // Invalid loan request
+            }
+
+            // Calculate interest rate based on credit score
+            const creditScoreModifier = (100 - club.creditScore) / 100;
+            const rateRange = bank.interestRateRange[1] - bank.interestRateRange[0];
+            const interestRate = bank.interestRateRange[0] + (rateRange * creditScoreModifier);
+            
+            const monthlyRate = interestRate / 100 / 12;
+            const monthlyRepayment = monthlyRate > 0 
+                ? (amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -termMonths))
+                : amount / termMonths;
+
+            const newLoan: Loan = {
+                id: state.nextLoanId,
+                bankId,
+                clubId: playerClubId,
+                principal: amount,
+                remainingBalance: amount,
+                monthlyRepayment,
+                interestRate,
+                termMonths,
+                monthsRemaining: termMonths,
+                startDate: new Date(state.currentDate),
+            };
+
+            const newClubs = {
+                ...state.clubs,
+                [playerClubId]: {
+                    ...club,
+                    balance: club.balance + amount,
+                },
+            };
+
+            return {
+                ...state,
+                clubs: newClubs,
+                loans: [...state.loans, newLoan],
+                nextLoanId: state.nextLoanId + 1,
+            };
+        }
+        case 'REPAY_LOAN': {
+            const { loanId } = action.payload;
+            const loanToRepay = state.loans.find(l => l.id === loanId);
+            if (!loanToRepay) return state;
+
+            const playerClubId = state.playerClubId!;
+            const club = state.clubs[playerClubId];
+
+            if (club.balance < loanToRepay.remainingBalance) {
+                return state; // Can't afford
+            }
+
+            const newClubs = {
+                ...state.clubs,
+                [playerClubId]: {
+                    ...club,
+                    balance: club.balance - loanToRepay.remainingBalance,
+                    creditScore: Math.min(100, club.creditScore + 5), // Bonus for early repayment
+                    // FIX: Using 'as const' to ensure TypeScript infers a literal type for 'outcome', not a generic string.
+                    loanHistory: [...club.loanHistory, { bankId: loanToRepay.bankId, outcome: 'paid_off' as const, amount: loanToRepay.principal, date: new Date(state.currentDate) }],
+                },
+            };
+            
+            const newLoans = state.loans.filter(l => l.id !== loanId);
+            
+            const newState = addNewsItem(state, "Loan Repaid Early", `You have successfully repaid your loan from ${state.banks[loanToRepay.bankId].name}. Your club's credit score has improved.`, 'loan_update');
+
+            return {
+                ...newState,
+                clubs: newClubs,
+                loans: newLoans,
+            };
         }
         // --- NEW TRANSFER SYSTEM ---
         case 'START_TRANSFER_NEGOTIATION': {
@@ -1251,7 +1343,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             
             if (wasBallCarrier) {
                 const opposition = isHome ? updatedState.awayLineup : updatedState.homeLineup;
-                const newCarrier = opposition.find(p => p.role === 'Central Defender' && !p.isSentOff) || opposition.find(p => !p.isSentOff);
+                const newCarrier = opposition.find(p => p.role === 'Zagueiro' && !p.isSentOff) || opposition.find(p => !p.isSentOff);
                 if(newCarrier) {
                     updatedState.ballCarrierId = newCarrier.id;
                     updatedState.attackingTeamId = isHome ? updatedState.awayTeamId : updatedState.homeTeamId;
@@ -1325,7 +1417,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 case 'attack_flanks':
                     shoutText = 'Attack the Flanks!';
                     lineup.forEach((p: LivePlayer) => {
-                        if (p.role.includes('Wing') || p.role.includes('Wide') || p.role.includes('Full-Back')) {
+                        if (p.role.includes('Ala') || p.role.includes('Aberto') || p.role.includes('Lateral')) {
                             p.instructions.dribbling = DribblingInstruction.DribbleMore;
                             p.instructions.crossing = CrossingInstruction.CrossMore;
                             p.instructions.positioning = PositioningInstruction.GetForward;
@@ -1500,7 +1592,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             if (scheduleIndex !== -1) newSchedule[scheduleIndex] = finalResult;
             
             const newLeagueTable = updateLeagueTableForMatch(state.leagueTable, finalResult);
-            newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - b.goalDifference || b.goalsFor - a.goalsFor);
+            newLeagueTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
             
             const aiResultsToday = state.schedule.filter(m => new Date(m.date).toDateString() === new Date(finalResult.date).toDateString() && m.id !== finalResult.id && m.homeScore !== undefined);
 
@@ -1516,73 +1608,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 matchDayResults: { playerResult: finalResult, aiResults: aiResultsToday }
             };
         }
-        case 'SET_PRESS_CONFERENCE_QUESTIONS': {
-            if (!state.pressConference) return state;
-            return {
-                ...state,
-                pressConference: {
-                    ...state.pressConference,
-                    questions: action.payload.questions,
-                }
-            };
-        }
-        case 'SUBMIT_PRESS_CONFERENCE_ANSWER': {
-            if (!state.pressConference) return state;
-
-            const { question, answer, narrative, teamMoraleEffect } = action.payload;
-            let newState = { ...state };
-            
-            newState = addNewsItem(newState, "Press Conference Report", `In response to the question, "${question}", the media reports: ${narrative}`, 'interaction_praise');
-
-            const newPlayers = JSON.parse(JSON.stringify(newState.players));
-            for (const pId in newPlayers) {
-                if (newPlayers[pId].clubId === newState.playerClubId) {
-                    newPlayers[pId].morale = Math.max(0, Math.min(100, newPlayers[pId].morale + teamMoraleEffect));
-                }
-            }
-
-            return {
-                ...newState,
-                players: newPlayers,
-                pressConference: {
-                    ...newState.pressConference,
-                    currentQuestionIndex: newState.pressConference.currentQuestionIndex + 1,
-                    outcomes: [...newState.pressConference.outcomes, { question, answer, narrative, teamMoraleEffect }],
-                }
-            };
-        }
-        case 'END_PRESS_CONFERENCE': {
-            if (!state.pressConference) return state;
-
-            const matchId = state.pressConference.matchId;
-            const newSchedule = [...state.schedule];
-            const matchIndex = newSchedule.findIndex(m => m.id === matchId);
-
-            if (matchIndex === -1) {
-                return { ...state, pressConference: null }; // Failsafe
-            }
-
-            newSchedule[matchIndex] = { ...newSchedule[matchIndex], preMatchPressConferenceDone: true };
-            
-            const playerMatchToday = newSchedule[matchIndex];
-            const aiMatches = state.schedule.filter(m =>
-                new Date(m.date).toDateString() === new Date(state.currentDate).toDateString() && m.homeScore === undefined && m.id !== matchId
-            );
-
-            return {
-                ...state,
-                schedule: newSchedule,
-                pressConference: null,
-                matchDayFixtures: {
-                    playerMatch: {
-                        match: playerMatchToday,
-                        homeTeam: state.clubs[playerMatchToday.homeTeamId],
-                        awayTeam: state.clubs[playerMatchToday.awayTeamId],
-                    },
-                    aiMatches,
-                }
-            };
-        }
+        // FIX: Removed all cases related to the deprecated 'pressConference' feature.
         default:
             return state;
     }

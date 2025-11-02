@@ -32,7 +32,7 @@ const MatchStatsSummary: React.FC<{ match: Match; clubs: Record<number, Club> }>
 
     return (
         <div className="mt-6 border-t border-gray-700 pt-4">
-            <h4 className="text-lg font-bold text-white mb-4">Match Statistics</h4>
+            <h4 className="text-lg font-bold text-white mb-4">Estatísticas da Partida</h4>
             <div className="bg-gray-700/50 p-4 rounded-lg">
                  <div className="flex justify-between items-center mb-4 font-bold text-center">
                     <span className="w-2/5 text-right">{homeTeam.name}</span>
@@ -40,12 +40,12 @@ const MatchStatsSummary: React.FC<{ match: Match; clubs: Record<number, Club> }>
                     <span className="w-2/5 text-left">{awayTeam.name}</span>
                 </div>
                 <div className="space-y-4">
-                    <GraphicalStatBar label="Possession" homeValue={match.homeStats.possession} awayValue={match.awayStats.possession} isPercentage />
-                    <GraphicalStatBar label="Shots" homeValue={match.homeStats.shots} awayValue={match.awayStats.shots} />
-                    <GraphicalStatBar label="On Target" homeValue={match.homeStats.shotsOnTarget} awayValue={match.awayStats.shotsOnTarget} />
+                    <GraphicalStatBar label="Posse de Bola" homeValue={match.homeStats.possession} awayValue={match.awayStats.possession} isPercentage />
+                    <GraphicalStatBar label="Finalizações" homeValue={match.homeStats.shots} awayValue={match.awayStats.shots} />
+                    <GraphicalStatBar label="No Alvo" homeValue={match.homeStats.shotsOnTarget} awayValue={match.awayStats.shotsOnTarget} />
                     <GraphicalStatBar label="xG" homeValue={match.homeStats.xG} awayValue={match.awayStats.xG} isXG />
-                    <GraphicalStatBar label="Tackles" homeValue={match.homeStats.tackles} awayValue={match.awayStats.tackles} />
-                    <GraphicalStatBar label="Fouls" homeValue={match.homeStats.fouls} awayValue={match.awayStats.fouls} />
+                    <GraphicalStatBar label="Desarmes" homeValue={match.homeStats.tackles} awayValue={match.awayStats.tackles} />
+                    <GraphicalStatBar label="Faltas" homeValue={match.homeStats.fouls} awayValue={match.awayStats.fouls} />
                 </div>
             </div>
         </div>
@@ -74,7 +74,7 @@ const NewsView: React.FC<NewsViewProps> = ({ gameState, dispatch }) => {
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl h-full flex flex-col md:flex-row">
             <div className="w-full md:w-1/3 border-r border-gray-700 flex flex-col">
-                <h2 className="text-2xl font-bold text-white p-4 border-b border-gray-700">Inbox</h2>
+                <h2 className="text-2xl font-bold text-white p-4 border-b border-gray-700">Caixa de Entrada</h2>
                 <div className="overflow-y-auto flex-1">
                     {gameState.news.map(item => (
                         <div
@@ -92,7 +92,7 @@ const NewsView: React.FC<NewsViewProps> = ({ gameState, dispatch }) => {
                 {selectedNewsItem ? (
                     <div>
                         <h3 className="text-2xl font-bold text-green-400 mb-2">{selectedNewsItem.headline}</h3>
-                        <p className="text-sm text-gray-500 mb-4">{selectedNewsItem.date.toDateString()}</p>
+                        <p className="text-sm text-gray-500 mb-4">{selectedNewsItem.date.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                         <div className="prose prose-invert prose-p:text-gray-300 whitespace-pre-wrap">
                             {selectedNewsItem.content}
                         </div>
@@ -102,7 +102,7 @@ const NewsView: React.FC<NewsViewProps> = ({ gameState, dispatch }) => {
                     </div>
                 ) : (
                     <div className="flex items-center justify-center h-full">
-                        <p className="text-gray-500">Select a news item to read.</p>
+                        <p className="text-gray-500">Selecione uma notícia para ler.</p>
                     </div>
                 )}
             </div>

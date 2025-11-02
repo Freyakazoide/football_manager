@@ -1,5 +1,5 @@
 {
-  "name": "Foot: Football Manager",
-  "description": "A single-player, offline football management simulation game. Manage your club's tactics, squad, and finances to lead them to glory in a persistent fictional universe.",
+  "name": "Foot: Manager de Futebol",
+  "description": "Um jogo de simulação de gerenciamento de futebol para um jogador, offline. Gerencie as táticas, o elenco e as finanças do seu clube para levá-lo à glória em um universo fictício persistente.",
   "requestFramePermissions": []
 }

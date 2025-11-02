@@ -10,7 +10,7 @@ interface TeamViewProps {
 
 const NextMatchWidget: React.FC<{ nextMatch: Match | undefined; gameState: GameState }> = ({ nextMatch, gameState }) => {
     if (!nextMatch) {
-        return <p className="text-gray-400">No upcoming matches scheduled.</p>;
+        return <p className="text-gray-400">Nenhuma partida agendada.</p>;
     }
     const opponentId = nextMatch.homeTeamId === gameState.playerClubId ? nextMatch.awayTeamId : nextMatch.homeTeamId;
     const opponent = gameState.clubs[opponentId];
@@ -18,11 +18,11 @@ const NextMatchWidget: React.FC<{ nextMatch: Match | undefined; gameState: GameS
 
     return (
         <div>
-            <h3 className="text-gray-400 text-sm font-bold uppercase tracking-wider">Next Match</h3>
+            <h3 className="text-gray-400 text-sm font-bold uppercase tracking-wider">Próxima Partida</h3>
             <div className="mt-2 text-center">
                 <p className="text-gray-500 text-xs">{new Date(nextMatch.date).toLocaleDateString()}</p>
                 <p className="text-xl font-bold text-white">{opponent.name}</p>
-                <p className="text-sm text-gray-400">{isHome ? '(Home)' : '(Away)'}</p>
+                <p className="text-sm text-gray-400">{isHome ? '(Casa)' : '(Fora)'}</p>
             </div>
         </div>
     );
@@ -33,14 +33,14 @@ const RecentFormWidget: React.FC<{ recentMatches: Match[]; playerClubId: number 
         if (match.homeScore === undefined || match.awayScore === undefined) return null;
         const isHome = match.homeTeamId === playerClubId;
         const scoreDiff = isHome ? match.homeScore - match.awayScore : match.awayScore - match.homeScore;
-        if (scoreDiff > 0) return { res: 'W', color: 'bg-green-500' };
-        if (scoreDiff < 0) return { res: 'L', color: 'bg-red-500' };
-        return { res: 'D', color: 'bg-gray-500' };
+        if (scoreDiff > 0) return { res: 'V', color: 'bg-green-500' };
+        if (scoreDiff < 0) return { res: 'D', color: 'bg-red-500' };
+        return { res: 'E', color: 'bg-gray-500' };
     };
 
     return (
         <div className="mt-4 pt-4 border-t border-gray-700">
-            <h3 className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-2">Recent Form</h3>
+            <h3 className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-2">Forma Recente</h3>
             <div className="flex justify-center gap-2">
                 {recentMatches.length > 0 ? recentMatches.slice(0, 5).reverse().map(match => {
                     const result = getResult(match);
@@ -49,7 +49,7 @@ const RecentFormWidget: React.FC<{ recentMatches: Match[]; playerClubId: number 
                             {result.res}
                         </span>
                     ) : null;
-                }) : <p className="text-xs text-gray-500">No matches played yet.</p>}
+                }) : <p className="text-xs text-gray-500">Nenhuma partida jogada ainda.</p>}
             </div>
         </div>
     );
@@ -57,16 +57,16 @@ const RecentFormWidget: React.FC<{ recentMatches: Match[]; playerClubId: number 
 
 const LeaguePositionWidget: React.FC<{ leagueEntry: LeagueEntry | undefined; position: number }> = ({ leagueEntry, position }) => {
     if (!leagueEntry) {
-        return <p className="text-gray-400">Not in league.</p>;
+        return <p className="text-gray-400">Fora da liga.</p>;
     }
     return (
         <div>
-            <h3 className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-2">League Position</h3>
+            <h3 className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-2">Posição na Liga</h3>
             <div className="flex items-baseline justify-center gap-4">
-                <span className="text-6xl font-bold text-green-400">{position}</span>
+                <span className="text-6xl font-bold text-green-400">{position}º</span>
                 <div className="text-left">
                     <p className="font-semibold">{leagueEntry.points} pts</p>
-                    <p className="text-xs text-gray-400">{leagueEntry.wins}-{leagueEntry.draws}-{leagueEntry.losses}</p>
+                    <p className="text-xs text-gray-400">{leagueEntry.wins}V-{leagueEntry.draws}E-{leagueEntry.losses}D</p>
                 </div>
             </div>
         </div>
@@ -91,16 +91,16 @@ const TeamStatsWidget: React.FC<{ gameState: GameState }> = ({ gameState }) => {
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
-            <h3 className="text-xl font-bold text-white mb-3">Season Leaders</h3>
+            <h3 className="text-xl font-bold text-white mb-3">Líderes da Temporada</h3>
             <div className="space-y-4">
                 <div>
-                    <p className="text-sm text-gray-400">Top Scorer</p>
+                    <p className="text-sm text-gray-400">Artilheiro</p>
                     {topScorer.goals > 0 && topScorer.player ? (
                         <p className="text-lg font-semibold">{topScorer.player.name} - <span className="font-bold text-green-400">{topScorer.goals}</span></p>
                     ) : <p className="text-sm text-gray-400">-</p>}
                 </div>
                 <div>
-                    <p className="text-sm text-gray-400">Top Assister</p>
+                    <p className="text-sm text-gray-400">Líder de Assistências</p>
                      {topAssister.assists > 0 && topAssister.player ? (
                         <p className="text-lg font-semibold">{topAssister.player.name} - <span className="font-bold text-green-400">{topAssister.assists}</span></p>
                     ) : <p className="text-sm text-gray-400">-</p>}
@@ -123,16 +123,16 @@ const SquadStatsTable: React.FC<{ gameState: GameState }> = ({ gameState }) => {
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6 mt-6">
-            <h2 className="text-xl font-bold text-white mb-4">Squad Season Statistics</h2>
+            <h2 className="text-xl font-bold text-white mb-4">Estatísticas do Elenco na Temporada</h2>
             <div className="overflow-x-auto max-h-96">
                 <table className="w-full text-left text-sm">
                     <thead className="border-b-2 border-gray-700 text-gray-400 sticky top-0 bg-gray-800">
                         <tr>
-                            <th className="p-2">Player</th>
-                            <th className="p-2 text-center">Apps</th>
-                            <th className="p-2 text-center">Gls</th>
-                            <th className="p-2 text-center">Ast</th>
-                            <th className="p-2 text-center font-bold">Av Rtg</th>
+                            <th className="p-2">Jogador</th>
+                            <th className="p-2 text-center">Jogos</th>
+                            <th className="p-2 text-center">Gols</th>
+                            <th className="p-2 text-center">Assis.</th>
+                            <th className="p-2 text-center font-bold">Nota M.</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -159,26 +159,26 @@ const FinancesSummary: React.FC<{ gameState: GameState }> = ({ gameState }) => {
     const club = gameState.clubs[gameState.playerClubId!];
     const clubPlayers = (Object.values(gameState.players) as Player[]).filter(p => p.clubId === club.id);
     const totalWeeklyWage = clubPlayers.reduce((sum, p) => sum + p.wage, 0);
-    const formatCurrency = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
+    const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Financial Summary</h2>
+            <h2 className="text-xl font-bold text-white mb-4">Resumo Financeiro</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-gray-700 p-4 rounded-lg text-center">
-                    <h3 className="text-gray-400 text-sm">Total Balance</h3>
+                    <h3 className="text-gray-400 text-sm">Saldo Total</h3>
                     <p className={`text-3xl font-bold ${club.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {formatCurrency(club.balance)}
                     </p>
                 </div>
                 <div className="bg-gray-700 p-4 rounded-lg text-center">
-                    <h3 className="text-gray-400 text-sm">Weekly Wage Bill</h3>
+                    <h3 className="text-gray-400 text-sm">Folha Salarial Semanal</h3>
                     <p className="text-3xl font-bold text-orange-400">
                         {formatCurrency(totalWeeklyWage)}
                     </p>
                 </div>
                  <div className="bg-gray-700 p-4 rounded-lg text-center">
-                    <h3 className="text-gray-400 text-sm">Monthly Wage Bill (est.)</h3>
+                    <h3 className="text-gray-400 text-sm">Folha Salarial Mensal (est.)</h3>
                     <p className="text-3xl font-bold text-red-400">
                         {formatCurrency(totalWeeklyWage * 4)}
                     </p>
@@ -192,17 +192,17 @@ const PlayerWagesList: React.FC<{ gameState: GameState }> = ({ gameState }) => {
     const clubPlayers = (Object.values(gameState.players) as Player[])
         .filter(p => p.clubId === gameState.playerClubId)
         .sort((a, b) => b.wage - a.wage);
-    const formatCurrency = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
+    const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6 mt-6">
-            <h2 className="text-xl font-bold text-white mb-4">Player Wages</h2>
+            <h2 className="text-xl font-bold text-white mb-4">Salários dos Jogadores</h2>
             <div className="overflow-y-auto max-h-96">
                 <table className="w-full text-left text-sm">
                     <thead className="border-b-2 border-gray-700 text-gray-400 sticky top-0 bg-gray-800">
                         <tr>
-                            <th className="p-2">Player</th>
-                            <th className="p-2 text-right">Weekly Wage</th>
+                            <th className="p-2">Jogador</th>
+                            <th className="p-2 text-right">Salário Semanal</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -222,7 +222,7 @@ const PlayerWagesList: React.FC<{ gameState: GameState }> = ({ gameState }) => {
 const RecentResultsList: React.FC<{ recentMatches: Match[]; gameState: GameState }> = ({ recentMatches, gameState }) => {
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Recent Results</h2>
+            <h2 className="text-xl font-bold text-white mb-4">Resultados Recentes</h2>
             <div className="space-y-3">
                 {recentMatches.length > 0 ? recentMatches.map(match => {
                     const homeTeam = gameState.clubs[match.homeTeamId];
@@ -238,7 +238,7 @@ const RecentResultsList: React.FC<{ recentMatches: Match[]; gameState: GameState
                              <span className={`w-2/5 text-left ${!isPlayerHome ? 'font-bold text-white' : 'text-gray-400'}`}>{awayTeam.name}</span>
                         </div>
                     )
-                }) : <p className="text-gray-500 text-center">No matches played yet.</p>}
+                }) : <p className="text-gray-500 text-center">Nenhuma partida jogada ainda.</p>}
             </div>
         </div>
     );
@@ -264,7 +264,7 @@ const TeamView: React.FC<TeamViewProps> = ({ gameState }) => {
             .slice(0, 5);
 
         const leagueEntry = gameState.leagueTable.find(e => e.clubId === playerClubId);
-        const position = leagueEntry ? gameState.leagueTable.findIndex(e => e.clubId === playerClubId) + 1 : 0;
+        const position = leagueEntry ? gameState.leagueTable.sort((a, b) => b.points - a.points || b.goalDifference - b.goalDifference || b.goalsFor - a.goalsFor).findIndex(e => e.clubId === playerClubId) + 1 : 0;
         return { nextMatch, recentMatches, leagueEntry, position };
     }, [gameState.schedule, gameState.leagueTable, playerClubId]);
     
@@ -315,12 +315,12 @@ const TeamView: React.FC<TeamViewProps> = ({ gameState }) => {
     
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-white">{club.name} - Team Hub</h1>
+            <h1 className="text-3xl font-bold text-white">{club.name} - Hub do Time</h1>
             <div className="bg-gray-900/50 rounded-lg shadow-xl">
                  <div className="flex border-b border-gray-700 px-4">
-                    <TabButton tab="overview" label="Overview" />
-                    <TabButton tab="stats" label="Stats" />
-                    <TabButton tab="finances" label="Finances" />
+                    <TabButton tab="overview" label="Visão Geral" />
+                    <TabButton tab="stats" label="Estatísticas" />
+                    <TabButton tab="finances" label="Finanças" />
                 </div>
                 <div className="p-4 md:p-6">
                     {renderContent()}

@@ -1,3 +1,4 @@
+
 import React, { useState, useReducer, useEffect, useCallback, useRef } from 'react';
 import { GameState, View, Club, Player, Match, PlayerRole, TransferNegotiation, Tactics, MatchDayInfo } from './types';
 import { gameReducer, initialState } from './services/gameReducer';
@@ -13,7 +14,8 @@ import TransfersView from './components/TransfersView';
 import PlayerProfileView from './components/PlayerProfileView';
 import MatchDayModal from './components/MatchDayModal';
 import TransferNegotiationModal from './components/TransferNegotiationModal';
-import MatchView from './components/MatchView';
+// FIX: MatchView is not a default export. It should be a named import.
+import { MatchView } from './components/MatchView';
 import NewsView from './components/NewsView';
 import MatchResultsModal from './components/MatchResultsModal';
 import MatchReportModal from './components/MatchReportModal';
@@ -24,23 +26,22 @@ import StaffView from './components/StaffView';
 import BoardView from './components/BoardView';
 import AcademyView from './components/AcademyView';
 import SeasonReviewModal from './components/SeasonReviewModal';
-import PressConferenceModal from './components/PressConferenceModal';
 
 const roleOrder: Record<PlayerRole, number> = {
     // GK
-    'Goalkeeper': 1, 'Sweeper Keeper': 2,
+    'Goleiro': 1, 'Goleiro Líbero': 2,
     // DEF
-    'Libero': 10, 'Central Defender': 11, 'Ball-Playing Defender': 12,
-    'Full-Back': 13, 'Wing-Back': 14, 'Inverted Wing-Back': 15,
+    'Líbero': 10, 'Zagueiro': 11, 'Zagueiro com Passe': 12,
+    'Lateral': 13, 'Ala': 14, 'Lateral Invertido': 15,
     // MID
-    'Defensive Midfielder': 20, 'Deep Lying Playmaker': 21, 'Ball Winning Midfielder': 22,
-    'Carrilero': 23, 'Central Midfielder': 24, 'Box-To-Box Midfielder': 25, 'Roaming Playmaker': 26,
-    'Mezzala': 27, 'Wide Midfielder': 28, 'Wide Playmaker': 29,
+    'Volante': 20, 'Construtor de Jogo Recuado': 21, 'Volante Ladrão de Bolas': 22,
+    'Carrilero': 23, 'Meio-campista': 24, 'Meia Box-to-Box': 25, 'Meia Itinerante': 26,
+    'Mezzala': 27, 'Meia Aberto': 28, 'Armador Aberto': 29,
     // AM
-    'Attacking Midfielder': 30, 'Advanced Playmaker': 31, 'Trequartista': 32,
-    'Shadow Striker': 33,
+    'Meia Atacante': 30, 'Armador Avançado': 31, 'Trequartista': 32,
+    'Atacante Sombra': 33,
     // FWD
-    'False Nine': 40, 'Deep-Lying Forward': 41, 'Poacher': 42, 'Advanced Forward': 43, 'Striker': 44, 'Complete Forward': 45,
+    'Falso Nove': 40, 'Atacante Recuado': 41, 'Finalizador': 42, 'Atacante Avançado': 43, 'Atacante': 44, 'Atacante Completo': 45,
 };
 
 const getMoraleIcon = (morale: number): string => {
@@ -61,20 +62,20 @@ const ClubSquadModal: React.FC<{
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
             <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                 <div className="p-4 border-b border-gray-700 flex justify-between items-center">
-                    <h2 className="text-2xl font-bold">{club.name} - Squad</h2>
+                    <h2 className="text-2xl font-bold">{club.name} - Elenco</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl font-bold">&times;</button>
                 </div>
                 <div className="p-4 overflow-y-auto">
                     <table className="w-full text-left">
                         <thead className="border-b-2 border-gray-700 text-gray-400">
                             <tr>
-                                <th className="p-3">Name</th>
-                                <th className="p-3">Position</th>
+                                <th className="p-3">Nome</th>
+                                <th className="p-3">Posição</th>
                                 <th className="p-3 text-center" title="Status">St</th>
-                                <th className="p-3 text-center" title="Morale">Mor</th>
-                                <th className="p-3 text-center" title="Match Fitness">Fit</th>
-                                <th className="p-3">Age</th>
-                                <th className="p-3 text-right">Value</th>
+                                <th className="p-3 text-center" title="Moral">Mor</th>
+                                <th className="p-3 text-center" title="Condicionamento Físico">Fís</th>
+                                <th className="p-3">Idade</th>
+                                <th className="p-3 text-right">Valor</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -87,14 +88,14 @@ const ClubSquadModal: React.FC<{
                                     <td className="p-3 font-semibold">{player.name}</td>
                                     <td className="p-3">{player.naturalPosition}</td>
                                     <td className="p-3 text-center">
-                                        {player.injury && <span className="text-red-500 font-bold" title={`Injured: ${player.injury.type}`}>✚</span>}
-                                        {player.suspension && <span className="text-red-500 font-bold" title={`Suspended`}>■</span>}
+                                        {player.injury && <span className="text-red-500 font-bold" title={`Lesionado: ${player.injury.type}`}>✚</span>}
+                                        {player.suspension && <span className="text-red-500 font-bold" title={`Suspenso`}>■</span>}
                                     </td>
                                     <td className="p-3 text-center" title={`${player.morale}`}>{getMoraleIcon(player.morale)}</td>
                                     <td className="p-3 text-center">{player.matchFitness}</td>
                                     <td className="p-3">{player.age}</td>
                                     <td className="p-3 text-right">
-                                        {player.marketValue.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}
+                                        {player.marketValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}
                                     </td>
                                 </tr>
                             ))}
@@ -277,7 +278,7 @@ const App: React.FC = () => {
     };
     
     if (!isInitialized) {
-        return <div className="flex items-center justify-center h-screen bg-gray-900 text-white">Loading Game World...</div>;
+        return <div className="flex items-center justify-center h-screen bg-gray-900 text-white">Carregando Mundo do Jogo...</div>;
     }
 
     if (state.liveMatch) {
@@ -288,7 +289,7 @@ const App: React.FC = () => {
         return (
             <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
                 <h1 className="text-4xl font-bold text-white mb-2">foot</h1>
-                <p className="text-lg text-gray-400 mb-8">Select a club to manage</p>
+                <p className="text-lg text-gray-400 mb-8">Selecione um clube para treinar</p>
                 <div className="w-full max-w-2xl bg-gray-800 rounded-lg shadow-lg p-4">
                     <ul className="space-y-2">
                         {Object.values(state.clubs).map((club: Club) => (
@@ -324,7 +325,6 @@ const App: React.FC = () => {
                     {renderView()}
                 </main>
             </div>
-            {state.pressConference && <PressConferenceModal gameState={state} dispatch={dispatch} />}
             {state.seasonReviewData && <SeasonReviewModal reviewData={state.seasonReviewData} gameState={state} onContinue={handleStartNewSeason} />}
             {state.matchDayFixtures && <MatchDayModal fixtures={state.matchDayFixtures} gameState={state} dispatch={dispatch} onGoToTactics={handleGoToTactics} />}
             {state.matchDayResults && <MatchResultsModal results={state.matchDayResults} gameState={state} onClose={closeMatchResultsModal} />}

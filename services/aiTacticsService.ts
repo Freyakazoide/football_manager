@@ -86,11 +86,12 @@ export const generateAITactics = (
     const opponentOverall = (opponentRatings.def + opponentRatings.mid + opponentRatings.fwd) / 3;
     const strengthDiff = ownOverall - opponentOverall;
 
-    let mentality: Mentality = 'Balanced';
+    // FIX: Translated mentality strings to match Mentality type.
+    let mentality: Mentality = 'Equilibrada';
     if (strengthDiff > 8) {
-        mentality = 'Offensive';
+        mentality = 'Ofensiva';
     } else if (strengthDiff < -8) {
-        mentality = 'Defensive';
+        mentality = 'Defensiva';
     }
     
     // --- New Formation Selection Logic ---
@@ -141,6 +142,7 @@ export const generateAITactics = (
     const { lineup, bench } = suggestSquadSelection(lineupSlots, clubPlayers, assistant?.attributes);
     
     // --- New Dynamic Instruction Logic ---
+    // FIX: Translated player roles from English to Portuguese.
     lineup.forEach(lp => {
         if (!lp) return;
         
@@ -161,28 +163,28 @@ export const generateAITactics = (
             case 'FWD':
                 if (attributes.shooting > 80) instructions.shooting = ShootingInstruction.ShootMoreOften;
                 if (attributes.dribbling > 80 && attributes.pace > 80) instructions.dribbling = DribblingInstruction.DribbleMore;
-                if ((role === 'Deep-Lying Forward' || role === 'False Nine') && attributes.passing > 75) instructions.passing = PassingInstruction.Risky;
+                if ((role === 'Atacante Recuado' || role === 'Falso Nove') && attributes.passing > 75) instructions.passing = PassingInstruction.Risky;
                 break;
             case 'MID':
                 if (attributes.dribbling > 80) instructions.dribbling = DribblingInstruction.DribbleMore;
-                if (attributes.creativity > 80 && role.includes('Playmaker')) instructions.passing = PassingInstruction.Risky;
-                if (attributes.shooting > 75 && (role === 'Box-To-Box Midfielder' || role === 'Mezzala' || role === 'Attacking Midfielder')) instructions.positioning = PositioningInstruction.GetForward;
-                if (role === 'Ball Winning Midfielder' || role === 'Carrilero') {
+                if (attributes.creativity > 80 && (role.includes('Armador') || role.includes('Construtor'))) instructions.passing = PassingInstruction.Risky;
+                if (attributes.shooting > 75 && (role === 'Meia Box-to-Box' || role === 'Mezzala' || role === 'Meia Atacante')) instructions.positioning = PositioningInstruction.GetForward;
+                if (role === 'Volante Ladrão de Bolas' || role === 'Carrilero') {
                     instructions.tackling = TacklingInstruction.Harder;
                     instructions.pressing = PressingInstruction.Urgent;
                 }
-                if (role === 'Defensive Midfielder' || role === 'Deep Lying Playmaker') instructions.positioning = PositioningInstruction.HoldPosition;
+                if (role === 'Volante' || role === 'Construtor de Jogo Recuado') instructions.positioning = PositioningInstruction.HoldPosition;
                 break;
             case 'DEF':
-                if (role === 'Wing-Back' && attributes.workRate > 80) instructions.positioning = PositioningInstruction.GetForward;
-                if (role === 'Ball-Playing Defender' && attributes.passing > 75) instructions.passing = PassingInstruction.Risky;
-                if (role.includes('Central') || role === 'Libero') instructions.positioning = PositioningInstruction.HoldPosition;
+                if (role === 'Ala' && attributes.workRate > 80) instructions.positioning = PositioningInstruction.GetForward;
+                if (role === 'Zagueiro com Passe' && attributes.passing > 75) instructions.passing = PassingInstruction.Risky;
+                if (role.includes('Zagueiro') || role === 'Líbero') instructions.positioning = PositioningInstruction.HoldPosition;
                 break;
         }
         
         // Synergistic instructions
         if (category === 'FWD' || category === 'MID' || category === 'DEF') {
-            if ((role.includes('Wing') || role.includes('Wide') || role.includes('Full-Back')) && attributes.crossing > 75) {
+            if ((role.includes('Ala') || role.includes('Aberto') || role.includes('Lateral')) && attributes.crossing > 75) {
                 instructions.crossing = CrossingInstruction.CrossMore;
                 instructions.positioning = PositioningInstruction.GetForward; // Encourage them to get into crossing positions
             }

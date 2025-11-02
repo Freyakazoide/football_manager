@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { GameState } from '../types';
 
@@ -41,14 +40,14 @@ const Header: React.FC<HeaderProps> = ({ gameState, onAdvanceDay, onGoBack, onGo
                 </div>
                 <div>
                     <h1 className="text-xl font-bold text-white">{playerClub?.name || 'Manager'}</h1>
-                    <p className="text-sm text-gray-400">{gameState.currentDate.toDateString()}</p>
+                    <p className="text-sm text-gray-400">{gameState.currentDate.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
             </div>
             <button
                 onClick={onAdvanceDay}
                 className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300 ease-in-out transform hover:scale-105"
             >
-                Continue
+                Continuar
             </button>
         </header>
     );

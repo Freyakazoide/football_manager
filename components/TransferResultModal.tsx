@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 // FIX: Removed unused import for a type that does not exist.
@@ -19,14 +18,14 @@ const TransferResultModal: React.FC<TransferResultModalProps> = ({ result, onClo
             <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-sm">
                 <div className="p-6 text-center">
                     <h2 className={`text-2xl font-bold mb-4 ${result.success ? 'text-green-400' : 'text-red-400'}`}>
-                        {result.success ? 'Transfer Successful!' : 'Offer Rejected'}
+                        {result.success ? 'Transferência Bem-sucedida!' : 'Oferta Rejeitada'}
                     </h2>
                     <p className="text-gray-300 mb-6">{result.message}</p>
                     <button
                         onClick={onClose}
                         className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition duration-300"
                     >
-                        Close
+                        Fechar
                     </button>
                 </div>
             </div>

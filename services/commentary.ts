@@ -1,45 +1,45 @@
 export const commentary = {
     tackle: [
-        "${defenderName} dispossesses ${creatorName} cleanly.",
-        "Key Tackle! ${defenderName} wins the ball back with a strong challenge.",
-        "A strong but fair challenge from ${defenderName} on ${creatorName}.",
-        "Superb timing from ${defenderName} to stop the attack.",
-        "${creatorName} is muscled off the ball by ${defenderName}.",
-        "That's a well-timed interception from ${defenderName}."
+        "${defenderName} despossui ${creatorName} de forma limpa.",
+        "Desarme crucial! ${defenderName} recupera a bola com uma entrada forte.",
+        "Uma entrada forte, mas leal de ${defenderName} em ${creatorName}.",
+        "Ótimo tempo de bola de ${defenderName} para parar o ataque.",
+        "${creatorName} é desarmado na força por ${defenderName}.",
+        "Essa foi uma interceptação bem calculada de ${defenderName}."
     ],
     foul: [
-        "Foul! ${defenderName} brings down ${creatorName}.",
-        "That's a clumsy challenge from ${defenderName}, free kick.",
-        "The referee blows the whistle after a late tackle by ${defenderName}.",
-        "${creatorName} is brought down illegally by ${defenderName}."
+        "Falta! ${defenderName} derruba ${creatorName}.",
+        "Que entrada desajeitada de ${defenderName}, falta marcada.",
+        "O árbitro apita após uma entrada atrasada de ${defenderName}.",
+        "${creatorName} é derrubado ilegalmente por ${defenderName}."
     ],
     highlight: [
-        "${creatorName} plays a clever pass through to ${attackerName}...",
-        "${creatorName} splits the defence with a wonderful through ball!",
-        "A chance opens up for ${attackerName} thanks to a pass from ${creatorName}!",
-        "It's a great opportunity here for ${attackerName}!"
+        "${creatorName} dá um passe inteligente para ${attackerName}...",
+        "${creatorName} rasga a defesa com um passe maravilhoso!",
+        "Uma chance se abre para ${attackerName} graças a um passe de ${creatorName}!",
+        "É uma grande oportunidade aqui para ${attackerName}!"
     ],
     goal: [
-        "GOAL! ${attackerName} finds the back of the net! Assisted by ${assistMaker}.",
-        "It's in! ${attackerName} with a clinical finish, setup by ${assistMaker}!",
-        "He's scored! A brilliant strike from ${attackerName}!",
-        "What a goal! ${attackerName} makes no mistake! Great assist from ${assistMaker}."
+        "GOL! ${attackerName} encontra o fundo da rede! Com assistência de ${assistMaker}.",
+        "É bola na rede! ${attackerName} com uma finalização precisa, servido por ${assistMaker}!",
+        "Ele marcou! Uma batida brilhante de ${attackerName}!",
+        "Que golaço! ${attackerName} não perdoa! Ótima assistência de ${assistMaker}."
     ],
     save: [
-        "A great save by ${keeperName} denies ${attackerName}!",
-        "Brilliant stop from ${keeperName}! He keeps his team in it.",
-        "${attackerName} must be wondering how that didn't go in! What a save by ${keeperName}!",
-        "The keeper stands tall! ${keeperName} makes a crucial save."
+        "Uma grande defesa de ${keeperName} nega o gol de ${attackerName}!",
+        "Defesa brilhante de ${keeperName}! Ele mantém seu time no jogo.",
+        "${attackerName} deve estar se perguntando como essa bola não entrou! Que defesa de ${keeperName}!",
+        "O goleiro se agiganta! ${keeperName} faz uma defesa crucial."
     ],
     nearMiss: [
-        "Near Miss! ${attackerName}'s shot goes ${missType}!",
-        "So close! ${attackerName} can't believe he's missed from there!",
-        "Agonizingly close for ${attackerName}, the shot is just ${missType}!",
-        "It's a whisker away from being a goal! ${attackerName} hits it ${missType}."
+        "Quase! O chute de ${attackerName} vai ${missType}!",
+        "Muito perto! ${attackerName} não acredita que perdeu essa chance!",
+        "Agonizantemente perto para ${attackerName}, o chute passa ${missType}!",
+        "Faltou um triz para ser gol! ${attackerName} chuta ${missType}."
     ],
     interception: [
-        "The pass towards ${intendedTarget} is cut out by ${interceptor}!",
-        "${interceptor} reads the play beautifully to intercept.",
-        "A loose pass is picked off by ${interceptor}."
+        "O passe para ${intendedTarget} é cortado por ${interceptor}!",
+        "${interceptor} lê a jogada lindamente para interceptar.",
+        "Um passe displicente é interceptado por ${interceptor}."
     ]
 };

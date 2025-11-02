@@ -13,18 +13,18 @@ const ConfidenceBar: React.FC<{ confidence: number }> = ({ confidence }) => {
     };
 
     const getBoardMood = (val: number) => {
-        if (val > 85) return "Ecstatic";
-        if (val > 70) return "Pleased";
-        if (val > 50) return "Content";
-        if (val > 30) return "Concerned";
-        if (val > 10) return "Unhappy";
-        return "Outraged";
+        if (val > 85) return "Extasiada";
+        if (val > 70) return "Satisfeita";
+        if (val > 50) return "Contente";
+        if (val > 30) return "Preocupada";
+        if (val > 10) return "Insatisfeita";
+        return "Furiosa";
     };
 
     return (
         <div>
             <div className="flex justify-between items-baseline mb-1">
-                <span className="text-sm font-semibold text-gray-300">Board Mood: {getBoardMood(confidence)}</span>
+                <span className="text-sm font-semibold text-gray-300">Humor da Diretoria: {getBoardMood(confidence)}</span>
                 <span className="text-lg font-bold text-gray-200">{confidence} / 100</span>
             </div>
             <div className="w-full bg-gray-700 rounded-full h-5">
@@ -44,32 +44,32 @@ const BoardView: React.FC<BoardViewProps> = ({ gameState }) => {
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-white mb-2">Board Room</h2>
-            <p className="text-gray-400 mb-6">An overview of your relationship with the board and current objectives.</p>
+            <h2 className="text-3xl font-bold text-white mb-2">Sala da Diretoria</h2>
+            <p className="text-gray-400 mb-6">Uma visão geral do seu relacionamento com a diretoria e os objetivos atuais.</p>
             
             <div className="bg-gray-900/50 p-6 rounded-lg mb-6">
-                <h3 className="text-xl font-semibold text-green-400 mb-4">Manager Confidence</h3>
+                <h3 className="text-xl font-semibold text-green-400 mb-4">Confiança no Treinador</h3>
                 <ConfidenceBar confidence={club.managerConfidence} />
             </div>
 
             <div className="bg-gray-900/50 p-6 rounded-lg">
-                <h3 className="text-xl font-semibold text-green-400 mb-4">Season Objectives</h3>
+                <h3 className="text-xl font-semibold text-green-400 mb-4">Objetivos da Temporada</h3>
                 {club.boardObjective ? (
                     <div>
                         <p className="text-lg text-white">
-                            <span className="font-bold">League:</span> {club.boardObjective.description}
+                            <span className="font-bold">Liga:</span> {club.boardObjective.description}
                         </p>
-                        <p className="text-sm text-gray-400">The board expects you to achieve this by the end of the season.</p>
+                        <p className="text-sm text-gray-400">A diretoria espera que você alcance isso até o final da temporada.</p>
                     </div>
                 ) : (
-                    <p className="text-gray-500">The board will set new objectives at the start of the next season.</p>
+                    <p className="text-gray-500">A diretoria definirá novos objetivos no início da próxima temporada.</p>
                 )}
             </div>
             
             <div className="bg-gray-900/50 p-6 rounded-lg mt-6">
-                <h3 className="text-xl font-semibold text-green-400 mb-4">Club Philosophies</h3>
+                <h3 className="text-xl font-semibold text-green-400 mb-4">Filosofias do Clube</h3>
                 <p className="text-sm text-gray-400 mb-4">
-                    These are the long-term guiding principles the board wants you to follow. Adhering to these philosophies is crucial for maintaining their confidence.
+                    Estes são os princípios orientadores de longo prazo que a diretoria quer que você siga. Aderir a essas filosofias é crucial para manter a confiança deles.
                 </p>
                 {club.philosophies.length > 0 ? (
                     <ul className="space-y-3">
@@ -85,7 +85,7 @@ const BoardView: React.FC<BoardViewProps> = ({ gameState }) => {
                         ))}
                     </ul>
                 ) : (
-                    <p className="text-gray-500">The board has not set any specific club philosophies at this time.</p>
+                    <p className="text-gray-500">A diretoria não definiu nenhuma filosofia específica para o clube neste momento.</p>
                 )}
             </div>
         </div>

@@ -130,14 +130,15 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     const aiScore = isAITeamHome ? newState.homeScore : newState.awayScore;
     const playerScore = isAITeamHome ? newState.awayScore : newState.homeScore;
 
+    // FIX: Translated mentality strings from English to Portuguese.
     if (newState.minute > 75) {
-        if (aiScore < playerScore && aiTeamMentality !== 'Offensive') {
-            if (isAITeamHome) newState.homeMentality = 'Offensive';
-            else newState.awayMentality = 'Offensive';
+        if (aiScore < playerScore && aiTeamMentality !== 'Ofensiva') {
+            if (isAITeamHome) newState.homeMentality = 'Ofensiva';
+            else newState.awayMentality = 'Ofensiva';
             newEvents.push({ minute: newState.minute, text: `${isAITeamHome ? newState.homeTeamName : newState.awayTeamName} are going all out attack!`, type: 'Info' });
-        } else if (aiScore > playerScore && aiTeamMentality !== 'Defensive') {
-            if (isAITeamHome) newState.homeMentality = 'Defensive';
-            else newState.awayMentality = 'Defensive';
+        } else if (aiScore > playerScore && aiTeamMentality !== 'Defensiva') {
+            if (isAITeamHome) newState.homeMentality = 'Defensiva';
+            else newState.awayMentality = 'Defensiva';
             newEvents.push({ minute: newState.minute, text: `${isAITeamHome ? newState.homeTeamName : newState.awayTeamName} are looking to shut up shop.`, type: 'Info' });
         }
     }
@@ -241,7 +242,8 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
 
     const ballCarrier = attackingTeam.find(p => p.id === newState.ballCarrierId && !p.isSentOff && !p.isInjured);
     if (!ballCarrier) {
-        const newCarrier = getPlayerByRole(defendingTeam, ['Central Defender', 'Defensive Midfielder']);
+        // FIX: Translated player roles from English to Portuguese.
+        const newCarrier = getPlayerByRole(defendingTeam, ['Zagueiro', 'Volante']);
         if(newCarrier) {
              newState.ballCarrierId = newCarrier.id;
              newState.attackingTeamId = isHomeAttacking ? newState.awayTeamId : newState.homeTeamId;
@@ -261,8 +263,9 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
     const opponentMod = getPositionalModifier(opponentFamiliarity);
 
     const inst = ballCarrier.instructions;
+    // FIX: Translated mentality string from English to Portuguese.
     const basePassDesire = (ballCarrier.attributes.passing + ballCarrier.attributes.teamwork) * carrierMod;
-    const baseDribbleDesire = ballCarrier.attributes.dribbling * (attackingMentality === 'Offensive' ? 1.2 : 0.9) * carrierMod;
+    const baseDribbleDesire = ballCarrier.attributes.dribbling * (attackingMentality === 'Ofensiva' ? 1.2 : 0.9) * carrierMod;
     
     const passMod = inst.passing === PassingInstruction.Shorter ? 1.2 : (inst.passing === PassingInstruction.Risky ? 0.8 : 1.0);
     const dribbleMod = inst.dribbling === DribblingInstruction.DribbleMore ? 1.3 : (inst.dribbling === DribblingInstruction.DribbleLess ? 0.7 : 1.0);
@@ -293,7 +296,8 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
             shotPower *= 1.5;
         }
         const pressure = opponent.attributes.positioning * 0.5 * fatigueMod(opponent.stamina) * opponentMod;
-        const keeper = getPlayerByRole(defendingTeam, ['Goalkeeper', 'Sweeper Keeper'])!;
+        // FIX: Translated player roles from English to Portuguese.
+        const keeper = getPlayerByRole(defendingTeam, ['Goleiro', 'Goleiro Líbero'])!;
         const keeperMod = getPositionalModifier(keeper.positionalFamiliarity[keeper.role] || 20);
         const keeperPower = (keeper.attributes.positioning * 1.2) * fatigueMod(keeper.stamina) * keeperMod * fitnessMod(keeper.matchFitness) * moraleMod(keeper.morale) * (isHomeAttacking ? awayMod : homeMod);
         
@@ -330,7 +334,7 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
                 defendingTeam.forEach(p => p.morale = Math.max(0, p.morale - 5));
 
                  defendingTeam.forEach(p => {
-                     const isDefenderOrGk = ['Goalkeeper', 'Sweeper Keeper', 'Central Defender', 'Ball-Playing Defender', 'Full-Back', 'Wing-Back', 'Libero', 'Defensive Midfielder'].includes(p.role);
+                     const isDefenderOrGk = ['Goleiro', 'Goleiro Líbero', 'Zagueiro', 'Zagueiro com Passe', 'Lateral', 'Ala', 'Líbero', 'Volante'].includes(p.role);
                      updateRating(p, isDefenderOrGk ? -0.3 : -0.15);
                  });
                  newState.ballCarrierId = null; // Reset for kickoff
@@ -357,7 +361,8 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
         newEvents.push({ minute: newState.minute, text: `${ballCarrier.name} looks to cross the ball.`, type: 'Info', primaryPlayerId: ballCarrier.id });
 
         if (crossQuality * Math.random() > defensiveHeader * Math.random()) {
-            const targetPlayer = getPlayerByRole(attackingTeam, ['Striker', 'Poacher', 'Advanced Forward', 'Shadow Striker']);
+            // FIX: Translated player roles from English to Portuguese.
+            const targetPlayer = getPlayerByRole(attackingTeam, ['Atacante', 'Finalizador', 'Atacante Avançado', 'Atacante Sombra']);
             if (targetPlayer) {
                 newEvents.push({ minute: newState.minute, text: `A great cross from ${ballCarrier.name} finds ${targetPlayer.name} in the box!`, type: 'Highlight', primaryPlayerId: ballCarrier.id, secondaryPlayerId: targetPlayer.id });
                 newState.isKeyPassOpportunity = true;
@@ -375,7 +380,8 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState, ne
 
     } else if (action === 'pass') {
         // --- PASS ---
-        const passTarget = getPlayerByRole(attackingTeam, ['Striker', 'Advanced Forward', 'Central Midfielder', 'Attacking Midfielder', 'Wide Midfielder']);
+        // FIX: Translated player roles from English to Portuguese.
+        const passTarget = getPlayerByRole(attackingTeam, ['Atacante', 'Atacante Avançado', 'Meio-campista', 'Meia Atacante', 'Meia Aberto']);
         if (passTarget) {
             let passQuality = (ballCarrier.attributes.passing + ballCarrier.attributes.creativity) * fatigueMod(ballCarrier.stamina) * carrierMod * currentFitnessMod * currentMoraleMod * (isHomeAttacking ? homeMod : awayMod);
             let interceptionQuality = (opponent.attributes.positioning + opponent.attributes.workRate) * fatigueMod(opponent.stamina) * opponentMod * (isHomeAttacking ? awayMod : homeMod);

@@ -17,23 +17,23 @@ const AcademyView: React.FC<AcademyViewProps> = ({ gameState, onPromotePlayer, o
             .sort((a, b) => b.potential - a.potential)
     , [gameState.players, playerClubId]);
     
-    const formatCurrency = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
+    const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-4">Youth Academy</h2>
-            <p className="text-gray-400 mb-6">Here are the current prospects in your club's academy. Nurture their talent through training and promote them when they are ready for the first team.</p>
+            <h2 className="text-2xl font-bold text-white mb-4">Categoria de Base</h2>
+            <p className="text-gray-400 mb-6">Aqui estão os jovens talentos da base do seu clube. Desenvolva o talento deles através do treino e promova-os quando estiverem prontos para o time principal.</p>
             
             <div className="overflow-x-auto">
                 <table className="w-full text-left">
                     <thead className="border-b-2 border-gray-700 text-gray-400">
                         <tr>
-                            <th className="p-3">Name</th>
-                            <th className="p-3">Age</th>
-                            <th className="p-3">Position</th>
-                            <th className="p-3 text-center">Potential</th>
-                            <th className="p-3 text-right">Value</th>
-                            <th className="p-3 text-center">Actions</th>
+                            <th className="p-3">Nome</th>
+                            <th className="p-3">Idade</th>
+                            <th className="p-3">Posição</th>
+                            <th className="p-3 text-center">Potencial</th>
+                            <th className="p-3 text-right">Valor</th>
+                            <th className="p-3 text-center">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -61,7 +61,7 @@ const AcademyView: React.FC<AcademyViewProps> = ({ gameState, onPromotePlayer, o
                                         onClick={() => onPromotePlayer(player.id)}
                                         className="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-sm transition-colors duration-200"
                                     >
-                                        Promote
+                                        Promover
                                     </button>
                                 </td>
                             </tr>
@@ -69,7 +69,7 @@ const AcademyView: React.FC<AcademyViewProps> = ({ gameState, onPromotePlayer, o
                          {youthPlayers.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="text-center p-8 text-gray-500">
-                                    Your academy is currently empty. A new intake of youth players will arrive at the end of the season.
+                                    Sua categoria de base está vazia. Uma nova leva de jovens jogadores chegará ao final da temporada.
                                 </td>
                             </tr>
                         )}

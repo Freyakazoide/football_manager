@@ -1,6 +1,6 @@
 
 
-import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantManagerAttributes, HeadOfScoutingAttributes, HeadOfPhysiotherapyAttributes, HeadOfPerformanceAttributes, Competition, DepartmentType, Sponsor, SponsorshipDeal, ClubPhilosophy } from '../types';
+import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantManagerAttributes, HeadOfScoutingAttributes, HeadOfPhysiotherapyAttributes, HeadOfPerformanceAttributes, Competition, DepartmentType, Sponsor, SponsorshipDeal, ClubPhilosophy, Bank } from '../types';
 import { SPONSOR_DATA } from './sponsors';
 
 const FIRST_NAMES = ['John', 'Paul', 'Mike', 'Leo', 'Chris', 'David', 'Alex', 'Ben', 'Sam', 'Tom', 'Dan', 'Matt'];
@@ -14,98 +14,113 @@ const CITIES = ['Northwood', 'Southglen', 'Easton', 'Westfield', 'Oakhaven', 'Ri
 const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pickRandom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
-// --- NEW POSITIONAL FAMILIARITY LOGIC ---
-
-export const ALL_ROLES: PlayerRole[] = [
-    'Goalkeeper', 'Sweeper Keeper', 'Central Defender', 'Ball-Playing Defender', 'Full-Back', 'Wing-Back', 'Inverted Wing-Back', 'Libero',
-    'Defensive Midfielder', 'Central Midfielder', 'Ball Winning Midfielder', 'Box-To-Box Midfielder', 'Deep Lying Playmaker', 'Roaming Playmaker',
-    'Mezzala', 'Carrilero', 'Wide Midfielder', 'Wide Playmaker', 'Attacking Midfielder', 'Advanced Playmaker', 'Shadow Striker',
-    'Trequartista', 'False Nine', 'Striker', 'Advanced Forward', 'Complete Forward', 'Poacher', 'Deep-Lying Forward'
+// --- NEW BANK DATA ---
+export const BANK_DATA: Bank[] = [
+    // FIX: Changed bank tiers from English to Portuguese to match the 'Bank' type definition.
+    { id: 1, name: "Stellar Bank Global", tier: 'Investimento Global', minReputation: 85, maxLoanAmount: 50_000_000, interestRateRange: [2.0, 4.5], termMonthsRange: [24, 60] },
+    { id: 2, name: "Quantum Finance Group", tier: 'Investimento Global', minReputation: 80, maxLoanAmount: 40_000_000, interestRateRange: [2.5, 5.0], termMonthsRange: [24, 48] },
+    { id: 3, name: "Heritage National Bank", tier: 'Comercial Nacional', minReputation: 65, maxLoanAmount: 15_000_000, interestRateRange: [4.0, 7.5], termMonthsRange: [12, 36] },
+    { id: 4, name: "Pinnacle Corporate Lending", tier: 'Comercial Nacional', minReputation: 60, maxLoanAmount: 10_000_000, interestRateRange: [5.0, 8.5], termMonthsRange: [12, 36] },
+    { id: 5, name: "Oakstead Regional Trust", tier: 'Regional', minReputation: 45, maxLoanAmount: 5_000_000, interestRateRange: [7.0, 11.0], termMonthsRange: [6, 24] },
+    { id: 6, name: "Community First Credit Union", tier: 'Cooperativa de Crédito', minReputation: 0, maxLoanAmount: 1_000_000, interestRateRange: [10.0, 15.0], termMonthsRange: [6, 18] },
 ];
 
+// --- NEW POSITIONAL FAMILIARITY LOGIC ---
+
+// FIX: Translated all PlayerRoles from English to Portuguese to match the 'PlayerRole' type.
+export const ALL_ROLES: PlayerRole[] = [
+    'Goleiro', 'Goleiro Líbero', 'Zagueiro', 'Zagueiro com Passe', 'Lateral', 'Ala', 'Lateral Invertido', 'Líbero',
+    'Volante', 'Meio-campista', 'Volante Ladrão de Bolas', 'Meia Box-to-Box', 'Construtor de Jogo Recuado', 'Meia Itinerante',
+    'Mezzala', 'Carrilero', 'Meia Aberto', 'Armador Aberto', 'Meia Atacante', 'Armador Avançado', 'Atacante Sombra',
+    'Trequartista', 'Falso Nove', 'Atacante', 'Atacante Avançado', 'Atacante Completo', 'Finalizador', 'Atacante Recuado'
+];
+
+// FIX: Translated all PlayerRoles from English to Portuguese to match the 'PlayerRole' type.
 export const ROLE_DEFINITIONS: Record<PlayerRole, { category: 'GK' | 'DEF' | 'MID' | 'FWD' }> = {
-    'Goalkeeper': { category: 'GK' }, 'Sweeper Keeper': { category: 'GK' },
-    'Central Defender': { category: 'DEF' }, 'Ball-Playing Defender': { category: 'DEF' }, 'Libero': { category: 'DEF' },
-    'Full-Back': { category: 'DEF' }, 'Wing-Back': { category: 'DEF' }, 'Inverted Wing-Back': { category: 'DEF' },
-    'Defensive Midfielder': { category: 'MID' }, 'Central Midfielder': { category: 'MID' }, 'Ball Winning Midfielder': { category: 'MID' },
-    'Box-To-Box Midfielder': { category: 'MID' }, 'Deep Lying Playmaker': { category: 'MID' }, 'Roaming Playmaker': { category: 'MID' },
-    'Mezzala': { category: 'MID' }, 'Carrilero': { category: 'MID' }, 'Wide Midfielder': { category: 'MID' }, 'Wide Playmaker': { category: 'MID' },
-    'Attacking Midfielder': { category: 'FWD' }, 'Advanced Playmaker': { category: 'FWD' }, 'Shadow Striker': { category: 'FWD' },
-    'Trequartista': { category: 'FWD' }, 'False Nine': { category: 'FWD' },
-    'Striker': { category: 'FWD' }, 'Advanced Forward': { category: 'FWD' }, 'Complete Forward': { category: 'FWD' },
-    'Poacher': { category: 'FWD' }, 'Deep-Lying Forward': { category: 'FWD' },
+    'Goleiro': { category: 'GK' }, 'Goleiro Líbero': { category: 'GK' },
+    'Zagueiro': { category: 'DEF' }, 'Zagueiro com Passe': { category: 'DEF' }, 'Líbero': { category: 'DEF' },
+    'Lateral': { category: 'DEF' }, 'Ala': { category: 'DEF' }, 'Lateral Invertido': { category: 'DEF' },
+    'Volante': { category: 'MID' }, 'Meio-campista': { category: 'MID' }, 'Volante Ladrão de Bolas': { category: 'MID' },
+    'Meia Box-to-Box': { category: 'MID' }, 'Construtor de Jogo Recuado': { category: 'MID' }, 'Meia Itinerante': { category: 'MID' },
+    'Mezzala': { category: 'MID' }, 'Carrilero': { category: 'MID' }, 'Meia Aberto': { category: 'MID' }, 'Armador Aberto': { category: 'MID' },
+    'Meia Atacante': { category: 'FWD' }, 'Armador Avançado': { category: 'FWD' }, 'Atacante Sombra': { category: 'FWD' },
+    'Trequartista': { category: 'FWD' }, 'Falso Nove': { category: 'FWD' },
+    'Atacante': { category: 'FWD' }, 'Atacante Avançado': { category: 'FWD' }, 'Atacante Completo': { category: 'FWD' },
+    'Finalizador': { category: 'FWD' }, 'Atacante Recuado': { category: 'FWD' },
 };
 
+// FIX: Translated all PlayerRoles from English to Portuguese to match the 'PlayerRole' type.
 export const ROLE_TO_POSITION_MAP: Record<PlayerRole, { x: number; y: number }> = {
     // GK
-    'Goalkeeper': { x: 50, y: 95 }, 'Sweeper Keeper': { x: 50, y: 90 },
+    'Goleiro': { x: 50, y: 95 }, 'Goleiro Líbero': { x: 50, y: 90 },
     // DEF
-    'Libero': { x: 50, y: 82 }, 'Central Defender': { x: 50, y: 78 }, 'Ball-Playing Defender': { x: 50, y: 78 },
-    'Full-Back': { x: 18, y: 75 },
-    'Wing-Back': { x: 15, y: 65 },
-    'Inverted Wing-Back': { x: 25, y: 68 },
+    'Líbero': { x: 50, y: 82 }, 'Zagueiro': { x: 50, y: 78 }, 'Zagueiro com Passe': { x: 50, y: 78 },
+    'Lateral': { x: 18, y: 75 },
+    'Ala': { x: 15, y: 65 },
+    'Lateral Invertido': { x: 25, y: 68 },
     // MID
-    'Defensive Midfielder': { x: 50, y: 65 },
-    'Deep Lying Playmaker': { x: 50, y: 62 },
-    'Ball Winning Midfielder': { x: 50, y: 58 },
+    'Volante': { x: 50, y: 65 },
+    'Construtor de Jogo Recuado': { x: 50, y: 62 },
+    'Volante Ladrão de Bolas': { x: 50, y: 58 },
     'Carrilero': { x: 35, y: 55 },
-    'Central Midfielder': { x: 50, y: 55 },
-    'Box-To-Box Midfielder': { x: 50, y: 50 },
-    'Roaming Playmaker': { x: 50, y: 48 },
+    'Meio-campista': { x: 50, y: 55 },
+    'Meia Box-to-Box': { x: 50, y: 50 },
+    'Meia Itinerante': { x: 50, y: 48 },
     'Mezzala': { x: 35, y: 45 },
-    'Wide Midfielder': { x: 15, y: 50 },
-    'Wide Playmaker': { x: 20, y: 45 },
+    'Meia Aberto': { x: 15, y: 50 },
+    'Armador Aberto': { x: 20, y: 45 },
     // AM
-    'Attacking Midfielder': { x: 50, y: 38 },
-    'Advanced Playmaker': { x: 50, y: 35 },
+    'Meia Atacante': { x: 50, y: 38 },
+    'Armador Avançado': { x: 50, y: 35 },
     'Trequartista': { x: 50, y: 30 },
-    'Shadow Striker': { x: 50, y: 25 },
+    'Atacante Sombra': { x: 50, y: 25 },
     // FWD
-    'False Nine': { x: 50, y: 22 },
-    'Deep-Lying Forward': { x: 50, y: 18 },
-    'Poacher': { x: 50, y: 12 },
-    'Advanced Forward': { x: 50, y: 10 },
-    'Striker': { x: 50, y: 15 },
-    'Complete Forward': { x: 50, y: 15 },
+    'Falso Nove': { x: 50, y: 22 },
+    'Atacante Recuado': { x: 50, y: 18 },
+    'Finalizador': { x: 50, y: 12 },
+    'Atacante Avançado': { x: 50, y: 10 },
+    'Atacante': { x: 50, y: 15 },
+    'Atacante Completo': { x: 50, y: 15 },
 };
 
 
+// FIX: Translated all PlayerRoles from English to Portuguese to match the 'PlayerRole' type.
 const FAMILIARITY_MAP: Record<PlayerRole, Partial<Record<PlayerRole, number>>> = {
     // GK Group
-    'Goalkeeper': { 'Goalkeeper': 100, 'Sweeper Keeper': 85 },
-    'Sweeper Keeper': { 'Sweeper Keeper': 100, 'Goalkeeper': 85, 'Libero': 50 },
+    'Goleiro': { 'Goleiro': 100, 'Goleiro Líbero': 85 },
+    'Goleiro Líbero': { 'Goleiro Líbero': 100, 'Goleiro': 85, 'Líbero': 50 },
 
     // DEF Group
-    'Central Defender': { 'Central Defender': 100, 'Ball-Playing Defender': 90, 'Libero': 70, 'Defensive Midfielder': 60, 'Full-Back': 50 },
-    'Ball-Playing Defender': { 'Ball-Playing Defender': 100, 'Central Defender': 90, 'Libero': 75, 'Defensive Midfielder': 65, 'Deep Lying Playmaker': 50 },
-    'Libero': { 'Libero': 100, 'Central Defender': 80, 'Defensive Midfielder': 70, 'Sweeper Keeper': 60 },
-    'Full-Back': { 'Full-Back': 100, 'Wing-Back': 90, 'Inverted Wing-Back': 80, 'Wide Midfielder': 65, 'Central Defender': 50 },
-    'Wing-Back': { 'Wing-Back': 100, 'Full-Back': 90, 'Wide Midfielder': 80, 'Inverted Wing-Back': 70 },
-    'Inverted Wing-Back': { 'Inverted Wing-Back': 100, 'Full-Back': 85, 'Defensive Midfielder': 70, 'Central Midfielder': 60, 'Wing-Back': 70 },
+    'Zagueiro': { 'Zagueiro': 100, 'Zagueiro com Passe': 90, 'Líbero': 70, 'Volante': 60, 'Lateral': 50 },
+    'Zagueiro com Passe': { 'Zagueiro com Passe': 100, 'Zagueiro': 90, 'Líbero': 75, 'Volante': 65, 'Construtor de Jogo Recuado': 50 },
+    'Líbero': { 'Líbero': 100, 'Zagueiro': 80, 'Volante': 70, 'Goleiro Líbero': 60 },
+    'Lateral': { 'Lateral': 100, 'Ala': 90, 'Lateral Invertido': 80, 'Meia Aberto': 65, 'Zagueiro': 50 },
+    'Ala': { 'Ala': 100, 'Lateral': 90, 'Meia Aberto': 80, 'Lateral Invertido': 70 },
+    'Lateral Invertido': { 'Lateral Invertido': 100, 'Lateral': 85, 'Volante': 70, 'Meio-campista': 60, 'Ala': 70 },
     
     // MID Group
-    'Defensive Midfielder': { 'Defensive Midfielder': 100, 'Deep Lying Playmaker': 85, 'Ball Winning Midfielder': 85, 'Central Midfielder': 80, 'Central Defender': 70 },
-    'Central Midfielder': { 'Central Midfielder': 100, 'Box-To-Box Midfielder': 90, 'Mezzala': 85, 'Carrilero': 85, 'Roaming Playmaker': 85, 'Defensive Midfielder': 80, 'Attacking Midfielder': 80 },
-    'Ball Winning Midfielder': { 'Ball Winning Midfielder': 100, 'Defensive Midfielder': 90, 'Central Midfielder': 85, 'Carrilero': 75 },
-    'Box-To-Box Midfielder': { 'Box-To-Box Midfielder': 100, 'Central Midfielder': 90, 'Roaming Playmaker': 80, 'Mezzala': 75, 'Carrilero': 70 },
-    'Deep Lying Playmaker': { 'Deep Lying Playmaker': 100, 'Defensive Midfielder': 90, 'Central Midfielder': 80, 'Roaming Playmaker': 70, 'Advanced Playmaker': 60 },
-    'Roaming Playmaker': { 'Roaming Playmaker': 100, 'Central Midfielder': 85, 'Mezzala': 80, 'Advanced Playmaker': 80, 'Box-To-Box Midfielder': 75 },
-    'Mezzala': { 'Mezzala': 100, 'Central Midfielder': 85, 'Attacking Midfielder': 80, 'Roaming Playmaker': 80, 'Wide Midfielder': 65 },
-    'Carrilero': { 'Carrilero': 100, 'Central Midfielder': 85, 'Ball Winning Midfielder': 80, 'Box-To-Box Midfielder': 75 },
-    'Wide Midfielder': { 'Wide Midfielder': 100, 'Wide Playmaker': 85, 'Wing-Back': 75, 'Full-Back': 65, 'Attacking Midfielder': 60 },
-    'Wide Playmaker': { 'Wide Playmaker': 100, 'Wide Midfielder': 85, 'Advanced Playmaker': 75, 'Attacking Midfielder': 70 },
+    'Volante': { 'Volante': 100, 'Construtor de Jogo Recuado': 85, 'Volante Ladrão de Bolas': 85, 'Meio-campista': 80, 'Zagueiro': 70 },
+    'Meio-campista': { 'Meio-campista': 100, 'Meia Box-to-Box': 90, 'Mezzala': 85, 'Carrilero': 85, 'Meia Itinerante': 85, 'Volante': 80, 'Meia Atacante': 80 },
+    'Volante Ladrão de Bolas': { 'Volante Ladrão de Bolas': 100, 'Volante': 90, 'Meio-campista': 85, 'Carrilero': 75 },
+    'Meia Box-to-Box': { 'Meia Box-to-Box': 100, 'Meio-campista': 90, 'Meia Itinerante': 80, 'Mezzala': 75, 'Carrilero': 70 },
+    'Construtor de Jogo Recuado': { 'Construtor de Jogo Recuado': 100, 'Volante': 90, 'Meio-campista': 80, 'Meia Itinerante': 70, 'Armador Avançado': 60 },
+    'Meia Itinerante': { 'Meia Itinerante': 100, 'Meio-campista': 85, 'Mezzala': 80, 'Armador Avançado': 80, 'Meia Box-to-Box': 75 },
+    'Mezzala': { 'Mezzala': 100, 'Meio-campista': 85, 'Meia Atacante': 80, 'Meia Itinerante': 80, 'Meia Aberto': 65 },
+    'Carrilero': { 'Carrilero': 100, 'Meio-campista': 85, 'Volante Ladrão de Bolas': 80, 'Meia Box-to-Box': 75 },
+    'Meia Aberto': { 'Meia Aberto': 100, 'Armador Aberto': 85, 'Ala': 75, 'Lateral': 65, 'Meia Atacante': 60 },
+    'Armador Aberto': { 'Armador Aberto': 100, 'Meia Aberto': 85, 'Armador Avançado': 75, 'Meia Atacante': 70 },
 
     // FWD Group (incl. Attacking Mids)
-    'Attacking Midfielder': { 'Attacking Midfielder': 100, 'Advanced Playmaker': 90, 'Shadow Striker': 85, 'Trequartista': 80, 'Central Midfielder': 80, 'False Nine': 75, 'Mezzala': 70 },
-    'Advanced Playmaker': { 'Advanced Playmaker': 100, 'Attacking Midfielder': 90, 'Trequartista': 85, 'Deep Lying Playmaker': 70, 'Wide Playmaker': 70, 'Roaming Playmaker': 70 },
-    'Shadow Striker': { 'Shadow Striker': 100, 'Attacking Midfielder': 85, 'Advanced Forward': 80, 'Poacher': 75, 'Striker': 70 },
-    'Trequartista': { 'Trequartista': 100, 'Advanced Playmaker': 85, 'False Nine': 80, 'Deep-Lying Forward': 75, 'Attacking Midfielder': 80 },
-    'False Nine': { 'False Nine': 100, 'Deep-Lying Forward': 85, 'Trequartista': 80, 'Attacking Midfielder': 75, 'Striker': 70 },
-    'Striker': { 'Striker': 100, 'Advanced Forward': 90, 'Complete Forward': 90, 'Poacher': 85, 'Deep-Lying Forward': 85 },
-    'Advanced Forward': { 'Advanced Forward': 100, 'Striker': 90, 'Poacher': 85, 'Shadow Striker': 75 },
-    'Complete Forward': { 'Complete Forward': 100, 'Striker': 90, 'Deep-Lying Forward': 85, 'Advanced Forward': 80 },
-    'Poacher': { 'Poacher': 100, 'Striker': 85, 'Advanced Forward': 85, 'Shadow Striker': 70 },
-    'Deep-Lying Forward': { 'Deep-Lying Forward': 100, 'Striker': 85, 'False Nine': 85, 'Complete Forward': 80, 'Trequartista': 70 },
+    'Meia Atacante': { 'Meia Atacante': 100, 'Armador Avançado': 90, 'Atacante Sombra': 85, 'Trequartista': 80, 'Meio-campista': 80, 'Falso Nove': 75, 'Mezzala': 70 },
+    'Armador Avançado': { 'Armador Avançado': 100, 'Meia Atacante': 90, 'Trequartista': 85, 'Construtor de Jogo Recuado': 70, 'Armador Aberto': 70, 'Meia Itinerante': 70 },
+    'Atacante Sombra': { 'Atacante Sombra': 100, 'Meia Atacante': 85, 'Atacante Avançado': 80, 'Finalizador': 75, 'Atacante': 70 },
+    'Trequartista': { 'Trequartista': 100, 'Armador Avançado': 85, 'Falso Nove': 80, 'Atacante Recuado': 75, 'Meia Atacante': 80 },
+    'Falso Nove': { 'Falso Nove': 100, 'Atacante Recuado': 85, 'Trequartista': 80, 'Meia Atacante': 75, 'Atacante': 70 },
+    'Atacante': { 'Atacante': 100, 'Atacante Avançado': 90, 'Atacante Completo': 90, 'Finalizador': 85, 'Atacante Recuado': 85 },
+    'Atacante Avançado': { 'Atacante Avançado': 100, 'Atacante': 90, 'Finalizador': 85, 'Atacante Sombra': 75 },
+    'Atacante Completo': { 'Atacante Completo': 100, 'Atacante': 90, 'Atacante Recuado': 85, 'Atacante Avançado': 80 },
+    'Finalizador': { 'Finalizador': 100, 'Atacante': 85, 'Atacante Avançado': 85, 'Atacante Sombra': 70 },
+    'Atacante Recuado': { 'Atacante Recuado': 100, 'Atacante': 85, 'Falso Nove': 85, 'Atacante Completo': 80, 'Trequartista': 70 },
 };
 
 const generateFamiliarity = (naturalRole: PlayerRole): Record<PlayerRole, number> => {
@@ -157,18 +172,19 @@ const defaultInstructions: PlayerInstructions = {
     marking: MarkingInstruction.Normal,
 };
 
+// FIX: Translated all PlayerRoles from English to Portuguese to match the 'PlayerRole' type.
 const defaultPositions442: { position: { x: number, y: number }, role: PlayerRole }[] = [
-    { position: { x: 50, y: 95 }, role: 'Goalkeeper' },
-    { position: { x: 20, y: 75 }, role: 'Full-Back' },
-    { position: { x: 40, y: 78 }, role: 'Central Defender' },
-    { position: { x: 60, y: 78 }, role: 'Central Defender' },
-    { position: { x: 80, y: 75 }, role: 'Full-Back' },
-    { position: { x: 20, y: 50 }, role: 'Wide Midfielder' },
-    { position: { x: 40, y: 55 }, role: 'Central Midfielder' },
-    { position: { x: 60, y: 55 }, role: 'Central Midfielder' },
-    { position: { x: 80, y: 50 }, role: 'Wide Midfielder' },
-    { position: { x: 40, y: 25 }, role: 'Striker' },
-    { position: { x: 60, y: 25 }, role: 'Striker' },
+    { position: { x: 50, y: 95 }, role: 'Goleiro' },
+    { position: { x: 20, y: 75 }, role: 'Lateral' },
+    { position: { x: 40, y: 78 }, role: 'Zagueiro' },
+    { position: { x: 60, y: 78 }, role: 'Zagueiro' },
+    { position: { x: 80, y: 75 }, role: 'Lateral' },
+    { position: { x: 20, y: 50 }, role: 'Meia Aberto' },
+    { position: { x: 40, y: 55 }, role: 'Meio-campista' },
+    { position: { x: 60, y: 55 }, role: 'Meio-campista' },
+    { position: { x: 80, y: 50 }, role: 'Meia Aberto' },
+    { position: { x: 40, y: 25 }, role: 'Atacante' },
+    { position: { x: 60, y: 25 }, role: 'Atacante' },
 ];
 
 const generateStaffAttributes = (role: StaffRole): StaffAttributes => {
@@ -264,8 +280,8 @@ export const generateScheduleForCompetition = (clubsInCompetition: Club[], start
 };
 
 
-// FIX: The Omit type was missing 'pressConference', causing a type error on the return statement.
-export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData' | 'transferNegotiations' | 'nextNegotiationId' | 'pressConference'> => {
+// FIX: Removed 'pressConference' from the Omit<> type as it is no longer part of the GameState.
+export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'currentDate' | 'liveMatch' | 'news' | 'nextNewsId' | 'matchDayFixtures' | 'matchDayResults' | 'matchStartError' | 'seasonReviewData' | 'transferNegotiations' | 'nextNegotiationId'> => {
     const clubs: Record<number, Club> = {};
     const players: Record<number, Player> = {};
     const staff: Record<number, Staff> = {};
@@ -273,6 +289,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
     const leagueTable: LeagueEntry[] = [];
     const sponsors: Record<number, Sponsor> = {};
     const sponsorshipDeals: SponsorshipDeal[] = [];
+    const banks: Record<number, Bank> = {};
     let playerIdCounter = 1;
     let staffIdCounter = 1;
     const NUM_CLUBS = 20;
@@ -285,6 +302,9 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
     
     // Create Sponsors
     SPONSOR_DATA.forEach(s => sponsors[s.id] = s);
+
+    // Create Banks
+    BANK_DATA.forEach(b => banks[b.id] = b);
 
     // Generate Staff Pool
     const staffRolesToGenerate = [StaffRole.AssistantManager, StaffRole.HeadOfPerformance, StaffRole.HeadOfPhysiotherapy, StaffRole.HeadOfScouting];
@@ -311,7 +331,8 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
 
     for (let i = 1; i <= NUM_CLUBS; i++) {
         const initialTactics: Tactics = {
-            mentality: 'Balanced',
+            // FIX: Translated 'Balanced' to 'Equilibrada' to match Mentality type.
+            mentality: 'Equilibrada',
             lineup: Array(11).fill(null),
             bench: Array(7).fill(null),
         };
@@ -344,7 +365,8 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             transferBudget: Math.floor(balance * 0.4),
             wageBudget: 150000,
             tactics: initialTactics,
-            trainingFocus: 'Balanced',
+            // FIX: Translated 'Balanced' to 'Equilibrado' to match TeamTrainingFocus type.
+            trainingFocus: 'Equilibrado',
             departments: {
                 [DepartmentType.Coaching]: { level: 1, chiefId: null },
                 [DepartmentType.Medical]: { level: 1, chiefId: null },
@@ -355,6 +377,8 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             managerConfidence: 100,
             boardObjective: null,
             philosophies,
+            creditScore: 50,
+            loanHistory: [],
         };
 
         if (competitionId === 1) {
@@ -369,7 +393,8 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
     Object.values(clubs).forEach(club => {
         const availableSponsors = Object.values(sponsors);
         
-        const findSponsor = (type: 'Main Shirt' | 'Kit Supplier' | 'Stadium Naming Rights') => {
+        // FIX: Translated Sponsor types from English to Portuguese.
+        const findSponsor = (type: 'Camisa Principal' | 'Fornecedor de Material' | 'Direitos do Estádio') => {
             const candidates = availableSponsors.filter(s => {
                 if (s.preferredType !== type) return false;
                 // Check if already taken
@@ -401,14 +426,15 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             });
         };
 
-        const shirtSponsor = findSponsor('Main Shirt');
+        // FIX: Translated Sponsor types from English to Portuguese.
+        const shirtSponsor = findSponsor('Camisa Principal');
         if (shirtSponsor) createDeal(shirtSponsor);
 
-        const kitSponsor = findSponsor('Kit Supplier');
+        const kitSponsor = findSponsor('Fornecedor de Material');
         if (kitSponsor) createDeal(kitSponsor);
 
         if (club.reputation > 65) {
-            const stadiumSponsor = findSponsor('Stadium Naming Rights');
+            const stadiumSponsor = findSponsor('Direitos do Estádio');
             if (stadiumSponsor) createDeal(stadiumSponsor);
         }
     });
@@ -431,10 +457,11 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
         hireStaff(StaffRole.HeadOfPerformance, DepartmentType.Performance);
     }
 
-    const GK_ROLES: PlayerRole[] = ['Goalkeeper', 'Sweeper Keeper'];
-    const DEF_ROLES: PlayerRole[] = ['Central Defender', 'Ball-Playing Defender', 'Full-Back', 'Wing-Back'];
-    const MID_ROLES: PlayerRole[] = ['Defensive Midfielder', 'Central Midfielder', 'Ball Winning Midfielder', 'Box-To-Box Midfielder', 'Wide Midfielder'];
-    const FWD_ROLES: PlayerRole[] = ['Attacking Midfielder', 'Striker', 'Advanced Forward', 'Poacher'];
+    // FIX: Translated all PlayerRoles from English to Portuguese to match the 'PlayerRole' type.
+    const GK_ROLES: PlayerRole[] = ['Goleiro', 'Goleiro Líbero'];
+    const DEF_ROLES: PlayerRole[] = ['Zagueiro', 'Zagueiro com Passe', 'Lateral', 'Ala'];
+    const MID_ROLES: PlayerRole[] = ['Volante', 'Meio-campista', 'Volante Ladrão de Bolas', 'Meia Box-to-Box', 'Meia Aberto'];
+    const FWD_ROLES: PlayerRole[] = ['Meia Atacante', 'Atacante', 'Atacante Avançado', 'Finalizador'];
 
     for (let clubId = 1; clubId <= NUM_CLUBS; clubId++) {
         const clubPlayers: Player[] = [];
@@ -573,5 +600,5 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
     const startDate = new Date(2024, 7, 10); // Season starts in August
     const schedule = generateScheduleForCompetition(clubsInPremierDivision, startDate);
     
-    return { clubs, players, staff, competitions, schedule, leagueTable, scoutingAssignments: [], nextScoutAssignmentId: 1, sponsors, sponsorshipDeals };
+    return { clubs, players, staff, competitions, schedule, leagueTable, scoutingAssignments: [], nextScoutAssignmentId: 1, sponsors, sponsorshipDeals, banks, loans: [], nextLoanId: 1 };
 };

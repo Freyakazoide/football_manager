@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { GameState, Player, PlayerRole, TransferNegotiation } from '../types';
 import { getRoleCategory } from '../services/database';
@@ -37,7 +35,7 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick,
             <div className="flex flex-col md:flex-row gap-4 mb-4">
                 <input
                     type="text"
-                    placeholder="Search player name..."
+                    placeholder="Buscar nome do jogador..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="flex-grow bg-gray-700 text-white p-2 rounded"
@@ -47,22 +45,22 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick,
                     onChange={(e) => setPositionFilter(e.target.value)}
                     className="bg-gray-700 text-white p-2 rounded"
                 >
-                    <option>All</option>
-                    <option>GK</option>
-                    <option>DEF</option>
-                    <option>MID</option>
-                    <option>FWD</option>
+                    <option>Todos</option>
+                    <option value="GK">GOL</option>
+                    <option value="DEF">DEF</option>
+                    <option value="MID">MEI</option>
+                    <option value="FWD">ATA</option>
                 </select>
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-left">
                     <thead className="border-b-2 border-gray-700 text-gray-400">
                         <tr>
-                            <th className="p-3">Name</th>
-                            <th className="p-3">Position</th>
-                            <th className="p-3">Age</th>
-                            <th className="p-3">Club</th>
-                            <th className="p-3 text-right">Market Value</th>
+                            <th className="p-3">Nome</th>
+                            <th className="p-3">Posição</th>
+                            <th className="p-3">Idade</th>
+                            <th className="p-3">Clube</th>
+                            <th className="p-3 text-right">Valor de Mercado</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -77,7 +75,7 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick,
                                 <td className="p-3">{player.age}</td>
                                 <td className="p-3">{gameState.clubs[player.clubId]?.name}</td>
                                 <td className="p-3 text-right">
-                                    {player.marketValue.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}
+                                    {player.marketValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}
                                 </td>
                             </tr>
                         ))}
@@ -99,33 +97,33 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, onPlayerClick,
                             <div>
                                 <p className="font-bold text-lg">{player.name}</p>
                                 <p className="text-sm text-gray-400">
-                                    {isPlayerBuying ? 'Outgoing offer to' : 'Incoming offer from'} {otherClub.name}
+                                    {isPlayerBuying ? 'Oferta enviada para' : 'Oferta recebida de'} {otherClub.name}
                                 </p>
                             </div>
                             <div className="text-right">
                                 <p className={`font-semibold text-sm px-2 py-1 rounded-full ${neg.status === 'player_turn' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
-                                    {neg.status === 'player_turn' ? 'Action Required' : 'Waiting for Response'}
+                                    {neg.status === 'player_turn' ? 'Ação Necessária' : 'Aguardando Resposta'}
                                 </p>
-                                <p className="text-xs text-gray-500 capitalize mt-1">{neg.stage} Stage</p>
+                                <p className="text-xs text-gray-500 capitalize mt-1">Fase de {neg.stage === 'club' ? 'Clubes' : 'Agente'}</p>
                             </div>
                         </div>
                     </div>
                 );
             }) : (
-                <p className="text-center text-gray-500 pt-8">You have no active transfer negotiations.</p>
+                <p className="text-center text-gray-500 pt-8">Você não tem negociações de transferência ativas.</p>
             )}
         </div>
     );
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-4">Transfers</h2>
+            <h2 className="text-2xl font-bold text-white mb-4">Transferências</h2>
             <div className="flex border-b border-gray-700 mb-4">
                 <button onClick={() => setActiveTab('market')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'market' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
-                    Market
+                    Mercado
                 </button>
                 <button onClick={() => setActiveTab('negotiations')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'negotiations' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
-                    Negotiations <span className="bg-green-600 text-white text-xs font-bold rounded-full px-2 ml-1">{activeNegotiations.length}</span>
+                    Negociações <span className="bg-green-600 text-white text-xs font-bold rounded-full px-2 ml-1">{activeNegotiations.length}</span>
                 </button>
             </div>
             

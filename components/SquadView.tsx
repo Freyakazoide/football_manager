@@ -15,9 +15,9 @@ const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
 };
 
 const MoraleDisplay: React.FC<{ morale: number }> = ({ morale }) => {
-    if (morale > 75) return <span className="text-green-400 text-sm">😊 Happy</span>;
-    if (morale > 50) return <span className="text-gray-300 text-sm">😐 Content</span>;
-    return <span className="text-red-400 text-sm">😞 Unhappy</span>;
+    if (morale > 75) return <span className="text-green-400 text-sm">😊 Feliz</span>;
+    if (morale > 50) return <span className="text-gray-300 text-sm">😐 Contente</span>;
+    return <span className="text-red-400 text-sm">😞 Infeliz</span>;
 };
 
 
@@ -138,20 +138,20 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-4">Squad</h2>
+            <h2 className="text-2xl font-bold text-white mb-4">Elenco</h2>
             
             <div className="flex flex-col sm:flex-row gap-4 mb-4 p-3 bg-gray-900/50 rounded-lg">
                 <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-400">Position:</span>
-                    <FilterButton label="All" onClick={() => setPositionFilter('All')} isActive={positionFilter === 'All'} />
-                    <FilterButton label="GK" onClick={() => setPositionFilter('GK')} isActive={positionFilter === 'GK'} />
+                    <span className="text-sm font-semibold text-gray-400">Posição:</span>
+                    <FilterButton label="Todos" onClick={() => setPositionFilter('All')} isActive={positionFilter === 'All'} />
+                    <FilterButton label="GOL" onClick={() => setPositionFilter('GK')} isActive={positionFilter === 'GK'} />
                     <FilterButton label="DEF" onClick={() => setPositionFilter('DEF')} isActive={positionFilter === 'DEF'} />
-                    <FilterButton label="MID" onClick={() => setPositionFilter('MID')} isActive={positionFilter === 'MID'} />
-                    <FilterButton label="FWD" onClick={() => setPositionFilter('FWD')} isActive={positionFilter === 'FWD'} />
+                    <FilterButton label="MEI" onClick={() => setPositionFilter('MID')} isActive={positionFilter === 'MID'} />
+                    <FilterButton label="ATA" onClick={() => setPositionFilter('FWD')} isActive={positionFilter === 'FWD'} />
                 </div>
                  <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-gray-400">Status:</span>
-                    <FilterButton label="Show Alerts" onClick={() => setShowAlertsOnly(!showAlertsOnly)} isActive={showAlertsOnly} />
+                    <FilterButton label="Mostrar Alertas" onClick={() => setShowAlertsOnly(!showAlertsOnly)} isActive={showAlertsOnly} />
                 </div>
             </div>
 
@@ -159,17 +159,17 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                 <table className="w-full text-left">
                     <thead className="border-b-2 border-gray-700 text-gray-400">
                         <tr>
-                            <SortableHeader label="Name" sortKey="name" />
+                            <SortableHeader label="Nome" sortKey="name" />
                             <SortableHeader label="Pos" sortKey="naturalPosition" className="text-center" />
                             <th className="p-3 text-center" title="Status">St</th>
                             <SortableHeader label="Mor" sortKey="morale" className="text-center" />
-                            <SortableHeader label="Fit" sortKey="matchFitness" className="text-center" />
-                            <SortableHeader label="Apps" sortKey="apps" className="text-center" />
-                            <SortableHeader label="Gls" sortKey="goals" className="text-center" />
-                            <SortableHeader label="Ast" sortKey="assists" className="text-center" />
-                            <SortableHeader label="Av Rtg" sortKey="avgRating" className="text-center" />
-                            <SortableHeader label="Age" sortKey="age" className="text-center" />
-                            <SortableHeader label="Value" sortKey="marketValue" className="text-right" />
+                            <SortableHeader label="Fís" sortKey="matchFitness" className="text-center" />
+                            <SortableHeader label="Jogos" sortKey="apps" className="text-center" />
+                            <SortableHeader label="Gols" sortKey="goals" className="text-center" />
+                            <SortableHeader label="Assis" sortKey="assists" className="text-center" />
+                            <SortableHeader label="Nota" sortKey="avgRating" className="text-center" />
+                            <SortableHeader label="Idade" sortKey="age" className="text-center" />
+                            <SortableHeader label="Valor" sortKey="marketValue" className="text-right" />
                         </tr>
                     </thead>
                     <tbody>
@@ -182,8 +182,8 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                                 <td className="p-3 font-semibold">{player.name}</td>
                                 <td className="p-3 text-center">{player.naturalPosition}</td>
                                 <td className="p-3 text-center">
-                                    {player.injury && <span className="text-red-500 font-bold" title={`Injured: ${player.injury.type}`}>✚</span>}
-                                    {player.suspension && <span className="text-red-500 font-bold" title={`Suspended until ${player.suspension.returnDate.toLocaleDateString()}`}>■</span>}
+                                    {player.injury && <span className="text-red-500 font-bold" title={`Lesionado: ${player.injury.type}`}>✚</span>}
+                                    {player.suspension && <span className="text-red-500 font-bold" title={`Suspenso até ${player.suspension.returnDate.toLocaleDateString()}`}>■</span>}
                                     {player.seasonYellowCards > 0 && 
                                         <span className="inline-flex items-center justify-center w-5 h-5 bg-yellow-400 text-black font-bold text-xs rounded-sm">
                                             {player.seasonYellowCards}
@@ -198,7 +198,7 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                                 <td className="p-3 text-center font-bold">{player.avgRating > 0 ? player.avgRating.toFixed(2) : '-'}</td>
                                 <td className="p-3 text-center">{player.age}</td>
                                 <td className="p-3 text-right">
-                                    {player.marketValue.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}
+                                    {player.marketValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}
                                 </td>
                             </tr>
                         ))

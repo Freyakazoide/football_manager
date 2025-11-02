@@ -1,4 +1,3 @@
-
 import { Player } from '../types';
 
 const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -21,15 +20,15 @@ export const generateInjury = (currentDate: Date, player: Player) => {
     // 60% chance of Muscular Injury
     if (injuryRoll < 0.60) {
         const severityRoll = Math.random();
-        const location = pickRandom(['Hamstring', 'Adductor', 'Calf']);
+        const location = pickRandom(['Posterior da Coxa', 'Adutor', 'Panturrilha']);
         if (severityRoll < 0.70) { // Grade 1 (70% of muscular)
-            injuryType = `Strained ${location} (Grade 1)`;
+            injuryType = `Estiramento no ${location} (Grau 1)`;
             durationDays = randInt(7, 21);
         } else if (severityRoll < 0.95) { // Grade 2 (25% of muscular)
-            injuryType = `Torn ${location} (Grade 2)`;
+            injuryType = `Lesão no ${location} (Grau 2)`;
             durationDays = randInt(28, 56);
         } else { // Grade 3 (5% of muscular)
-            injuryType = `Ruptured ${location} (Grade 3)`;
+            injuryType = `Ruptura no ${location} (Grau 3)`;
             durationDays = randInt(80, 100);
         }
     } 
@@ -37,29 +36,29 @@ export const generateInjury = (currentDate: Date, player: Player) => {
     else if (injuryRoll < 0.80) {
         const severityRoll = Math.random();
         if (severityRoll < 0.60) { // Light (60% of sprains)
-            injuryType = 'Twisted Ankle';
+            injuryType = 'Tornozelo Torcido';
             durationDays = randInt(7, 10);
         } else { // Moderate (40% of sprains)
-            injuryType = 'Sprained Ankle';
+            injuryType = 'Entorse de Tornozelo';
             durationDays = randInt(21, 42);
         }
     } 
     // 15% chance of Impact/Bruise
     else if (injuryRoll < 0.95) {
-        injuryType = 'Impact Injury (Bruise)';
+        injuryType = 'Lesão por Contusão';
         durationDays = randInt(2, 5);
     } 
     // 5% chance of Severe Injury
     else {
         const severeTypeRoll = Math.random();
         if (severeTypeRoll < 0.5) {
-            injuryType = 'Torn ACL';
+            injuryType = 'Rompimento do Ligamento Cruzado Anterior';
             durationDays = randInt(180, 270);
         } else if (severeTypeRoll < 0.8) {
-            injuryType = 'Fractured Leg';
+            injuryType = 'Fratura na Perna';
             durationDays = randInt(90, 150);
         } else {
-            injuryType = 'Damaged Meniscus';
+            injuryType = 'Lesão no Menisco';
             durationDays = randInt(60, 120);
         }
     }

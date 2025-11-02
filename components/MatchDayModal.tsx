@@ -24,8 +24,8 @@ const MatchDayModal: React.FC<MatchDayModalProps> = ({ fixtures, gameState, disp
          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
             <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
                 <div className="p-6 text-center border-b border-gray-700">
-                    <h2 className="text-2xl font-bold text-green-400 mb-2">Match Day!</h2>
-                    <p className="text-gray-400 mb-4">{match.date.toDateString()}</p>
+                    <h2 className="text-2xl font-bold text-green-400 mb-2">Dia de Jogo!</h2>
+                    <p className="text-gray-400 mb-4">{match.date.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                     <div className="bg-gray-700 rounded-lg p-4">
                         <div className="flex items-center justify-around text-lg font-semibold">
                             <span>{homeTeam.name}</span>
@@ -37,18 +37,18 @@ const MatchDayModal: React.FC<MatchDayModalProps> = ({ fixtures, gameState, disp
 
                 {gameState.matchStartError && (
                     <div className="p-4 bg-red-900/50 text-red-300 text-center text-sm">
-                        <p className="font-bold">Cannot Start Match</p>
+                        <p className="font-bold">Não é Possível Iniciar a Partida</p>
                         <p>{gameState.matchStartError}</p>
-                        <button onClick={() => dispatch({type: 'CLEAR_MATCH_START_ERROR'})} className="mt-2 text-xs text-gray-300 underline">Dismiss</button>
+                        <button onClick={() => dispatch({type: 'CLEAR_MATCH_START_ERROR'})} className="mt-2 text-xs text-gray-300 underline">Dispensar</button>
                     </div>
                 )}
                 
                 <div className="p-6 overflow-y-auto flex-1">
-                    <h3 className="text-lg font-semibold text-gray-300 mb-3 text-center">Your Starting XI</h3>
+                    <h3 className="text-lg font-semibold text-gray-300 mb-3 text-center">Sua Escalação Inicial</h3>
                     <div className="bg-gray-900/50 rounded-lg p-4">
                         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
                             {playerClub.tactics.lineup.map((lp, index) => {
-                                if (!lp) return <li key={`empty-${index}`} className="text-gray-600">- Empty Slot -</li>;
+                                if (!lp) return <li key={`empty-${index}`} className="text-gray-600">- Posição Vazia -</li>;
                                 const player = gameState.players[lp.playerId];
                                 const isInvalid = player.injury || player.suspension;
                                 return (
@@ -67,13 +67,13 @@ const MatchDayModal: React.FC<MatchDayModalProps> = ({ fixtures, gameState, disp
                         onClick={onGoToTactics}
                         className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-4 rounded transition duration-300"
                     >
-                        Change Tactics
+                        Mudar Táticas
                     </button>
                      <button
                         onClick={handleStartMatch}
                         className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition duration-300"
                     >
-                        Confirm & Start Match
+                        Confirmar e Iniciar Partida
                     </button>
                 </div>
             </div>

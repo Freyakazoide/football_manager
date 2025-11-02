@@ -50,7 +50,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, onNavigate, gameSt
                 foot
             </div>
             <ul className="space-y-2">
-                {Object.values(View).filter(v => v !== 'Player Profile').map((view) => (
+                {Object.values(View).filter(v => v !== 'Perfil do Jogador').map((view) => (
                    <NavItem 
                         key={view} 
                         view={view} 

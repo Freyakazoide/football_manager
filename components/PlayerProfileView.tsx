@@ -124,7 +124,7 @@ const PositionalFamiliarityPitch: React.FC<{ player: Player }> = ({ player }) =>
 
 const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameState, dispatch, onStartNegotiation }) => {
     const player = gameState.players[playerId];
-    if (!player) return <div>Player not found.</div>;
+    if (!player) return <div>Jogador não encontrado.</div>;
     
     const club = gameState.clubs[player.clubId];
     
@@ -167,12 +167,12 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
         return new Date(player.lastRenewalDate) > sixMonthsAgo;
     }, [player.lastRenewalDate, gameState.currentDate]);
 
-    const formatCurrency = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
+    const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
 
     const attributeGroups: {title: string, attrs: (keyof PlayerAttributes)[]}[] = [
-        { title: 'Technical', attrs: ['passing', 'dribbling', 'shooting', 'tackling', 'heading', 'crossing'] },
+        { title: 'Técnico', attrs: ['passing', 'dribbling', 'shooting', 'tackling', 'heading', 'crossing'] },
         { title: 'Mental', attrs: ['aggression', 'creativity', 'positioning', 'teamwork', 'workRate'] },
-        { title: 'Physical', attrs: ['pace', 'stamina', 'strength', 'naturalFitness'] },
+        { title: 'Físico', attrs: ['pace', 'stamina', 'strength', 'naturalFitness'] },
     ];
     
     const thirtyDaysAgo = new Date(gameState.currentDate);
@@ -198,75 +198,75 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
             <div className="space-y-6 lg:col-span-1">
                  {(player.injury || player.suspension) && (
                     <div className={`p-3 rounded-lg ${player.injury ? 'bg-red-900/50 border-red-500' : 'bg-yellow-900/50 border-yellow-500'} border`}>
-                         <h3 className="text-lg font-semibold text-red-400 mb-2">{player.injury ? 'Injured' : 'Suspended'}</h3>
+                         <h3 className="text-lg font-semibold text-red-400 mb-2">{player.injury ? 'Lesionado' : 'Suspenso'}</h3>
                          <div className="text-sm space-y-1">
                             {player.injury && <p>{player.injury.type}</p>}
-                            <p>Expected back: <span className="font-semibold">{(player.injury?.returnDate || player.suspension?.returnDate)?.toLocaleDateString()}</span></p>
+                            <p>Retorno esperado: <span className="font-semibold">{(player.injury?.returnDate || player.suspension?.returnDate)?.toLocaleDateString()}</span></p>
                          </div>
                     </div>
                 )}
                 <div>
                    <h3 className="text-lg font-semibold text-green-400 mb-2">Status</h3>
                    <div className="text-sm space-y-3">
-                       <StatusProgressBar label="Morale" value={player.morale} />
-                       <StatusProgressBar label="Satisfaction" value={player.satisfaction} />
-                       <StatusProgressBar label="Match Fitness" value={player.matchFitness} />
+                       <StatusProgressBar label="Moral" value={player.morale} />
+                       <StatusProgressBar label="Satisfação" value={player.satisfaction} />
+                       <StatusProgressBar label="Cond. Físico" value={player.matchFitness} />
                    </div>
                 </div>
                  <div>
-                   <h3 className="text-lg font-semibold text-green-400 mb-2">Contract</h3>
+                   <h3 className="text-lg font-semibold text-green-400 mb-2">Contrato</h3>
                    <div className="text-sm space-y-1">
-                        <p>Wage: <span className="font-semibold">{formatCurrency(player.wage)}/wk</span></p>
-                        <p>Expires: <span className="font-semibold">{player.contractExpires.toLocaleDateString()}</span></p>
+                        <p>Salário: <span className="font-semibold">{formatCurrency(player.wage)}/sem</span></p>
+                        <p>Expira em: <span className="font-semibold">{player.contractExpires.toLocaleDateString()}</span></p>
                    </div>
                 </div>
                  <div>
-                   <h3 className="text-lg font-semibold text-green-400 mb-2">Value</h3>
+                   <h3 className="text-lg font-semibold text-green-400 mb-2">Valor</h3>
                    <div className="text-sm space-y-1">
-                        <p>Market Value: <span className="font-semibold">{formatCurrency(player.marketValue)}</span></p>
+                        <p>Valor de Mercado: <span className="font-semibold">{formatCurrency(player.marketValue)}</span></p>
                    </div>
                 </div>
 
                 {isTransferTarget && (
                 <div className="bg-gray-700 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-green-400 mb-2">Transfer</h3>
+                    <h3 className="text-lg font-semibold text-green-400 mb-2">Transferência</h3>
                     <button
                         onClick={() => onStartNegotiation(player.id)}
                         className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded"
                     >
-                        Start Transfer Negotiation
+                        Iniciar Negociação
                     </button>
                 </div>
                 )}
                 {!isTransferTarget && (
                     <>
                         <div className="bg-gray-700 p-4 rounded-lg">
-                            <h3 className="text-lg font-semibold text-green-400 mb-2">Contract Renewal</h3>
+                            <h3 className="text-lg font-semibold text-green-400 mb-2">Renovação de Contrato</h3>
                              <button 
                                 onClick={handleStartRenewal} 
                                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded disabled:bg-gray-600 disabled:cursor-not-allowed"
                                 disabled={isRenewalOnCooldown}
-                                title={isRenewalOnCooldown ? "You recently signed a contract with this player." : "Negotiate a new contract"}
+                                title={isRenewalOnCooldown ? "Você renovou o contrato com este jogador recentemente." : "Negociar um novo contrato"}
                             >
-                                {isRenewalOnCooldown ? 'Renewal Cooldown' : 'Offer New Contract'}
+                                {isRenewalOnCooldown ? 'Renovação em Cooldown' : 'Oferecer Novo Contrato'}
                             </button>
                         </div>
 
                         <div className="bg-gray-700 p-4 rounded-lg">
-                            <h3 className="text-lg font-semibold text-green-400 mb-3">Player Interaction</h3>
+                            <h3 className="text-lg font-semibold text-green-400 mb-3">Interagir com Jogador</h3>
                              <div className="grid grid-cols-1 gap-2">
                                 <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'praise' } })} disabled={praiseCooldown.onCooldown} className="bg-gray-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
-                                    {praiseCooldown.onCooldown ? `Praise (Wait ${praiseCooldown.remainingDays}d)` : 'Praise Player'}
+                                    {praiseCooldown.onCooldown ? `Elogiar (Aguarde ${praiseCooldown.remainingDays}d)` : 'Elogiar Jogador'}
                                 </button>
                                 <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'criticize' } })} disabled={criticizeCooldown.onCooldown} className="bg-gray-600 hover:bg-orange-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
-                                    {criticizeCooldown.onCooldown ? `Criticize (Wait ${criticizeCooldown.remainingDays}d)` : 'Criticize Player'}
+                                    {criticizeCooldown.onCooldown ? `Criticar (Aguarde ${criticizeCooldown.remainingDays}d)` : 'Criticar Jogador'}
                                 </button>
                                 <button 
                                     onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'promise' } })}
                                     disabled={!!player.promise || promiseCooldown.onCooldown}
                                     className="bg-gray-600 hover:bg-yellow-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
                                 >
-                                    {player.promise ? 'Promise Active' : promiseCooldown.onCooldown ? `Promise (Wait ${promiseCooldown.remainingDays}d)` : 'Promise Playing Time'}
+                                    {player.promise ? 'Promessa Ativa' : promiseCooldown.onCooldown ? `Prometer (Aguarde ${promiseCooldown.remainingDays}d)` : 'Prometer Tempo de Jogo'}
                                 </button>
                             </div>
                         </div>
@@ -281,13 +281,13 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
             <table className="w-full text-left text-sm">
                 <thead className="border-b-2 border-gray-700 text-gray-400">
                     <tr>
-                        <th className="p-2">Season</th>
-                        <th className="p-2">Club</th>
-                        <th className="p-2 text-center">Apps</th>
-                        <th className="p-2 text-center">Gls</th>
-                        <th className="p-2 text-center">Ast</th>
-                        <th className="p-2 text-center">Tkls</th>
-                        <th className="p-2 text-center font-bold">Av Rtg</th>
+                        <th className="p-2">Temporada</th>
+                        <th className="p-2">Clube</th>
+                        <th className="p-2 text-center">Jogos</th>
+                        <th className="p-2 text-center">Gols</th>
+                        <th className="p-2 text-center">Assis.</th>
+                        <th className="p-2 text-center">Des.</th>
+                        <th className="p-2 text-center font-bold">Nota M.</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -305,7 +305,7 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                         </tr>
                     )) : (
                         <tr>
-                            <td colSpan={7} className="p-4 text-center text-gray-500">No career history recorded.</td>
+                            <td colSpan={7} className="p-4 text-center text-gray-500">Nenhum histórico de carreira registrado.</td>
                         </tr>
                     )}
                 </tbody>
@@ -318,8 +318,8 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
             <div className="flex justify-between items-start">
                 <div>
                     <h2 className="text-3xl font-bold">{player.name}</h2>
-                    <p className="text-gray-400">{player.naturalPosition} | {player.age} y/o | {player.nationality}</p>
-                    <p className="text-sm text-gray-500">Club: {club?.name || 'N/A'}</p>
+                    <p className="text-gray-400">{player.naturalPosition} | {player.age} anos | {player.nationality}</p>
+                    <p className="text-sm text-gray-500">Clube: {club?.name || 'N/A'}</p>
                 </div>
             </div>
 
@@ -330,8 +330,8 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                 <div className="md:col-span-2">
                     <div className="border-b border-gray-700">
                         <div className="flex">
-                            <button onClick={() => setActiveTab('attributes')} className={`py-2 px-4 font-semibold ${activeTab === 'attributes' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>Attributes</button>
-                            <button onClick={() => setActiveTab('history')} className={`py-2 px-4 font-semibold ${activeTab === 'history' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>History</button>
+                            <button onClick={() => setActiveTab('attributes')} className={`py-2 px-4 font-semibold ${activeTab === 'attributes' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>Atributos</button>
+                            <button onClick={() => setActiveTab('history')} className={`py-2 px-4 font-semibold ${activeTab === 'history' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>Histórico</button>
                         </div>
                     </div>
                     <div className="p-4 bg-gray-900/50 rounded-b-lg">

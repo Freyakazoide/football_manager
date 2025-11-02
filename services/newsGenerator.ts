@@ -2,26 +2,26 @@ import { Match, Club, Player } from '../types';
 
 const templates = {
     dominantWin: [
-        { headline: `Clinical ${'winner'} Dismantle ${'loser'}`, content: `${'winner'} put on a show today, dominating possession with ${'winPossession'}% of the ball and peppering the goal with ${'winShots'} shots. The final score of ${'score'} doesn't flatter them, as they thoroughly deserved the victory based on an expected goals tally of ${'winXG'} to ${'loser'}'s ${'loseXG'}.` },
-        { headline: `${'winner'} Cruise to ${'score'} Victory`, content: `It was a comfortable day at the office for ${'winner'}. They controlled the tempo from start to finish, and the ${'score'} victory was a fair reflection of their superiority on the pitch.`}
+        { headline: `${'winner'} Clínico Desmantela ${'loser'}`, content: `${'winner'} deu um show hoje, dominando a posse de bola com ${'winPossession'}% e bombardeando o gol com ${'winShots'} finalizações. O placar final de ${'score'} não os favorece, pois mereceram amplamente a vitória com base em um total de gols esperados de ${'winXG'} contra ${'loseXG'} do ${'loser'}.` },
+        { headline: `${'winner'} Vence por ${'score'} com Tranquilidade`, content: `Foi um dia tranquilo no escritório para o ${'winner'}. Eles controlaram o ritmo do início ao fim, e a vitória por ${'score'} foi um reflexo justo de sua superioridade em campo.`}
     ],
     smashAndGrab: [
-        { headline: `Late Drama Sees ${'winner'} Steal the Points`, content: `In a classic smash-and-grab performance, ${'winner'} weathered a storm of ${'loseShots'} shots from ${'loser'} to snatch a ${'score'} victory. Despite having only ${'winPossession'}% possession, their clinical finishing made all the difference.` },
+        { headline: `Drama no Fim Vê ${'winner'} Roubar os Pontos`, content: `Em uma performance clássica de "smash-and-grab", o ${'winner'} resistiu a uma tempestade de ${'loseShots'} finalizações do ${'loser'} para arrancar uma vitória por ${'score'}. Apesar de ter apenas ${'winPossession'}% de posse de bola, sua finalização clínica fez toda a diferença.` },
     ],
     hardFoughtWin: [
-        { headline: `${'winner'} Edge Out ${'loser'} in Tense Affair`, content: `A hard-fought battle saw ${'winner'} emerge with a narrow ${'score'} win. It was a game of fine margins, but a moment of quality decided the contest.` }
+        { headline: `${'winner'} Supera ${'loser'} em Duelo Tenso`, content: `Uma batalha acirrada viu o ${'winner'} sair com uma vitória apertada por ${'score'}. Foi um jogo de detalhes, mas um momento de qualidade decidiu a partida.` }
     ],
     disappointingLoss: [
-         { headline: `Frustration for ${'loser'} in ${'score'} Defeat`, content: `It's a tough result to take for ${'loser'}. Despite creating several good chances (totaling ${'loseXG'} xG), they couldn't find the cutting edge and ultimately fell to a ${'score'} defeat against ${'winner'}.` }
+         { headline: `Frustração para o ${'loser'} na Derrota por ${'score'}`, content: `É um resultado difícil de engolir para o ${'loser'}. Apesar de criar várias boas chances (totalizando ${'loseXG'} xG), eles não conseguiram o toque final e acabaram caindo para uma derrota por ${'score'} contra o ${'winner'}.` }
     ],
     thrillingDraw: [
-        { headline: `All Square in ${'score'} Thriller`, content: `What a match! Both ${'home'} and ${'away'} left it all on the pitch in a pulsating ${'score'} draw. A back-and-forth contest saw both sides have chances to win it.` }
+        { headline: `Tudo Igual em Empate Eletrizante de ${'score'}`, content: `Que partida! Tanto ${'home'} quanto ${'away'} deixaram tudo em campo em um empate pulsante de ${'score'}. Uma disputa de ida e volta viu ambos os lados terem chances de vencer.` }
     ],
     scoreDraw: [
-        { headline: `Points Shared as ${'home'} and ${'away'} Draw ${'score'}`, content: `It's all square between ${'home'} and ${'away'} as the match ends ${'score'}. Both teams had their moments but neither could find a winning goal.` }
+        { headline: `Pontos Divididos no Empate de ${'score'} entre ${'home'} e ${'away'}`, content: `Tudo igual entre ${'home'} e ${'away'} com o jogo terminando em ${'score'}. Ambas as equipes tiveram seus momentos, mas nenhuma conseguiu encontrar o gol da vitória.` }
     ],
     scorelessDraw: [
-        { headline: `Stalemate as ${'home'} and ${'away'} Play Out Scoreless Draw`, content: `A tactical battle ended in a stalemate today, with neither side able to break the deadlock. The match finished 0-0, a result that was probably fair given the lack of clear-cut chances for either team.`}
+        { headline: `Empate sem Gols entre ${'home'} e ${'away'}`, content: `Uma batalha tática terminou em um impasse hoje, com nenhum dos lados conseguindo quebrar o zero. O jogo terminou em 0-0, um resultado que provavelmente foi justo dada a falta de chances claras para qualquer equipe.`}
     ]
 };
 
@@ -34,7 +34,7 @@ export const generateNarrativeReport = (match: Match, playerClubId: number | nul
     const { homeScore, awayScore, homeStats, awayStats } = match;
 
     if (homeScore === undefined || awayScore === undefined || !homeStats || !awayStats) {
-        return { headline: "Match Report", content: "Match details are unavailable.", matchStatsSummary: match };
+        return { headline: "Relatório da Partida", content: "Detalhes da partida indisponíveis.", matchStatsSummary: match };
     }
 
     const playerTeam = playerClubId === homeTeam.id ? homeTeam : playerClubId === awayTeam.id ? awayTeam : null;
@@ -122,10 +122,10 @@ export const generateNarrativeReport = (match: Match, playerClubId: number | nul
     }
 
     if (Object.keys(yellowCards).length > 0) {
-        eventsContent += `Yellow Cards: ${Object.keys(yellowCards).map(id => `${players[Number(id)].name} (${clubs[players[Number(id)].clubId].name})`).join(', ')}\n`;
+        eventsContent += `Cartões Amarelos: ${Object.keys(yellowCards).map(id => `${players[Number(id)].name} (${clubs[players[Number(id)].clubId].name})`).join(', ')}\n`;
     }
     if (redCards.length > 0) {
-        eventsContent += `Red Cards: ${redCards.map(id => `${players[id].name} (${clubs[players[id].clubId].name})`).join(', ')}\n`;
+        eventsContent += `Cartões Vermelhos: ${redCards.map(id => `${players[id].name} (${clubs[players[id].clubId].name})`).join(', ')}\n`;
     }
     if (match.injuryEvents && match.injuryEvents.length > 0) {
          match.injuryEvents.forEach(event => {
@@ -133,13 +133,13 @@ export const generateNarrativeReport = (match: Match, playerClubId: number | nul
             const returnDate = new Date(event.returnDate);
             const diffTime = Math.abs(returnDate.getTime() - matchDate.getTime());
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
-            eventsContent += `Injury: ${players[event.playerId].name} (${clubs[players[event.playerId].clubId].name}) is expected to be out for ${durationText}.\n`;
+            const durationText = diffDays > 10 ? `aprox. ${Math.round(diffDays/7)} semanas` : `aprox. ${diffDays} dias`;
+            eventsContent += `Lesão: ${players[event.playerId].name} (${clubs[players[event.playerId].clubId].name}) deve ficar de fora por ${durationText}.\n`;
         });
     }
 
     if (eventsContent) {
-        finalContent += `\n\n---\nDisciplinary & Injuries:\n${eventsContent}`;
+        finalContent += `\n\n---\nDisciplina e Lesões:\n${eventsContent}`;
     }
     
     return { headline: finalHeadline, content: finalContent, matchStatsSummary: match };

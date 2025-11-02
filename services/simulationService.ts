@@ -1,4 +1,4 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes, SponsorshipDeal, NewsItem } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes, SponsorshipDeal, NewsItem, Loan } from '../types';
 import { getRoleCategory, ALL_ROLES } from './database';
 import { generateInjury } from './injuryService';
 import { getSeason } from './playerStatsService';
@@ -77,8 +77,9 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
     const homeMentality = clubs[match.homeTeamId].tactics.mentality;
     const awayMentality = clubs[match.awayTeamId].tactics.mentality;
     const mentalityMod = (mentality: Mentality, unit: 'def' | 'mid' | 'fwd') => {
-        if (mentality === 'Defensive') return unit === 'def' ? 1.1 : (unit === 'fwd' ? 0.85 : 1.0);
-        if (mentality === 'Offensive') return unit === 'fwd' ? 1.15 : (unit === 'def' ? 0.9 : 1.0);
+        // FIX: Translated mentality strings to match Mentality type.
+        if (mentality === 'Defensiva') return unit === 'def' ? 1.1 : (unit === 'fwd' ? 0.85 : 1.0);
+        if (mentality === 'Ofensiva') return unit === 'fwd' ? 1.15 : (unit === 'def' ? 0.9 : 1.0);
         return 1.0;
     };
 
@@ -101,8 +102,9 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
 
     // Game Volume simulation - total number of possessions in a game
     let totalPossessions = 120; // Average number of possessions
-    if (homeMentality === 'Offensive' && awayMentality === 'Offensive') totalPossessions = 150;
-    if (homeMentality === 'Defensive' && awayMentality === 'Defensive') totalPossessions = 90;
+    // FIX: Translated mentality strings to match Mentality type.
+    if (homeMentality === 'Ofensiva' && awayMentality === 'Ofensiva') totalPossessions = 150;
+    if (homeMentality === 'Defensiva' && awayMentality === 'Defensiva') totalPossessions = 90;
 
     let homeScore = 0;
     let awayScore = 0;
@@ -228,12 +230,13 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
     return { ...match, homeScore, awayScore, homeStats, awayStats, log, playerStats, homeLineup, awayLineup, disciplinaryEvents, injuryEvents };
 };
 
+// FIX: Translated training focus strings to match TeamTrainingFocus type.
 const getTrainingFocusAttributes = (focus: TeamTrainingFocus): (keyof PlayerAttributes)[] => {
     switch (focus) {
-        case 'Attacking': return ['shooting', 'dribbling', 'crossing', 'creativity'];
-        case 'Defending': return ['tackling', 'heading', 'positioning', 'strength'];
-        case 'Physical': return ['pace', 'stamina', 'strength', 'naturalFitness'];
-        case 'Tactical': return ['positioning', 'teamwork', 'workRate'];
+        case 'Ofensivo': return ['shooting', 'dribbling', 'crossing', 'creativity'];
+        case 'Defensivo': return ['tackling', 'heading', 'positioning', 'strength'];
+        case 'Físico': return ['pace', 'stamina', 'strength', 'naturalFitness'];
+        case 'Tático': return ['positioning', 'teamwork', 'workRate'];
         default: return [];
     }
 };
@@ -463,30 +466,61 @@ const getMonthlyIncome = (club: Club, players: Player[], sponsorshipDeals: Spons
     return monthlySponsorIncome + ticketSales;
 };
 
-export const processMonthlyFinances = (clubs: Record<number, Club>, players: Record<number, Player>, staff: Record<number, Staff>, sponsorshipDeals: SponsorshipDeal[]): Record<number, Club> => {
-    return Object.values(clubs).reduce((acc, club) => {
-        // --- EXPENSES ---
-        const clubPlayers = (Object.values(players) as Player[]).filter(p => p.clubId === club.id);
+export const processMonthlyFinances = (state: GameState): Partial<GameState> => {
+    const { clubs, players, staff, sponsorshipDeals, loans, news, nextNewsId } = state;
+    const newClubs: Record<number, Club> = JSON.parse(JSON.stringify(clubs));
+    const newLoans: Loan[] = [];
+    const newNews: NewsItem[] = [];
+    let tempNextNewsId = nextNewsId;
+
+    // Process expenses and income for all clubs
+    Object.values(newClubs).forEach(club => {
+        const clubPlayers = Object.values(players).filter(p => p.clubId === club.id);
         const playerWages = clubPlayers.reduce((sum, p) => sum + p.wage, 0) * 4;
-
-        const departments = (Object.values(club.departments) as StaffDepartment[]);
-
-        const staffChiefs = departments.map(d => d.chiefId).filter(Boolean) as number[];
-        const staffWages = staffChiefs.reduce((sum, id) => sum + staff[id].wage, 0) * 4;
-
-        const maintenanceCost = departments.reduce((sum, d) => sum + getDepartmentMaintenanceCost(d.level), 0);
+        const staffWages = Object.values(staff).filter(s => s.clubId === club.id).reduce((sum, s) => sum + s.wage, 0) * 4;
+        const maintenanceCost = Object.values(club.departments).reduce((sum, d) => sum + getDepartmentMaintenanceCost(d.level), 0);
+        const income = getMonthlyIncome(club, clubPlayers, sponsorshipDeals);
         
-        const totalMonthlyBill = playerWages + staffWages + maintenanceCost;
-
-        // --- INCOME ---
-        const totalMonthlyIncome = getMonthlyIncome(club, clubPlayers, sponsorshipDeals);
+        club.balance += income - (playerWages + staffWages + maintenanceCost);
+    });
+    
+    // Process loan repayments
+    loans.forEach(loan => {
+        const club = newClubs[loan.clubId];
+        if (!club) return;
         
-        acc[club.id] = {
-            ...club,
-            balance: club.balance - totalMonthlyBill + totalMonthlyIncome,
-        };
-        return acc;
-    }, {} as Record<number, Club>);
+        if (club.balance >= loan.monthlyRepayment) {
+            club.balance -= loan.monthlyRepayment;
+            const interestPayment = loan.remainingBalance * (loan.interestRate / 100 / 12);
+            const principalPayment = loan.monthlyRepayment - interestPayment;
+            
+            const updatedLoan: Loan = {
+                ...loan,
+                remainingBalance: loan.remainingBalance - principalPayment,
+                monthsRemaining: loan.monthsRemaining - 1,
+            };
+
+            if (updatedLoan.monthsRemaining <= 0) {
+                // Loan paid off
+                club.creditScore = Math.min(100, club.creditScore + 10);
+                club.loanHistory.push({ bankId: loan.bankId, outcome: 'paid_off', amount: loan.principal, date: new Date(state.currentDate) });
+                if (club.id === state.playerClubId) {
+                    newNews.push({ id: tempNextNewsId++, date: new Date(state.currentDate), headline: "Loan Repaid", content: `You have successfully repaid your loan of ${loan.principal.toLocaleString()}. Your club's credit score has improved.`, type: 'loan_update', isRead: false });
+                }
+            } else {
+                newLoans.push(updatedLoan);
+            }
+        } else {
+            // Loan defaulted
+            club.creditScore = Math.max(0, club.creditScore - 25);
+            club.loanHistory.push({ bankId: loan.bankId, outcome: 'defaulted', amount: loan.principal, date: new Date(state.currentDate) });
+            if (club.id === state.playerClubId) {
+                newNews.push({ id: tempNextNewsId++, date: new Date(state.currentDate), headline: "Loan Defaulted!", content: `The club has failed to make the monthly repayment for its loan from ${state.banks[loan.bankId].name}. Your credit score has been severely damaged.`, type: 'loan_update', isRead: false });
+            }
+        }
+    });
+
+    return { clubs: newClubs, loans: newLoans, news: [...newNews, ...news], nextNewsId: tempNextNewsId };
 };
 
 export const awardPrizeMoney = (clubs: Record<number, Club>, leagueTable: LeagueEntry[]): Record<number, Club> => {

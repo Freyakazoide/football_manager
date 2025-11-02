@@ -265,7 +265,7 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch, isPreMat
                     <div>
                         <label className="block text-gray-400 text-xs font-bold mb-1">Mentality</label>
                         <select value={tactics.mentality} onChange={e => setTactics(t => ({...t, mentality: e.target.value as Mentality}))} className="w-full bg-gray-700 text-white p-2 rounded text-sm">
-                            <option>Defensive</option> <option>Balanced</option> <option>Offensive</option>
+                            <option>Defensiva</option> <option>Equilibrada</option> <option>Ofensiva</option>
                         </select>
                     </div>
                      <div>

@@ -1,59 +1,59 @@
 // Enums
 export enum View {
-    SQUAD = 'Squad',
-    TEAM = 'Team',
-    TACTICS = 'Tactics',
-    STAFF = 'Staff',
-    BOARD = 'Board',
-    ACADEMY = 'Academy',
-    COMPETITION = 'Competition',
-    CALENDAR = 'Calendar',
-    FINANCES = 'Finances',
-    TRANSFERS = 'Transfers',
-    NEWS = 'News',
-    PLAYER_PROFILE = 'Player Profile',
-    TRAINING = 'Training',
-    SCOUTING = 'Scouting',
+    SQUAD = 'Elenco',
+    TEAM = 'Time',
+    TACTICS = 'Táticas',
+    STAFF = 'Equipe Técnica',
+    BOARD = 'Diretoria',
+    ACADEMY = 'Base',
+    COMPETITION = 'Competição',
+    CALENDAR = 'Calendário',
+    FINANCES = 'Finanças',
+    TRANSFERS = 'Transferências',
+    NEWS = 'Notícias',
+    PLAYER_PROFILE = 'Perfil do Jogador',
+    TRAINING = 'Treino',
+    SCOUTING = 'Observação',
 }
 
 export type PlayerRole =
-    // Goalkeeper
-    | 'Goalkeeper' | 'Sweeper Keeper'
-    // Defenders
-    | 'Central Defender' | 'Ball-Playing Defender' | 'Full-Back' | 'Wing-Back' | 'Inverted Wing-Back' | 'Libero'
-    // Midfielders
-    | 'Defensive Midfielder' | 'Central Midfielder' | 'Ball Winning Midfielder' | 'Box-To-Box Midfielder'
-    | 'Deep Lying Playmaker' | 'Roaming Playmaker' | 'Mezzala' | 'Carrilero' | 'Wide Midfielder' | 'Wide Playmaker'
-    // Attacking Midfielders
-    | 'Attacking Midfielder' | 'Advanced Playmaker' | 'Shadow Striker' | 'Trequartista' | 'False Nine'
-    // Strikers
-    | 'Striker' | 'Advanced Forward' | 'Complete Forward' | 'Poacher' | 'Deep-Lying Forward';
+    // Goleiro
+    | 'Goleiro' | 'Goleiro Líbero'
+    // Defensores
+    | 'Zagueiro' | 'Zagueiro com Passe' | 'Lateral' | 'Ala' | 'Lateral Invertido' | 'Líbero'
+    // Meio-campistas
+    | 'Volante' | 'Meio-campista' | 'Volante Ladrão de Bolas' | 'Meia Box-to-Box'
+    | 'Construtor de Jogo Recuado' | 'Meia Itinerante' | 'Mezzala' | 'Carrilero' | 'Meia Aberto' | 'Armador Aberto'
+    // Meias Atacantes
+    | 'Meia Atacante' | 'Armador Avançado' | 'Atacante Sombra' | 'Trequartista' | 'Falso Nove'
+    // Atacantes
+    | 'Atacante' | 'Atacante Avançado' | 'Atacante Completo' | 'Finalizador' | 'Atacante Recuado';
 
-export type Mentality = 'Defensive' | 'Balanced' | 'Offensive';
+export type Mentality = 'Defensiva' | 'Equilibrada' | 'Ofensiva';
 
-export enum ShootingInstruction { Normal = 'Normal', ShootMoreOften = 'Shoot More Often', ShootLessOften = 'Shoot Less Often' }
-export enum PassingInstruction { Normal = 'Normal', Shorter = 'Shorter', Risky = 'Risky' }
-export enum DribblingInstruction { Normal = 'Normal', DribbleMore = 'Dribble More', DribbleLess = 'Dribble Less' }
-export enum CrossingInstruction { Normal = 'Normal', CrossMore = 'Cross More', CrossLess = 'Cross Less' }
-export enum PositioningInstruction { Normal = 'Normal', GetForward = 'Get Forward', HoldPosition = 'Hold Position' }
-export enum TacklingInstruction { Normal = 'Normal', Cautious = 'Cautious', Harder = 'Harder' }
-export enum PressingInstruction { Normal = 'Normal', Urgent = 'Urgent', DropOff = 'Drop Off' }
-export enum MarkingInstruction { Normal = 'Normal', Zonal = 'Zonal', ManMarking = 'Man Marking' }
+export enum ShootingInstruction { Normal = 'Normal', ShootMoreOften = 'Chutar Mais Vezes', ShootLessOften = 'Chutar Menos Vezes' }
+export enum PassingInstruction { Normal = 'Normal', Shorter = 'Mais Curtos', Risky = 'Passes de Risco' }
+export enum DribblingInstruction { Normal = 'Normal', DribbleMore = 'Driblar Mais', DribbleLess = 'Driblar Menos' }
+export enum CrossingInstruction { Normal = 'Normal', CrossMore = 'Cruzar Mais', CrossLess = 'Cruzar Menos' }
+export enum PositioningInstruction { Normal = 'Normal', GetForward = 'Avançar Mais', HoldPosition = 'Manter Posição' }
+export enum TacklingInstruction { Normal = 'Normal', Cautious = 'Com Cautela', Harder = 'Mais Forte' }
+export enum PressingInstruction { Normal = 'Normal', Urgent = 'Urgente', DropOff = 'Recuar' }
+export enum MarkingInstruction { Normal = 'Normal', Zonal = 'Marcação por Zona', ManMarking = 'Marcação Individual' }
 
 // --- NEW STAFF SYSTEM ---
 
 export enum DepartmentType {
-    Coaching = 'Coaching',
-    Medical = 'Medical',
-    Scouting = 'Scouting',
+    Coaching = 'Treinamento',
+    Medical = 'Médico',
+    Scouting = 'Observação',
     Performance = 'Performance',
 }
 
 export enum StaffRole {
-    AssistantManager = 'Assistant Manager',
-    HeadOfPhysiotherapy = 'Head of Physiotherapy',
-    HeadOfScouting = 'Head of Scouting',
-    HeadOfPerformance = 'Head of Performance',
+    AssistantManager = 'Auxiliar Técnico',
+    HeadOfPhysiotherapy = 'Chefe de Fisioterapia',
+    HeadOfScouting = 'Chefe de Observação',
+    HeadOfPerformance = 'Chefe de Performance',
 }
 
 export interface AssistantManagerAttributes {
@@ -99,6 +99,31 @@ export interface StaffDepartment {
 }
 
 // --- END NEW STAFF SYSTEM ---
+
+// --- NEW BANKING & LOAN TYPES ---
+export interface Bank {
+    id: number;
+    name: string;
+    tier: 'Investimento Global' | 'Comercial Nacional' | 'Regional' | 'Cooperativa de Crédito';
+    minReputation: number;
+    maxLoanAmount: number;
+    interestRateRange: [number, number]; // [min, max] percentage
+    termMonthsRange: [number, number]; // [min, max] months
+}
+
+export interface Loan {
+    id: number;
+    bankId: number;
+    clubId: number;
+    principal: number;
+    remainingBalance: number;
+    monthlyRepayment: number;
+    interestRate: number;
+    termMonths: number;
+    monthsRemaining: number;
+    startDate: Date;
+}
+
 
 // Interfaces & Types
 export interface PlayerAttributes {
@@ -175,7 +200,7 @@ export interface Tactics {
     bench: (number | null)[];
 }
 
-export type TeamTrainingFocus = 'Balanced' | 'Attacking' | 'Defending' | 'Tactical' | 'Physical' | 'Set Pieces';
+export type TeamTrainingFocus = 'Equilibrado' | 'Ofensivo' | 'Defensivo' | 'Tático' | 'Físico' | 'Bolas Paradas';
 
 export type ClubPhilosophy =
     | { type: 'sign_young_players'; description: string; parameters: { maxAge: number } }
@@ -198,6 +223,9 @@ export interface Club {
     managerConfidence: number; // 0-100
     boardObjective: { type: 'league_finish', position: number, description: string } | null;
     philosophies: ClubPhilosophy[];
+    // --- NEW FINANCIAL HISTORY ---
+    creditScore: number; // 0-100, affects interest rates
+    loanHistory: { bankId: number, outcome: 'paid_off' | 'defaulted', amount: number, date: Date }[];
 }
 
 
@@ -245,7 +273,6 @@ export interface Match {
     awayLineup?: (LineupPlayer | null)[]; // for match report
     disciplinaryEvents?: { playerId: number, type: 'yellow' | 'red' }[];
     injuryEvents?: { playerId: number, type: string, returnDate: Date }[];
-    preMatchPressConferenceDone?: boolean;
 }
 
 export interface NewsItem {
@@ -253,7 +280,7 @@ export interface NewsItem {
     date: Date;
     headline: string;
     content: string;
-    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed' | 'board_report';
+    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed' | 'board_report' | 'loan_update';
     relatedEntityId?: number;
     isRead: boolean;
     matchStatsSummary?: Match;
@@ -389,15 +416,8 @@ export interface TransferNegotiation {
     agreedFee: number;
 }
 
-export interface PressConference {
-    matchId: number;
-    questions: string[];
-    currentQuestionIndex: number;
-    outcomes: { question: string; answer: string; narrative: string; teamMoraleEffect: number }[];
-}
-
 // --- NEW SPONSORSHIP TYPES ---
-export type SponsorType = 'Main Shirt' | 'Kit Supplier' | 'Stadium Naming Rights' | 'Training Ground';
+export type SponsorType = 'Camisa Principal' | 'Fornecedor de Material' | 'Direitos do Estádio' | 'CT';
 
 export type SponsorGuideline =
     | { type: 'min_reputation', value: number }
@@ -444,7 +464,10 @@ export interface GameState {
     seasonReviewData: SeasonReviewData | null;
     transferNegotiations: Record<number, TransferNegotiation>;
     nextNegotiationId: number;
-    pressConference: PressConference | null;
     sponsors: Record<number, Sponsor>;
     sponsorshipDeals: SponsorshipDeal[];
+    // --- NEW BANKING STATE ---
+    banks: Record<number, Bank>;
+    loans: Loan[];
+    nextLoanId: number;
 }

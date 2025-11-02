@@ -37,7 +37,7 @@ const MiniPitch: React.FC<{
                         onClick={() => onPlayerClick(player)}
                     >
                         <div className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-xs text-white ${teamColor} border-2 border-black/30`}>
-                            {lp!.role}
+                            {lp!.role.substring(0,3)}
                         </div>
                         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-center text-xs font-semibold whitespace-nowrap bg-black/50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                             {player.name.split(' ')[1]}
@@ -62,17 +62,17 @@ const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, o
     
     const renderSummary = () => (
         <div>
-            <h3 className="text-xl font-bold text-green-400 mb-4">Match Summary</h3>
+            <h3 className="text-xl font-bold text-green-400 mb-4">Resumo da Partida</h3>
             <p className="text-gray-300">
-                A competitive match between {homeTeam.name} and {awayTeam.name} finished {match.homeScore}-{match.awayScore}.
-                The game saw a total of {(match.homeStats?.shots ?? 0) + (match.awayStats?.shots ?? 0)} shots, with plenty of action at both ends.
+                Uma partida competitiva entre {homeTeam.name} e {awayTeam.name} terminou em {match.homeScore}-{match.awayScore}.
+                O jogo teve um total de {(match.homeStats?.shots ?? 0) + (match.awayStats?.shots ?? 0)} finalizações, com muita ação em ambos os lados.
             </p>
         </div>
     );
     
     const renderLineups = () => {
         if (!match.homeLineup || !match.awayLineup) {
-            return <p className="text-gray-400">Starting lineup information is not available for this match.</p>;
+            return <p className="text-gray-400">Informações de escalação inicial não estão disponíveis para esta partida.</p>;
         }
         return (
             <div className="grid grid-cols-2 gap-4">
@@ -95,19 +95,19 @@ const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, o
                 <span className="w-1/3 text-center"></span>
                 <span className="w-1/3 text-left">{awayTeam.name}</span>
             </div>
-            <StatRow label="Possession" homeValue={`${match.homeStats?.possession}%`} awayValue={`${match.awayStats?.possession}%`} />
-            <StatRow label="Shots" homeValue={match.homeStats?.shots ?? 0} awayValue={match.awayStats?.shots ?? 0} />
-            <StatRow label="On Target" homeValue={match.homeStats?.shotsOnTarget ?? 0} awayValue={match.awayStats?.shotsOnTarget ?? 0} />
+            <StatRow label="Posse" homeValue={`${match.homeStats?.possession}%`} awayValue={`${match.awayStats?.possession}%`} />
+            <StatRow label="Finalizações" homeValue={match.homeStats?.shots ?? 0} awayValue={match.awayStats?.shots ?? 0} />
+            <StatRow label="No Alvo" homeValue={match.homeStats?.shotsOnTarget ?? 0} awayValue={match.awayStats?.shotsOnTarget ?? 0} />
             <StatRow label="xG" homeValue={match.homeStats?.xG.toFixed(2) ?? '0.00'} awayValue={match.awayStats?.xG.toFixed(2) ?? '0.00'} />
             <StatRow label="Passes" homeValue={match.homeStats?.passes ?? 0} awayValue={match.awayStats?.passes ?? 0} />
-            <StatRow label="Tackles" homeValue={match.homeStats?.tackles ?? 0} awayValue={match.awayStats?.tackles ?? 0} />
-            <StatRow label="Fouls" homeValue={match.homeStats?.fouls ?? 0} awayValue={match.awayStats?.fouls ?? 0} />
-            <StatRow label="Corners" homeValue={match.homeStats?.corners ?? 0} awayValue={match.awayStats?.corners ?? 0} />
+            <StatRow label="Desarmes" homeValue={match.homeStats?.tackles ?? 0} awayValue={match.awayStats?.tackles ?? 0} />
+            <StatRow label="Faltas" homeValue={match.homeStats?.fouls ?? 0} awayValue={match.awayStats?.fouls ?? 0} />
+            <StatRow label="Escanteios" homeValue={match.homeStats?.corners ?? 0} awayValue={match.awayStats?.corners ?? 0} />
         </div>
     );
 
     const renderPlayerRatings = () => {
-        if (!match.playerStats) return <p>Player ratings are unavailable for this match.</p>;
+        if (!match.playerStats) return <p>Notas dos jogadores indisponíveis para esta partida.</p>;
 
         const renderTeamTable = (teamId: number) => {
             const players = allPlayersInvolved.filter(p => p.clubId === teamId);
@@ -117,12 +117,12 @@ const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, o
                     <table className="w-full text-left text-sm">
                         <thead className="text-gray-400">
                             <tr>
-                                <th className="p-1">Name</th>
+                                <th className="p-1">Nome</th>
                                 <th className="p-1 text-center">G</th>
                                 <th className="p-1 text-center">A</th>
-                                <th className="p-1 text-center">S</th>
-                                <th className="p-1 text-center">T</th>
-                                <th className="p-1 text-center font-bold">Rat</th>
+                                <th className="p-1 text-center">F</th>
+                                <th className="p-1 text-center">D</th>
+                                <th className="p-1 text-center font-bold">Nota</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -173,6 +173,14 @@ const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, o
         }
     };
     
+    const TABS: { id: Tab; label: string }[] = [
+        { id: 'summary', label: 'Resumo' },
+        { id: 'lineups', label: 'Escalações' },
+        { id: 'stats', label: 'Estatísticas' },
+        { id: 'ratings', label: 'Notas' },
+        { id: 'events', label: 'Eventos' }
+    ];
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
             <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -194,9 +202,9 @@ const MatchReportModal: React.FC<MatchReportModalProps> = ({ match, gameState, o
 
                 {/* Tabs */}
                 <div className="flex border-b border-gray-700">
-                    {(['summary', 'lineups', 'stats', 'ratings', 'events'] as Tab[]).map(tab => (
-                        <button key={tab} onClick={() => setActiveTab(tab)} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === tab ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
-                            {tab}
+                    {TABS.map(tab => (
+                        <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === tab.id ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
+                            {tab.label}
                         </button>
                     ))}
                 </div>

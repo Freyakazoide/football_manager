@@ -14,17 +14,17 @@ const InstructionEditor: React.FC<{
     onInstructionChange: (key: keyof PlayerInstructions, value: any) => void;
 }> = ({ instructions, onInstructionChange }) => {
     const instructionSet = [
-        { title: 'In Possession', instructions: [
-            { key: 'shooting', enum: ShootingInstruction, label: 'Shooting' },
-            { key: 'passing', enum: PassingInstruction, label: 'Passing' },
-            { key: 'dribbling', enum: DribblingInstruction, label: 'Dribbling' },
-            { key: 'crossing', enum: CrossingInstruction, label: 'Crossing' },
-            { key: 'positioning', enum: PositioningInstruction, label: 'Positioning' },
+        { title: 'Com Posse de Bola', instructions: [
+            { key: 'shooting', enum: ShootingInstruction, label: 'Finalização' },
+            { key: 'passing', enum: PassingInstruction, label: 'Passe' },
+            { key: 'dribbling', enum: DribblingInstruction, label: 'Drible' },
+            { key: 'crossing', enum: CrossingInstruction, label: 'Cruzamento' },
+            { key: 'positioning', enum: PositioningInstruction, label: 'Posicionamento' },
         ]},
-        { title: 'Out of Possession', instructions: [
-            { key: 'tackling', enum: TacklingInstruction, label: 'Tackling' },
-            { key: 'pressing', enum: PressingInstruction, label: 'Pressing' },
-            { key: 'marking', enum: MarkingInstruction, label: 'Marking' },
+        { title: 'Sem Posse de Bola', instructions: [
+            { key: 'tackling', enum: TacklingInstruction, label: 'Desarme' },
+            { key: 'pressing', enum: PressingInstruction, label: 'Pressão' },
+            { key: 'marking', enum: MarkingInstruction, label: 'Marcação' },
         ]},
     ];
 
@@ -86,13 +86,13 @@ const PlayerInstructionModal: React.FC<PlayerInstructionModalProps> = ({ player,
                 <div className="p-4 border-b border-gray-700 flex justify-between items-center">
                     <div>
                         <h2 className="text-2xl font-bold">{player.name}</h2>
-                        <p className="text-gray-400">Player Instructions</p>
+                        <p className="text-gray-400">Instruções do Jogador</p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl font-bold">&times;</button>
                 </div>
                 <div className="p-6 overflow-y-auto">
                     <div className="mb-4">
-                        <label className="block text-gray-400 text-sm font-bold mb-2">Role</label>
+                        <label className="block text-gray-400 text-sm font-bold mb-2">Função</label>
                         <select
                             value={localLineupPlayer.role}
                             onChange={handleRoleChange}
@@ -108,7 +108,7 @@ const PlayerInstructionModal: React.FC<PlayerInstructionModalProps> = ({ player,
                 </div>
                 <div className="p-4 border-t border-gray-700">
                     <button onClick={handleSaveChanges} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                        Save and Close
+                        Salvar e Fechar
                     </button>
                 </div>
             </div>

@@ -72,6 +72,7 @@ export const createLiveMatchState = (
         awayTeamId: awayTeam.id,
         homeTeamName: homeTeam.name,
         awayTeamName: awayTeam.name,
+        ball: { x: 50, y: 50, z: 0, possession: 'home', lastTouchedBy: null },
         minute: 0,
         homeScore: 0,
         awayScore: 0,

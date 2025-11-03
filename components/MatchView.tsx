@@ -5,6 +5,7 @@ import { runMinute } from '../services/matchEngine';
 import { getUnitRatings } from '../services/simulationService';
 import { ROLE_DEFINITIONS } from '../services/database';
 import PlayerInstructionModal from './PlayerInstructionModal';
+import Match2DView from './Match2DView';
 
 const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
     return ROLE_DEFINITIONS[role]?.category || 'MID';
@@ -364,9 +365,10 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
                 </div>
 
                 <div className="lg:col-span-2 min-h-0">
-                     <PitchView
+                    <Match2DView
                         playerTeam={playerTeam}
                         opponentTeam={opponentTeam}
+                        ball={liveMatch.ball}
                         onPlayerClick={(p) => setSelectedPlayer(p)}
                         onDrop={handleSubDrop}
                     />

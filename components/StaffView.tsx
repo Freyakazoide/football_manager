@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { GameState, Staff, StaffRole, DepartmentType, StaffAttributes } from '../types';
+import { GameState, Staff, StaffRole, DepartmentType, StaffAttributes, Club } from '../types';
 import { Action } from '../services/reducerTypes';
 
 interface StaffViewProps {
@@ -39,17 +39,11 @@ const DepartmentCard: React.FC<{
     const chief = department.chiefId ? gameState.staff[department.chiefId] : null;
 
     const handleUpgrade = () => {
-        // The confirm() dialog might be blocked, making the button appear unresponsive.
-        // Removing it for a direct, immediate action.
         dispatch({ type: 'UPGRADE_DEPARTMENT', payload: { department: departmentType } });
     };
 
-    const handleFire = () => {
-         if (chief) {
-            // The confirm() dialog might be blocked, making the button appear unresponsive.
-            // Removing it for a direct, immediate action.
-            dispatch({ type: 'FIRE_STAFF', payload: { staffId: chief.id } });
-        }
+    const handleFire = (staffId: number) => {
+        dispatch({ type: 'FIRE_STAFF', payload: { staffId } });
     };
     
     return (
@@ -67,19 +61,44 @@ const DepartmentCard: React.FC<{
                                 <StaffAttribute key={key} label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} value={value as number} />
                             ))}
                         </div>
-                        <button onClick={handleFire} className="mt-3 w-full text-xs bg-red-800 hover:bg-red-700 py-1 rounded">Fire</button>
+                        <button onClick={() => handleFire(chief.id)} className="mt-3 w-full text-xs bg-red-800 hover:bg-red-700 py-1 rounded">Demitir</button>
                     </div>
                 ) : (
                     <div className="text-center p-6 border-2 border-dashed border-gray-600 rounded-lg">
-                        <p className="text-gray-500">No Chief Hired</p>
+                        <p className="text-gray-500">Nenhum Chefe Contratado</p>
+                    </div>
+                )}
+
+                 {departmentType === DepartmentType.Coaching && (
+                    <div className="mt-3">
+                        <h4 className="text-md font-semibold text-gray-300 mb-2">Treinadores ({department.coachIds?.length || 0}/{department.level})</h4>
+                        <div className="space-y-2">
+                            {department.coachIds?.map(id => gameState.staff[id]).map(coach => (
+                                <div key={coach.id} className="bg-gray-900/50 p-3 rounded-lg">
+                                    <h4 className="font-semibold text-white">{coach.name}</h4>
+                                    <p className="text-xs text-gray-500 mb-2">{coach.role}</p>
+                                    <div className="space-y-1">
+                                         {Object.entries(coach.attributes).map(([key, value]) => (
+                                            <StaffAttribute key={key} label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} value={value as number} />
+                                        ))}
+                                    </div>
+                                    <button onClick={() => handleFire(coach.id)} className="mt-3 w-full text-xs bg-red-800 hover:bg-red-700 py-1 rounded">Demitir</button>
+                                </div>
+                            ))}
+                            {Array.from({ length: department.level - (department.coachIds?.length || 0) }).map((_, i) => (
+                                <div key={`empty-${i}`} className="text-center p-4 border-2 border-dashed border-gray-600 rounded-lg">
+                                    <p className="text-gray-500 text-sm">Vaga para Treinador</p>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>
 
             <div className="mt-4 pt-4 border-t border-gray-600">
                 <div className="text-xs text-gray-400 flex justify-between">
-                    <span>Maint. Cost:</span>
-                    <span>${getDepartmentMaintenanceCost(department.level)}/mo</span>
+                    <span>Custo Manutenção:</span>
+                    <span>{getDepartmentMaintenanceCost(department.level).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}/mês</span>
                 </div>
                 {department.level < 5 && (
                     <button 
@@ -87,7 +106,7 @@ const DepartmentCard: React.FC<{
                         disabled={club.balance < getDepartmentUpgradeCost(department.level)}
                         className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-sm disabled:bg-gray-600 disabled:cursor-not-allowed"
                     >
-                        Upgrade to Lvl {department.level + 1} (${getDepartmentUpgradeCost(department.level).toLocaleString()})
+                        Melhorar para Nível {department.level + 1} ({getDepartmentUpgradeCost(department.level).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })})
                     </button>
                 )}
             </div>
@@ -96,21 +115,31 @@ const DepartmentCard: React.FC<{
 };
 
 
-const StaffMarketCard: React.FC<{ staff: Staff; onHire: (staffId: number, department: DepartmentType) => void; hiredChiefs: Record<DepartmentType, number|null> }> = ({ staff, onHire, hiredChiefs }) => {
-    const roleToDepartmentMap: Record<StaffRole, DepartmentType> = {
+const StaffMarketCard: React.FC<{ staff: Staff; onHire: (staffId: number, department: DepartmentType) => void; hiredChiefs: Record<DepartmentType, number|null>; club: Club }> = ({ staff, onHire, hiredChiefs, club }) => {
+    const roleToDepartmentMap: Record<string, DepartmentType> = {
         [StaffRole.AssistantManager]: DepartmentType.Coaching,
         [StaffRole.HeadOfPerformance]: DepartmentType.Performance,
         [StaffRole.HeadOfPhysiotherapy]: DepartmentType.Medical,
         [StaffRole.HeadOfScouting]: DepartmentType.Scouting,
     };
-    const department = roleToDepartmentMap[staff.role];
-    const isPositionFilled = !!hiredChiefs[department];
+    
+    let isPositionFilled = false;
+    let department: DepartmentType | undefined;
+
+    if (staff.role === StaffRole.Coach) {
+        department = DepartmentType.Coaching;
+        const coachingDept = club.departments[department];
+        isPositionFilled = (coachingDept.coachIds?.length || 0) >= coachingDept.level;
+    } else {
+        department = roleToDepartmentMap[staff.role];
+        isPositionFilled = !!hiredChiefs[department!];
+    }
     
     return (
         <div className="bg-gray-700/50 rounded-lg p-4 flex flex-col">
             <div className="flex-1">
                 <h4 className="font-bold text-lg text-white">{staff.name}</h4>
-                <p className="text-sm text-gray-400">{staff.role} | {staff.age} y/o</p>
+                <p className="text-sm text-gray-400">{staff.role} | {staff.age} anos</p>
                 <p className="text-xs text-gray-500 mb-3">{staff.nationality}</p>
 
                 <div className="space-y-1 mb-3">
@@ -119,13 +148,13 @@ const StaffMarketCard: React.FC<{ staff: Staff; onHire: (staffId: number, depart
                     ))}
                 </div>
             </div>
-            <p className="text-xs text-yellow-400 font-mono mb-3">Wage: {staff.wage.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}/wk</p>
+            <p className="text-xs text-yellow-400 font-mono mb-3">Salário: {staff.wage.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}/sem</p>
             <button
-                onClick={() => onHire(staff.id, department)}
+                onClick={() => onHire(staff.id, department!)}
                 disabled={isPositionFilled}
                 className="w-full py-2 rounded font-bold text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
             >
-                {isPositionFilled ? 'Position Filled' : 'Offer Contract'}
+                {isPositionFilled ? (staff.role === StaffRole.Coach ? 'Vagas de Treinador preenchidas' : 'Posição Preenchida') : 'Oferecer Contrato'}
             </button>
         </div>
     );
@@ -167,20 +196,20 @@ const StaffView: React.FC<StaffViewProps> = ({ gameState, dispatch }) => {
     const renderStaffSearch = () => (
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {unemployedStaff.map(staff => (
-                <StaffMarketCard key={staff.id} staff={staff} onHire={handleHire} hiredChiefs={hiredChiefs} />
+                <StaffMarketCard key={staff.id} staff={staff} onHire={handleHire} hiredChiefs={hiredChiefs} club={club} />
             ))}
         </div>
     );
 
     return (
          <div className="bg-gray-800 rounded-lg shadow-xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-4">Staff Center</h2>
+            <h2 className="text-2xl font-bold text-white mb-4">Centro de Staff</h2>
             <div className="flex border-b border-gray-700 mb-4">
                 <button onClick={() => setActiveTab('current')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'current' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
-                    Your Staff
+                    Seu Staff
                 </button>
                  <button onClick={() => setActiveTab('search')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'search' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
-                    Staff Market
+                    Mercado de Staff
                 </button>
             </div>
             

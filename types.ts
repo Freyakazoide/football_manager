@@ -54,6 +54,7 @@ export enum StaffRole {
     HeadOfPhysiotherapy = 'Chefe de Fisioterapia',
     HeadOfScouting = 'Chefe de Observação',
     HeadOfPerformance = 'Chefe de Performance',
+    Coach = 'Treinador',
 }
 
 export interface AssistantManagerAttributes {
@@ -79,7 +80,16 @@ export interface HeadOfPerformanceAttributes {
     loadManagement: number;
 }
 
-export type StaffAttributes = AssistantManagerAttributes | HeadOfPhysiotherapyAttributes | HeadOfScoutingAttributes | HeadOfPerformanceAttributes;
+export interface CoachingAttributes {
+    attacking: number;
+    defending: number;
+    possession: number;
+    fitness: number;
+    goalkeeping: number;
+    workingWithYoungsters: number;
+}
+
+export type StaffAttributes = AssistantManagerAttributes | HeadOfPhysiotherapyAttributes | HeadOfScoutingAttributes | HeadOfPerformanceAttributes | CoachingAttributes;
 
 export interface Staff {
     id: number;
@@ -96,6 +106,7 @@ export interface Staff {
 export interface StaffDepartment {
     level: number; // 1-5
     chiefId: number | null;
+    coachIds?: number[]; // Only for Coaching department
 }
 
 // --- END NEW STAFF SYSTEM ---
@@ -179,7 +190,12 @@ export interface Player {
     injury: { type: string; returnDate: Date } | null;
     suspension: { returnDate: Date } | null;
     seasonYellowCards: number;
-    promise?: { type: 'playing_time', deadline: Date } | null;
+    promise?: { 
+        type: 'playing_time' | 'discipline_warning' | 'season_target';
+        deadline: Date;
+        targetMetric?: 'goals' | 'assists' | 'avg_rating';
+        targetValue?: number;
+    } | null;
     individualTrainingFocus: IndividualTrainingFocus;
     squadStatus: SquadStatus;
     isTransferListed?: boolean;
@@ -250,13 +266,14 @@ export interface Club {
     name: string;
     country: string;
     reputation: number;
+    // FIX: Add missing competitionId property.
+    competitionId: number;
     balance: number;
     transferBudget: number;
     wageBudget: number;
     tactics: Tactics;
     trainingFocus: TeamTrainingFocus;
     departments: Record<DepartmentType, StaffDepartment>;
-    competitionId: number;
     managerConfidence: number; // 0-100
     boardObjective: { type: 'league_finish', position: number, description: string } | null;
     philosophies: ClubPhilosophy[];

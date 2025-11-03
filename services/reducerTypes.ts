@@ -25,7 +25,7 @@ export type Action =
     | { type: 'UPDATE_LIVE_PLAYER_INSTRUCTIONS'; payload: { playerId: number; instructions: PlayerInstructions } }
     | { type: 'END_MATCH' }
     // Player & Contract Management
-    | { type: 'PLAYER_INTERACTION'; payload: { playerId: number; interactionType: 'praise' | 'criticize' | 'promise' } }
+    | { type: 'PLAYER_INTERACTION'; payload: { playerId: number; interactionType: 'praise' | 'criticize' | 'promise' | 'discipline' | 'set_target'; target?: { metric: 'goals' | 'assists'; value: number } } }
     | { type: 'PROMOTE_YOUTH_PLAYER'; payload: { playerId: number } }
     | { type: 'UPDATE_PLAYER_SQUAD_STATUS'; payload: { playerId: number, squadStatus: SquadStatus } }
     | { type: 'SET_PLAYER_ASKING_PRICE'; payload: { playerId: number; price: number } }

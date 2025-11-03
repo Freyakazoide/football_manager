@@ -209,7 +209,6 @@ const processClubTransferLogic = (
         const newNegotiation: TransferNegotiation = {
             id: currentNegotiationId,
             playerId: target.id,
-            // FIX: Added missing 'type' property.
             type: 'transfer',
             sellingClubId: target.clubId,
             buyingClubId: club.id,

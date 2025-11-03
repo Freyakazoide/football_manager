@@ -1,6 +1,6 @@
 
 
-import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantManagerAttributes, HeadOfScoutingAttributes, HeadOfPhysiotherapyAttributes, HeadOfPerformanceAttributes, Competition, DepartmentType, Sponsor, SponsorshipDeal, ClubPhilosophy, Bank, SquadStatus } from '../types';
+import { GameState, Club, Player, PlayerAttributes, Match, LeagueEntry, LineupPlayer, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, CrossingInstruction, PositioningInstruction, TacklingInstruction, PressingInstruction, MarkingInstruction, PlayerRole, Tactics, Staff, StaffRole, StaffAttributes, AssistantManagerAttributes, HeadOfScoutingAttributes, HeadOfPhysiotherapyAttributes, HeadOfPerformanceAttributes, Competition, DepartmentType, Sponsor, SponsorshipDeal, ClubPhilosophy, Bank, SquadStatus, CoachingAttributes } from '../types';
 import { SPONSOR_DATA } from './sponsors';
 
 const FIRST_NAMES = ['John', 'Paul', 'Mike', 'Leo', 'Chris', 'David', 'Alex', 'Ben', 'Sam', 'Tom', 'Dan', 'Matt'];
@@ -212,6 +212,15 @@ const generateStaffAttributes = (role: StaffRole): StaffAttributes => {
                 fitnessCoaching: randInt(50, 95),
                 loadManagement: randInt(50, 95),
             } as HeadOfPerformanceAttributes;
+        case StaffRole.Coach:
+            return {
+                attacking: randInt(40, 90),
+                defending: randInt(40, 90),
+                possession: randInt(40, 90),
+                fitness: randInt(40, 90),
+                goalkeeping: randInt(40, 90),
+                workingWithYoungsters: randInt(40, 90),
+            } as CoachingAttributes;
     }
 };
 
@@ -311,7 +320,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
     BANK_DATA.forEach(b => banks[b.id] = b);
 
     // Generate Staff Pool
-    const staffRolesToGenerate = [StaffRole.AssistantManager, StaffRole.HeadOfPerformance, StaffRole.HeadOfPhysiotherapy, StaffRole.HeadOfScouting];
+    const staffRolesToGenerate = [StaffRole.AssistantManager, StaffRole.HeadOfPerformance, StaffRole.HeadOfPhysiotherapy, StaffRole.HeadOfScouting, StaffRole.Coach];
     for (const role of staffRolesToGenerate) {
         for (let i = 0; i < NUM_STAFF_PER_ROLE; i++) {
             const contractExpires = new Date();
@@ -373,7 +382,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             // FIX: Translated 'Balanced' to 'Equilibrado' to match TeamTrainingFocus type.
             trainingFocus: 'Equilibrado',
             departments: {
-                [DepartmentType.Coaching]: { level: 1, chiefId: null },
+                [DepartmentType.Coaching]: { level: 1, chiefId: null, coachIds: [] },
                 [DepartmentType.Medical]: { level: 1, chiefId: null },
                 [DepartmentType.Scouting]: { level: 1, chiefId: null },
                 [DepartmentType.Performance]: { level: 1, chiefId: null },
@@ -462,6 +471,12 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
         hireStaff(StaffRole.HeadOfPhysiotherapy, DepartmentType.Medical);
         hireStaff(StaffRole.HeadOfScouting, DepartmentType.Scouting);
         hireStaff(StaffRole.HeadOfPerformance, DepartmentType.Performance);
+
+        const coachToHire = availableStaff(StaffRole.Coach);
+        if (coachToHire) {
+            club.departments[DepartmentType.Coaching].coachIds = [coachToHire.id];
+            coachToHire.clubId = clubId;
+        }
     }
 
     // FIX: Translated all PlayerRoles from English to Portuguese to match the 'PlayerRole' type.
@@ -513,6 +528,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
                 individualTrainingFocus: null,
                 squadStatus: 'Rotação' as SquadStatus, // Temporary, will be overwritten
                 isTransferListed: false,
+                promise: null,
                 interactions: [],
                 attributeChanges: [],
             };
@@ -575,6 +591,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
                 individualTrainingFocus: null,
                 squadStatus: 'Base',
                 isTransferListed: false,
+                promise: null,
                 interactions: [],
                 attributeChanges: [],
             };

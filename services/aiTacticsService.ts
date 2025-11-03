@@ -1,4 +1,4 @@
-import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction, AssistantManagerAttributes, Staff, StaffRole, Mentality } from '../types';
+import { Player, Tactics, PlayerInstructions, ShootingInstruction, PassingInstruction, DribblingInstruction, TacklingInstruction, LineupPlayer, PlayerRole, CrossingInstruction, PositioningInstruction, PressingInstruction, MarkingInstruction, AssistantManagerAttributes, Staff, StaffRole, Mentality, CoachingAttributes } from '../types';
 import { ROLE_DEFINITIONS } from './database';
 import { FORMATION_PRESETS } from './formations';
 import { getOverallRating } from './simulationService';

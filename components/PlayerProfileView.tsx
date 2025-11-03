@@ -136,7 +136,7 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     const isTransferTarget = player.clubId !== gameState.playerClubId;
     const areAttributesFullyScouted = Object.keys(player.scoutedAttributes).length > 0 || !isTransferTarget;
 
-    const getInteractionCooldown = (topic: 'praise' | 'criticize' | 'promise'): { onCooldown: boolean, remainingDays: number } => {
+    const getInteractionCooldown = (topic: 'praise' | 'criticize' | 'promise' | 'discipline' | 'set_target'): { onCooldown: boolean, remainingDays: number } => {
         const COOLDOWN_DAYS = 30;
         const lastInteraction = player.interactions
             .filter(i => i.topic === topic)
@@ -158,6 +158,8 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     const praiseCooldown = getInteractionCooldown('praise');
     const criticizeCooldown = getInteractionCooldown('criticize');
     const promiseCooldown = getInteractionCooldown('promise');
+    const disciplineCooldown = getInteractionCooldown('discipline');
+    const targetCooldown = getInteractionCooldown('set_target');
 
     const isRenewalOnCooldown = useMemo(() => {
         if (!player.lastRenewalDate) return false;
@@ -225,6 +227,14 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                             <StatusProgressBar label="Satisfação" value={player.satisfaction} />
                             <StatusProgressBar label="Cond. Físico" value={player.matchFitness} />
                         </div>
+                        {player.promise && (
+                            <div className="mt-4 p-2 bg-yellow-900/50 rounded-lg text-xs text-yellow-300">
+                                <p className="font-bold">Promessa Ativa:</p>
+                                {player.promise.type === 'season_target' && <p>Marcar {player.promise.targetValue} {player.promise.targetMetric} até {player.promise.deadline.toLocaleDateString()}</p>}
+                                {player.promise.type === 'playing_time' && <p>Mais tempo de jogo até {player.promise.deadline.toLocaleDateString()}</p>}
+                                {player.promise.type === 'discipline_warning' && <p>Melhorar a performance até {player.promise.deadline.toLocaleDateString()}</p>}
+                            </div>
+                        )}
                     </div>
                     <div>
                         <h3 className="text-lg font-semibold text-green-400 mb-2">Alterações de Treino (30d)</h3>
@@ -347,6 +357,12 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                                         className="bg-gray-600 hover:bg-yellow-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
                                     >
                                         {player.promise ? 'Promessa Ativa' : promiseCooldown.onCooldown ? `Prometer (Aguarde ${promiseCooldown.remainingDays}d)` : 'Prometer Tempo de Jogo'}
+                                    </button>
+                                     <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'discipline' } })} disabled={disciplineCooldown.onCooldown} className="bg-gray-600 hover:bg-red-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                        {disciplineCooldown.onCooldown ? `Disciplinar (Aguarde ${disciplineCooldown.remainingDays}d)` : 'Disciplinar Jogador'}
+                                    </button>
+                                    <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'set_target', target: { metric: 'goals', value: 10 } } })} disabled={!!player.promise || targetCooldown.onCooldown} className="bg-gray-600 hover:bg-purple-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                        {player.promise?.type === 'season_target' ? 'Meta Ativa' : targetCooldown.onCooldown ? `Definir Meta (Aguarde ${targetCooldown.remainingDays}d)` : 'Definir Meta (10 Gols)'}
                                     </button>
                                 </div>
                             </div>

@@ -1,4 +1,4 @@
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes, SponsorshipDeal, NewsItem, Loan, SquadStatus } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes, SponsorshipDeal, NewsItem, Loan, SquadStatus, CoachingAttributes } from '../types';
 import { getRoleCategory, ALL_ROLES } from './database';
 import { generateInjury } from './injuryService';
 import { getSeason } from './playerStatsService';
@@ -260,6 +260,17 @@ export const processPlayerDevelopment = (players: Record<number, Player>, clubs:
             continue;
         }
 
+        const coachingDept = club.departments[DepartmentType.Coaching];
+        const coaches = coachingDept.coachIds?.map(id => staff[id] as Staff & { attributes: CoachingAttributes }) || [];
+        const avgCoaching = {
+            attacking: coaches.length > 0 ? coaches.reduce((sum, c) => sum + c.attributes.attacking, 0) / coaches.length : 50,
+            defending: coaches.length > 0 ? coaches.reduce((sum, c) => sum + c.attributes.defending, 0) / coaches.length : 50,
+            possession: coaches.length > 0 ? coaches.reduce((sum, c) => sum + c.attributes.possession, 0) / coaches.length : 50,
+            fitness: coaches.length > 0 ? coaches.reduce((sum, c) => sum + c.attributes.fitness, 0) / coaches.length : 50,
+            goalkeeping: coaches.length > 0 ? coaches.reduce((sum, c) => sum + c.attributes.goalkeeping, 0) / coaches.length : 50,
+            workingWithYoungsters: coaches.length > 0 ? coaches.reduce((sum, c) => sum + c.attributes.workingWithYoungsters, 0) / coaches.length : 50,
+        };
+
         const performanceChiefId = club.departments[DepartmentType.Performance].chiefId;
         const performanceChief = performanceChiefId ? staff[performanceChiefId] as Staff & { attributes: HeadOfPerformanceAttributes } : null;
 
@@ -313,6 +324,26 @@ export const processPlayerDevelopment = (players: Record<number, Player>, clubs:
                 if (avgRating < 6.5) improvementModifier *= 0.7;
                 // Staff bonus
                 if (performanceChief) improvementModifier *= (1 + (performanceChief.attributes.fitnessCoaching / 200));
+                
+                // Coach bonus
+                const attackingAttrs: (keyof PlayerAttributes)[] = ['shooting', 'crossing', 'dribbling', 'creativity'];
+                const defendingAttrs: (keyof PlayerAttributes)[] = ['tackling', 'heading', 'positioning'];
+                const possessionAttrs: (keyof PlayerAttributes)[] = ['passing', 'teamwork'];
+                const physicalAttrs: (keyof PlayerAttributes)[] = ['pace', 'stamina', 'strength', 'naturalFitness'];
+
+                if (attackingAttrs.includes(attrToImprove)) {
+                    improvementModifier *= (1 + (avgCoaching.attacking / 250));
+                } else if (defendingAttrs.includes(attrToImprove)) {
+                    improvementModifier *= (1 + (avgCoaching.defending / 250));
+                } else if (possessionAttrs.includes(attrToImprove)) {
+                    improvementModifier *= (1 + (avgCoaching.possession / 250));
+                } else if (physicalAttrs.includes(attrToImprove)) {
+                    improvementModifier *= (1 + (avgCoaching.fitness / 250));
+                }
+
+                if (player.age < 22) {
+                    improvementModifier *= (1 + (avgCoaching.workingWithYoungsters / 200));
+                }
 
                 if (Math.random() < improvementModifier && player.attributes[attrToImprove] < 99) {
                     player.attributes[attrToImprove] += 1;
@@ -424,6 +455,7 @@ export const generateRegens = (clubs: Record<number, Club>, retiredPlayerCount: 
             seasonYellowCards: 0,
             individualTrainingFocus: null,
             squadStatus: 'Base',
+            promise: null,
             interactions: [],
             attributeChanges: [],
         };

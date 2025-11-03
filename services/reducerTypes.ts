@@ -1,4 +1,3 @@
-
 import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType, BoardRequestType, LoanOffer, SquadStatus, SecondaryTrainingFocus } from '../types';
 
 export type Action =
@@ -26,7 +25,7 @@ export type Action =
     | { type: 'UPDATE_LIVE_PLAYER_INSTRUCTIONS'; payload: { playerId: number; instructions: PlayerInstructions } }
     | { type: 'END_MATCH' }
     // Player & Contract Management
-    | { type: 'PLAYER_INTERACTION'; payload: { playerId: number; interactionType: 'praise' | 'criticize' | 'discipline' | 'set_target'; target?: { metric: 'goals' | 'assists'; value: number } } }
+    | { type: 'PLAYER_INTERACTION'; payload: { playerId: number; interactionType: 'praise' | 'criticize' | 'discipline' | 'set_target', target?: { metric: 'goals' | 'assists'; value: number } } }
     | { type: 'RESPOND_TO_CONCERN'; payload: { playerId: number; responseId: string } }
     | { type: 'PROMOTE_YOUTH_PLAYER'; payload: { playerId: number } }
     | { type: 'UPDATE_PLAYER_SQUAD_STATUS'; payload: { playerId: number, squadStatus: SquadStatus } }

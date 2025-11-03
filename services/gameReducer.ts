@@ -1,6 +1,6 @@
 import { GameState, LivePlayer, Player, Club, Match, NewsItem, MatchDayInfo, PlayerMatchStats, LineupPlayer, PressingInstruction, PositioningInstruction, CrossingInstruction, DribblingInstruction, PassingInstruction, PlayerAttributes, ScoutingAssignment, Staff, HeadOfPhysiotherapyAttributes, StaffRole, HeadOfScoutingAttributes, SeasonReviewData, LeagueEntry, TransferNegotiation, DepartmentType, SponsorshipDeal, Loan, TransferOffer, LoanOffer, BoardRequestType, SquadStatus, ContractOffer, PromiseType, SecondaryTrainingFocus, TeamTrainingFocus } from '../types';
 import { Action } from './reducerTypes';
-import { runMatch, processPlayerDevelopment, processPlayerAging, processMonthlyFinances, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens, getUnitRatings, processPhilosophyReview, processPlayerConcerns } from './simulationService';
+import { runMatch, processPlayerDevelopment, processPlayerAging, processMonthlyFinances, recalculateMarketValue, awardPrizeMoney, processPromotionsAndRelegations, generateRegens, getUnitRatings, processPhilosophyReview, processPlayerConcerns, processTeamCohesion } from './simulationService';
 import { createLiveMatchState } from './matchEngine';
 import { generateNarrativeReport } from './newsGenerator';
 import { generateAITactics } from './aiTacticsService';
@@ -299,8 +299,11 @@ const handleMonthlyUpdates = (state: GameState): GameState => {
         newState = addNewsItem(newState, news.headline, news.content, news.type, news.relatedEntityId);
     });
 
+    // 6. Process Team Cohesion
+    newState.clubs = processTeamCohesion(newState.clubs);
 
-    // 6. Handle yearly aging
+
+    // 7. Handle yearly aging
     if (newState.currentDate.getMonth() === 0) { // New year
         const { players } = processPlayerAging(newState.players);
         newState.players = players;
@@ -550,12 +553,12 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                                 const totalMedicalSkill = chiefSkill + levelBonus;
 
                                 const durationModifier = 1 - (totalMedicalSkill / 400); // 120 skill = 30% reduction
-                                const originalDuration = new Date(injury.returnDate).getTime() - new Date(injury.startDate).getTime();
+                                const originalDuration = new Date(injury.returnDate).getTime() - result.date.getTime();
                                 const newDuration = originalDuration * durationModifier;
-                                const newReturnDate = new Date(new Date(injury.startDate).getTime() + newDuration);
+                                const newReturnDate = new Date(result.date.getTime() + newDuration);
                                 
-                                // FIX: Ensure startDate is included in the injury object assignment to match the Player type.
-                                player.injury = { type: injury.type, returnDate: newReturnDate, startDate: new Date(injury.startDate) };
+                                // FIX: Added missing 'startDate' property to the injury object.
+                                player.injury = { type: injury.type, returnDate: newReturnDate, startDate: new Date(result.date) };
 
                                 if (player.clubId === playerClubId) {
                                     const diffDays = Math.ceil(newDuration / (1000 * 60 * 60 * 24));
@@ -1048,25 +1051,37 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             if (!playerClubId) return state;
 
             const club = state.clubs[playerClubId];
-            if (club.departments[department].chiefId) return state; // Position already filled
-
             const staffToHire = state.staff[staffId];
             const newStaff = { 
                 ...state.staff,
                 [staffId]: { ...staffToHire, clubId: playerClubId },
             };
+            
+            let newDepartments = { ...club.departments };
+
+            if (staffToHire.role === StaffRole.Coach) {
+                const currentCoaches = newDepartments[department].coachIds || [];
+                if (currentCoaches.length < newDepartments[department].level) {
+                    newDepartments[department] = {
+                        ...newDepartments[department],
+                        coachIds: [...currentCoaches, staffId],
+                    };
+                } else {
+                    return state; // No open coach slots
+                }
+            } else {
+                 if (newDepartments[department].chiefId) return state; // Position already filled
+                 newDepartments[department] = {
+                    ...newDepartments[department],
+                    chiefId: staffId,
+                 };
+            }
 
             const newClubs = { 
                 ...state.clubs, 
                 [playerClubId]: { 
                     ...club, 
-                    departments: {
-                        ...club.departments,
-                        [department]: {
-                            ...club.departments[department],
-                            chiefId: staffId,
-                        }
-                    } 
+                    departments: newDepartments
                 } 
             };
 
@@ -1091,12 +1106,21 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 [staffId]: { ...staffToFire, clubId: null },
             };
             
-            const departmentKey = Object.keys(club.departments).find(d => club.departments[d as DepartmentType].chiefId === staffId) as DepartmentType | undefined;
-
-            const newDepartments = departmentKey ? {
-                ...club.departments,
-                [departmentKey]: { ...club.departments[departmentKey], chiefId: null }
-            } : club.departments;
+            let newDepartments = { ...club.departments };
+            const departmentKey = Object.keys(newDepartments).find(d => newDepartments[d as DepartmentType].chiefId === staffId) as DepartmentType | undefined;
+            
+            if (departmentKey) {
+                newDepartments = {
+                    ...newDepartments,
+                    [departmentKey]: { ...newDepartments[departmentKey], chiefId: null }
+                };
+            } else if (staffToFire.role === StaffRole.Coach) {
+                const coachingDept = newDepartments[DepartmentType.Coaching];
+                newDepartments[DepartmentType.Coaching] = {
+                    ...coachingDept,
+                    coachIds: coachingDept.coachIds?.filter(id => id !== staffId)
+                };
+            }
             
             const newClubs = { 
                 ...state.clubs, 
@@ -1213,7 +1237,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
         
             const cooldownDate = club.boardRequestCooldowns[request.type];
             if (cooldownDate && new Date(cooldownDate) > state.currentDate) return state;
-            if (club.requestsThisMonth.count >= 2) return state;
+            if (club.requestsThisMonth.month === state.currentDate.getMonth() && club.requestsThisMonth.year === state.currentDate.getFullYear() && club.requestsThisMonth.count >= 2) {
+                return state; // Limit reached for current month
+            }
             if (request.requirements.minConfidence && club.managerConfidence < request.requirements.minConfidence) return state;
             if (request.requirements.minReputation && club.reputation < request.requirements.minReputation) return state;
             if (request.requirements.minBalance && club.balance < request.requirements.minBalance) return state;
@@ -1223,7 +1249,12 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             newCooldown.setMonth(newCooldown.getMonth() + request.cooldownMonths);
         
             club.boardRequestCooldowns = { ...club.boardRequestCooldowns, [request.type]: newCooldown };
-            club.requestsThisMonth = { ...club.requestsThisMonth, count: club.requestsThisMonth.count + 1 };
+
+            if (club.requestsThisMonth.month === state.currentDate.getMonth() && club.requestsThisMonth.year === state.currentDate.getFullYear()) {
+                club.requestsThisMonth = { ...club.requestsThisMonth, count: club.requestsThisMonth.count + 1 };
+            } else {
+                club.requestsThisMonth = { month: state.currentDate.getMonth(), year: state.currentDate.getFullYear(), count: 1 };
+            }
             
             const successChance = 0.5 + ((club.managerConfidence - 50) / 100); // Range: 0 (at 0 confidence) to 1 (at 100 confidence)
             const success = Math.random() < successChance;
@@ -1878,7 +1909,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             // Generate injuries
             const injuredPlayers = finalState.injuredPlayerIds.map(id => state.players[id]).filter(p => p);
             if(injuredPlayers.length > 0) {
-                // FIX: Spread the result from generateInjury to include the required startDate property.
+                 // FIX: Spread the full injury object to include 'startDate' and match the type definition.
                  playerResult.injuryEvents = injuredPlayers.map(p => {
                     const injury = generateInjury(state.currentDate, p);
                     return { playerId: p.id, ...injury };
@@ -1919,13 +1950,14 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 playerResult.injuryEvents.forEach(injury => {
                     const injuredPlayer = updatedPlayers[injury.playerId];
                     if (injuredPlayer && injuredPlayer.clubId === newState.playerClubId) {
-                        // FIX: Ensure startDate is included when creating the injury object for the player.
+                        // FIX: Added missing 'startDate' property to match the Player['injury'] type.
                         injuredPlayer.injury = { type: injury.type, returnDate: injury.returnDate, startDate: injury.startDate };
                         
                         const diffTime = Math.abs(injury.returnDate.getTime() - playerResult.date.getTime());
                         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                         const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
                         
+                        // FIX: Replaced undefined 'player' variable with 'injuredPlayer' to resolve reference error.
                         newState = addNewsItem(newState, `Player Injured: ${injuredPlayer.name}`, `${injuredPlayer.name} picked up an injury in the match.\n\nHe is expected to be out for ${durationText}. The diagnosis is: ${injury.type}.`, 'injury_report_player', injuredPlayer.id);
                     }
                 });

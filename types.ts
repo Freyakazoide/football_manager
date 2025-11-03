@@ -409,7 +409,6 @@ export interface LiveMatchState {
     matchId: number;
     homeTeamId: number; awayTeamId: number;
     homeTeamName: string; awayTeamName: string;
-    ball: { x: number; y: number; z: number, possession: 'home' | 'away' | null, lastTouchedBy: number | null };
     minute: number;
     homeScore: number; awayScore: number;
     homeLineup: LivePlayer[]; awayLineup: LivePlayer[];

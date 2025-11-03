@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { GameState, Club, Player, PlayerSeasonStats } from '../types';
 import { getSeason } from '../services/playerStatsService';
@@ -50,10 +49,14 @@ const PlayerStatsView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
             if (stat === 'yellowCards') {
                 return b.player.seasonYellowCards - a.player.seasonYellowCards;
             }
-            // FIX: Explicitly cast 'stat' to a keyof PlayerSeasonStats that is known to be numeric,
-            // after handling the special string-only cases ('avgRating', 'yellowCards'), to resolve the arithmetic operation error.
-            const numericStat = stat as 'goals' | 'assists' | 'tackles' | 'dribbles' | 'apps' | 'redCards';
-            return b.seasonStats[numericStat] - a.seasonStats[numericStat];
+            const numericStat = stat as keyof PlayerSeasonStats;
+            const valA = a.seasonStats[numericStat];
+            const valB = b.seasonStats[numericStat];
+
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                return valB - valA;
+            }
+            return 0;
         }).slice(0, 20);
     }, [playersWithStats, stat]);
 

@@ -32,6 +32,7 @@ export const initialState: GameState = {
     nextNegotiationId: 1,
     sponsors: {},
     sponsorshipDeals: [],
+    shortlist: [],
     // FIX: Add missing properties for banking system to conform to GameState type.
     banks: {},
     loans: [],
@@ -796,6 +797,40 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                         squadStatus,
                     },
                 },
+            };
+        }
+        case 'SET_PLAYER_ASKING_PRICE': {
+            const { playerId, price } = action.payload;
+            const player = state.players[playerId];
+            if (!player || player.clubId !== state.playerClubId) {
+                return state;
+            }
+            return {
+                ...state,
+                players: {
+                    ...state.players,
+                    [playerId]: {
+                        ...player,
+                        askingPrice: price > 0 ? price : undefined,
+                    },
+                },
+            };
+        }
+        case 'ADD_TO_SHORTLIST': {
+            const { playerId } = action.payload;
+            if (state.shortlist.includes(playerId)) {
+                return state;
+            }
+            return {
+                ...state,
+                shortlist: [...state.shortlist, playerId],
+            };
+        }
+        case 'REMOVE_FROM_SHORTLIST': {
+            const { playerId } = action.payload;
+            return {
+                ...state,
+                shortlist: state.shortlist.filter(id => id !== playerId),
             };
         }
         case 'UPDATE_TRAINING_SETTINGS': {

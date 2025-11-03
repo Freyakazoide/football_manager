@@ -620,5 +620,6 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
     const startDate = new Date(2024, 7, 10); // Season starts in August
     const schedule = generateScheduleForCompetition(clubsInPremierDivision, startDate);
     
-    return { clubs, players, staff, competitions, schedule, leagueTable, scoutingAssignments: [], nextScoutAssignmentId: 1, sponsors, sponsorshipDeals, banks, loans: [], nextLoanId: 1 };
+    // FIX: Added missing 'shortlist' property to conform to the GameState type.
+    return { clubs, players, staff, competitions, schedule, leagueTable, scoutingAssignments: [], nextScoutAssignmentId: 1, sponsors, sponsorshipDeals, banks, loans: [], nextLoanId: 1, shortlist: [] };
 };

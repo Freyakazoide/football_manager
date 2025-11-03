@@ -183,6 +183,7 @@ export interface Player {
     individualTrainingFocus: IndividualTrainingFocus;
     squadStatus: SquadStatus;
     isTransferListed?: boolean;
+    askingPrice?: number;
 
     // --- NEW/UPDATED Player properties ---
     lastRenewalDate?: Date; // Cooldown for new negotiations
@@ -533,6 +534,7 @@ export interface GameState {
     nextNegotiationId: number;
     sponsors: Record<number, Sponsor>;
     sponsorshipDeals: SponsorshipDeal[];
+    shortlist: number[];
     // --- NEW BANKING STATE ---
     banks: Record<number, Bank>;
     loans: Loan[];

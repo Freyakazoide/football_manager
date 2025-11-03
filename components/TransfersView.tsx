@@ -81,7 +81,7 @@ const TransferListManagement: React.FC<{
 
 
 const TransfersView: React.FC<TransfersViewProps> = ({ gameState, dispatch, onPlayerClick, onOpenNegotiation }) => {
-    const [activeTab, setActiveTab] = useState<'market' | 'loan_market' | 'negotiations' | 'transfer_list'>('market');
+    const [activeTab, setActiveTab] = useState<'market' | 'loan_market' | 'negotiations' | 'transfer_list' | 'shortlist'>('market');
     const [searchTerm, setSearchTerm] = useState('');
     const [positionFilter, setPositionFilter] = useState('All');
 
@@ -112,38 +112,61 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, dispatch, onPl
             !['completed', 'cancelled_player', 'cancelled_ai'].includes(n.status))
     , [gameState.transferNegotiations, gameState.playerClubId]);
     
-    const renderPlayerTable = (players: Player[]) => (
-        <div className="overflow-x-auto">
-            <table className="w-full text-left">
-                <thead className="border-b-2 border-gray-700 text-gray-400">
-                    <tr>
-                        <th className="p-3">Nome</th>
-                        <th className="p-3">Posição</th>
-                        <th className="p-3">Idade</th>
-                        <th className="p-3">Clube</th>
-                        <th className="p-3 text-right">Valor de Mercado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {players.slice(0, 100).map(player => (
-                        <tr
-                            key={player.id}
-                            className="border-b border-gray-700 hover:bg-gray-700 cursor-pointer"
-                            onClick={() => onPlayerClick(player)}
-                        >
-                            <td className="p-3 font-semibold">{player.name}</td>
-                            <td className="p-3">{player.naturalPosition}</td>
-                            <td className="p-3">{player.age}</td>
-                            <td className="p-3">{gameState.clubs[player.clubId]?.name}</td>
-                            <td className="p-3 text-right">
-                                {player.marketValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}
-                            </td>
+    const renderPlayerTable = (players: Player[]) => {
+        const handleToggleShortlist = (playerId: number) => {
+            if (gameState.shortlist.includes(playerId)) {
+                dispatch({ type: 'REMOVE_FROM_SHORTLIST', payload: { playerId } });
+            } else {
+                dispatch({ type: 'ADD_TO_SHORTLIST', payload: { playerId } });
+            }
+        };
+
+        return (
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="border-b-2 border-gray-700 text-gray-400">
+                        <tr>
+                            <th className="p-3">Nome</th>
+                            <th className="p-3">Posição</th>
+                            <th className="p-3">Idade</th>
+                            <th className="p-3">Clube</th>
+                            <th className="p-3 text-right">Valor de Mercado</th>
+                            <th className="p-3 text-center">Obs.</th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
+                    </thead>
+                    <tbody>
+                        {players.slice(0, 100).map(player => (
+                            <tr
+                                key={player.id}
+                                className="border-b border-gray-700 hover:bg-gray-700 cursor-pointer"
+                                onClick={() => onPlayerClick(player)}
+                            >
+                                <td className="p-3 font-semibold">{player.name}</td>
+                                <td className="p-3">{player.naturalPosition}</td>
+                                <td className="p-3">{player.age}</td>
+                                <td className="p-3">{gameState.clubs[player.clubId]?.name}</td>
+                                <td className="p-3 text-right">
+                                    {player.marketValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 })}
+                                </td>
+                                <td className="p-3 text-center">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Prevent row click
+                                            handleToggleShortlist(player.id);
+                                        }}
+                                        title={gameState.shortlist.includes(player.id) ? 'Remover da lista de observação' : 'Adicionar à lista de observação'}
+                                        className={`text-xl ${gameState.shortlist.includes(player.id) ? 'text-yellow-400' : 'text-gray-500'}`}
+                                    >
+                                        {gameState.shortlist.includes(player.id) ? '★' : '☆'}
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
 
     const renderMarket = () => (
         <>
@@ -206,11 +229,21 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, dispatch, onPl
         </div>
     );
 
+    const renderShortlist = () => {
+        const shortlistedPlayers = gameState.shortlist.map(id => gameState.players[id]).filter(Boolean);
+        if (shortlistedPlayers.length === 0) {
+            return <p className="text-center text-gray-500 pt-8">Sua lista de observação está vazia. Adicione jogadores do mercado.</p>;
+        }
+        return renderPlayerTable(shortlistedPlayers);
+    };
+
     const renderContent = () => {
         switch (activeTab) {
             case 'market':
             case 'loan_market':
                 return renderMarket();
+            case 'shortlist':
+                return renderShortlist();
             case 'negotiations':
                 return renderNegotiations();
             case 'transfer_list':
@@ -229,6 +262,9 @@ const TransfersView: React.FC<TransfersViewProps> = ({ gameState, dispatch, onPl
                 </button>
                  <button onClick={() => setActiveTab('loan_market')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'loan_market' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
                     Mercado de Empréstimos
+                </button>
+                 <button onClick={() => setActiveTab('shortlist')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'shortlist' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
+                    Lista de Observação <span className="bg-blue-600 text-white text-xs font-bold rounded-full px-2 ml-1">{gameState.shortlist.length}</span>
                 </button>
                 <button onClick={() => setActiveTab('negotiations')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'negotiations' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
                     Negociações <span className="bg-green-600 text-white text-xs font-bold rounded-full px-2 ml-1">{activeNegotiations.length}</span>

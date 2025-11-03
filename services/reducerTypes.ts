@@ -28,6 +28,7 @@ export type Action =
     | { type: 'PLAYER_INTERACTION'; payload: { playerId: number; interactionType: 'praise' | 'criticize' | 'promise' } }
     | { type: 'PROMOTE_YOUTH_PLAYER'; payload: { playerId: number } }
     | { type: 'UPDATE_PLAYER_SQUAD_STATUS'; payload: { playerId: number, squadStatus: SquadStatus } }
+    | { type: 'SET_PLAYER_ASKING_PRICE'; payload: { playerId: number; price: number } }
     // Training & Scouting
     | { type: 'UPDATE_TRAINING_SETTINGS'; payload: { teamFocus: TeamTrainingFocus, individualFocuses: Record<number, IndividualTrainingFocus> } }
     | { type: 'CREATE_SCOUTING_ASSIGNMENT'; payload: Omit<ScoutingAssignment, 'id' | 'isComplete' | 'reportPlayerIds'> }
@@ -40,6 +41,9 @@ export type Action =
     | { type: 'REPAY_LOAN'; payload: { loanId: number } }
     // Season Logic
     | { type: 'START_NEW_SEASON' }
+    // Shortlist
+    | { type: 'ADD_TO_SHORTLIST'; payload: { playerId: number } }
+    | { type: 'REMOVE_FROM_SHORTLIST'; payload: { playerId: number } }
     // New Transfer Negotiation Actions
     | { type: 'TOGGLE_PLAYER_TRANSFER_LIST_STATUS'; payload: { playerId: number } }
     | { type: 'OFFER_PLAYER_TO_CLUBS'; payload: { playerId: number } }

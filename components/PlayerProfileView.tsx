@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { GameState, Player, PlayerAttributes, PlayerRole, SquadStatus } from '../types';
 import { Action } from '../services/reducerTypes';
@@ -133,6 +131,7 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     const club = gameState.clubs[player.clubId];
     
     const [activeTab, setActiveTab] = useState<'attributes' | 'history'>('attributes');
+    const [askingPrice, setAskingPrice] = useState(player.askingPrice || player.marketValue);
     
     const isTransferTarget = player.clubId !== gameState.playerClubId;
     const areAttributesFullyScouted = Object.keys(player.scoutedAttributes).length > 0 || !isTransferTarget;
@@ -168,6 +167,19 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     }, [player.lastRenewalDate, gameState.currentDate]);
 
     const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
+
+    const handleSetAskingPrice = () => {
+        dispatch({ type: 'SET_PLAYER_ASKING_PRICE', payload: { playerId: player.id, price: askingPrice } });
+    };
+
+    const isShortlisted = gameState.shortlist.includes(player.id);
+    const handleToggleShortlist = () => {
+        if (isShortlisted) {
+            dispatch({ type: 'REMOVE_FROM_SHORTLIST', payload: { playerId: player.id } });
+        } else {
+            dispatch({ type: 'ADD_TO_SHORTLIST', payload: { playerId: player.id } });
+        }
+    };
 
     const attributeGroups: {title: string, attrs: (keyof PlayerAttributes)[]}[] = [
         { title: 'Técnico', attrs: ['passing', 'dribbling', 'shooting', 'tackling', 'heading', 'crossing'] },
@@ -263,6 +275,23 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                         <h3 className="text-lg font-semibold text-green-400 mb-2">Valor</h3>
                         <div className="text-sm space-y-1">
                             <p>Valor de Mercado: <span className="font-semibold">{formatCurrency(player.marketValue)}</span></p>
+                            {!isTransferTarget && (
+                                <div className="pt-2">
+                                    <label className="block text-xs font-bold text-gray-400 mb-1">Definir Preço Pedido</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="number"
+                                            step="100000"
+                                            value={askingPrice}
+                                            onChange={(e) => setAskingPrice(Number(e.target.value))}
+                                            className="w-full bg-gray-700 p-2 rounded text-sm"
+                                        />
+                                        <button onClick={handleSetAskingPrice} className="bg-blue-600 hover:bg-blue-700 px-4 rounded text-sm font-bold">
+                                            Definir
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -280,6 +309,12 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded"
                         >
                             Fazer Oferta de Empréstimo
+                        </button>
+                        <button
+                            onClick={handleToggleShortlist}
+                            className="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 rounded"
+                        >
+                            {isShortlisted ? 'Remover da Lista de Observação' : 'Adicionar à Lista de Observação'}
                         </button>
                     </div>
                     )}

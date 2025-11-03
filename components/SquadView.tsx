@@ -31,11 +31,12 @@ const FitnessBar: React.FC<{ fitness: number }> = ({ fitness }) => {
     return (
         <div className="w-24 bg-gray-600 rounded-full h-5 relative mx-auto">
             <div
-                className={`${getColor(fitness)} h-5 rounded-full text-center text-xs text-white font-bold flex items-center justify-center transition-all duration-300`}
+                className={`${getColor(fitness)} h-5 rounded-full transition-all duration-300`}
                 style={{ width: `${fitness}%` }}
-            >
+            />
+            <span className="absolute inset-0 flex items-center justify-center text-xs text-white font-bold">
                 {fitness}%
-            </div>
+            </span>
         </div>
     );
 };

@@ -15,8 +15,7 @@ import TransfersView from './components/TransfersView';
 import PlayerProfileView from './components/PlayerProfileView';
 import MatchDayModal from './components/MatchDayModal';
 import TransferNegotiationModal from './components/TransferNegotiationModal';
-// FIX: MatchView is not a default export. It should be a named import.
-import { MatchView } from './components/MatchView';
+import MatchView from './components/MatchView';
 import NewsView from './components/NewsView';
 import MatchResultsModal from './components/MatchResultsModal';
 import MatchReportModal from './components/MatchReportModal';

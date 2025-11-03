@@ -52,7 +52,8 @@ export const generateOffersForPlayer = (
             : 0;
         
         const isUpgrade = getOverallRating(offeredPlayer) > avgRatingInPosition + 2;
-        const isAffordable = offeredPlayer.marketValue < club.transferBudget && offeredPlayer.wage < (club.wageBudget * 0.2); // Simple wage check
+        const priceToCheck = offeredPlayer.askingPrice ?? offeredPlayer.marketValue;
+        const isAffordable = priceToCheck < club.transferBudget && offeredPlayer.wage < (club.wageBudget * 0.2); // Simple wage check
         const reputationMatch = club.reputation > sellingClub.reputation - 20;
 
         if (isUpgrade && isAffordable && reputationMatch) {
@@ -79,7 +80,8 @@ export const generateOffersForPlayer = (
             // Only 1 in 3 interested clubs actually make an offer to not spam the user
             if (Math.random() > 0.33) continue;
 
-            const offerFee = Math.round(offeredPlayer.marketValue * (0.8 + Math.random() * 0.3)); // 80% to 110% of value
+            const basePrice = offeredPlayer.askingPrice ?? offeredPlayer.marketValue;
+            const offerFee = Math.round(basePrice * (0.8 + Math.random() * 0.3)); // 80% to 110% of asking price or value
             
             const newNegotiation: TransferNegotiation = {
                 id: currentNegotiationId,
@@ -167,7 +169,8 @@ const processClubTransferLogic = (
     const potentialTargets = Object.values(gameState.players).filter(p => {
         if (p.clubId === club.id) return false; // Not from their own club
         if (getRoleCategory(p.naturalPosition) !== getRoleCategory(weakestStarter!.naturalPosition)) return false; // Must be same position category
-        if (p.marketValue > club.balance * 0.7) return false; // Must be affordable (max 70% of balance)
+        const priceToCheck = p.askingPrice ?? p.marketValue;
+        if (priceToCheck > club.balance * 0.7) return false; // Must be affordable (max 70% of balance)
 
         // New logic: Must be an upgrade in either current ability or potential
         const ratingImprovement = getOverallRating(p) - weakestStarterScore;
@@ -192,8 +195,10 @@ const processClubTransferLogic = (
 
     // Pick the best value target (highest rating for the price, with bonus for being listed)
     potentialTargets.sort((a, b) => {
-        const scoreA = (getOverallRating(a) / a.marketValue) * (a.isTransferListed ? 1.5 : 1);
-        const scoreB = (getOverallRating(b) / b.marketValue) * (b.isTransferListed ? 1.5 : 1);
+        const priceA = a.askingPrice ?? a.marketValue;
+        const priceB = b.askingPrice ?? b.marketValue;
+        const scoreA = (getOverallRating(a) / priceA) * (a.isTransferListed ? 1.5 : 1);
+        const scoreB = (getOverallRating(b) / priceB) * (b.isTransferListed ? 1.5 : 1);
         return scoreB - scoreA;
     });
     const target = potentialTargets[0];
@@ -216,7 +221,8 @@ const processClubTransferLogic = (
             agreedFee: 0
         };
 
-        const initialOfferFee = Math.round((target.marketValue * (0.9 + Math.random() * 0.15)) / 1000) * 1000;
+        const basePrice = target.askingPrice ?? target.marketValue;
+        const initialOfferFee = Math.round((basePrice * (0.9 + Math.random() * 0.15)) / 1000) * 1000;
         newNegotiation.clubOfferHistory.push({ offer: { fee: initialOfferFee }, by: 'ai' });
 
         let newNewsItem: NewsItem | null = null;

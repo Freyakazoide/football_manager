@@ -210,6 +210,7 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
     }
 
     // New Injury Simulation for AI Matches
+    // FIX: Corrected the type of injuryEvents to include startDate, matching the Match interface.
     const injuryEvents: { playerId: number, type: string, returnDate: Date, startDate: Date }[] = [];
     const allStarters = [...homeLineup, ...awayLineup].filter(Boolean);
     const injuredPlayerIds = new Set<number>();

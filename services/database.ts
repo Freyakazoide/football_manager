@@ -524,7 +524,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             loanHistory: [],
             boardRequestCooldowns: {},
             requestsThisMonth: { month: currentDate.getMonth(), year: currentDate.getFullYear(), count: 0 },
-            // FIX: Add missing teamCohesion and lastLineup properties
+            // FIX: Add missing teamCohesion and lastLineup properties to Club object.
             teamCohesion: 50,
             lastLineup: [],
         };

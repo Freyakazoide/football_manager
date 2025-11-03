@@ -1,3 +1,4 @@
+
 import { GameState, LiveMatchState, MatchDayInfo, Club, Player, LivePlayer, MatchEvent, Mentality, MatchStats, PlayerMatchStats, PlayerRole, LineupPlayer, TacklingInstruction, ShootingInstruction, DribblingInstruction, PassingInstruction, PressingInstruction, PositioningInstruction, CrossingInstruction, MarkingInstruction, PlayerAttributes } from '../types';
 import { commentary } from './commentary';
 import { getRoleCategory } from './database';
@@ -134,3 +135,143 @@ const getNearestOpponent = (player: LivePlayer, zone: number, opponents: LivePla
     if (playerRoleCat === 'FWD') {
         opponentCandidates = activeOpponents.filter(p => getRoleCategory(p.role) === 'DEF');
     }
+    return null;
+}
+
+// A helper to determine action success based on stats and randomness
+const getActionSuccess = (attackerStat: number, defenderStat: number, baseChance: number, staminaModifier: number): boolean => {
+    const statDifference = attackerStat - defenderStat;
+    // Each point of difference is 0.5% chance change. Stamina modifier is small.
+    const chance = baseChance + (statDifference / 200) + staminaModifier;
+    return Math.random() < Math.max(0.05, Math.min(0.95, chance));
+};
+
+export const runMinute = (state: LiveMatchState): { newState: LiveMatchState; newEvents: MatchEvent[] } => {
+    const newState: LiveMatchState = JSON.parse(JSON.stringify(state));
+    const newEvents: MatchEvent[] = [];
+
+    // --- 1. MINUTE AND STATUS UPDATE ---
+    newState.minute++;
+
+    if (newState.status === 'first-half' && newState.minute >= 45) {
+        newState.status = 'half-time';
+        newState.isPaused = true;
+        newEvents.push({ minute: newState.minute, text: "The referee blows for half-time.", type: 'Info' });
+        return { newState, newEvents };
+    }
+    if (newState.status === 'second-half' && newState.minute >= 90 + (newState.log.length / 10)) { // Simple stoppage time
+        newState.status = 'full-time';
+        newState.isPaused = true;
+        newEvents.push({ minute: newState.minute, text: "Full time! The referee ends the match.", type: 'Info' });
+        return { newState, newEvents };
+    }
+    if (newState.status === 'half-time' && !newState.isPaused) {
+        newState.status = 'second-half';
+        newState.attackingTeamId = newState.awayTeamId; // Away team starts second half
+        newState.ballCarrierId = null;
+        newState.ballZone = 2; // Midfield kickoff
+    }
+     // Handle kickoff at start
+    if (newState.status === 'pre-match' && !newState.isPaused) {
+        newState.status = 'first-half';
+    }
+
+
+    // --- 2. STAMINA DRAIN ---
+    [...newState.homeLineup, ...newState.awayLineup].forEach(p => {
+        if (!p.isSentOff) {
+            p.stamina = Math.max(0, p.stamina - (0.3 / (p.attributes.naturalFitness / 100)));
+        }
+    });
+
+    // --- 3. TEAM POSSESSION ---
+    let attackingTeam = newState.attackingTeamId === newState.homeTeamId ? newState.homeLineup : newState.awayLineup;
+    let defendingTeam = newState.attackingTeamId === newState.homeTeamId ? newState.awayLineup : newState.homeLineup;
+    let attackingTeamName = newState.attackingTeamId === newState.homeTeamId ? newState.homeTeamName : newState.awayTeamName;
+    let attackingStats = newState.attackingTeamId === newState.homeTeamId ? newState.homeStats : newState.awayStats;
+
+    const turnover = (interceptor?: LivePlayer) => {
+        newState.attackingTeamId = (newState.attackingTeamId === newState.homeTeamId) ? newState.awayTeamId : newState.homeTeamId;
+        newState.ballCarrierId = interceptor ? interceptor.id : null;
+        if (newState.ballZone === 1) newState.ballZone = 3;
+        else if (newState.ballZone === 3) newState.ballZone = 1;
+    };
+    
+    if (!newState.ballCarrierId) {
+        const teamForKickoff = newState.attackingTeamId === newState.homeTeamId ? newState.homeLineup : newState.awayLineup;
+        const midfielders = teamForKickoff.filter(p => getRoleCategory(p.role) === 'MID' && !p.isSentOff);
+        const carrier = pickRandom(midfielders.length > 0 ? midfielders : teamForKickoff.filter(p=>!p.isSentOff));
+        if (carrier) newState.ballCarrierId = carrier.id;
+        else return { newState, newEvents }; // No players left
+    }
+
+    let carrier = attackingTeam.find(p => p.id === newState.ballCarrierId);
+    if (!carrier) {
+        turnover();
+        return { newState, newEvents };
+    }
+    carrier.stamina = Math.max(0, carrier.stamina - 0.2); // Extra drain for carrier
+    const staminaMod = (carrier.stamina - 50) / 1000;
+
+    const opponent = getNearestOpponent(carrier, newState.ballZone, defendingTeam);
+
+    // --- 4. ACTION SIMULATION ---
+    if (newState.ballZone === 1) { // Defensive Zone
+        // FIX: Replaced non-existent 'pressing' attribute with 'aggression'.
+        if (getActionSuccess(carrier.attributes.passing, opponent?.attributes.aggression || 40, 0.8, staminaMod)) {
+            newState.ballZone = 2;
+            const target = getPlayerByRole(attackingTeam, ['Volante', 'Meio-campista', 'Construtor de Jogo Recuado']);
+            if (target) { newState.ballCarrierId = target.id; newEvents.push({ minute: newState.minute, text: `${carrier.name} brings the ball out from the back.`, type: 'Info' }); }
+        } else { newEvents.push({ minute: newState.minute, text: `${opponent?.name || 'An attacker'} presses high and forces a turnover!`, type: 'Tackle' }); turnover(opponent); }
+    } 
+    else if (newState.ballZone === 2) { // Midfield Zone
+        const actionRoll = Math.random();
+        if (actionRoll < 0.65) { // Pass
+            if (getActionSuccess(carrier.attributes.passing, opponent?.attributes.tackling || 40, 0.75, staminaMod)) {
+                newState.ballZone = 3;
+                const target = getPlayerByRole(attackingTeam, ['Meia Atacante', 'Atacante Sombra', 'Falso Nove', 'Atacante']);
+                if (target) { newState.ballCarrierId = target.id; newEvents.push({ minute: newState.minute, text: `${carrier.name} plays a through ball to ${target.name}!`, type: 'Highlight' }); }
+            } else { newEvents.push({ minute: newState.minute, text: `${opponent?.name || 'A midfielder'} intercepts a pass from ${carrier.name}.`, type: 'Tackle' }); turnover(opponent); }
+        } else { // Dribble
+            if (getActionSuccess(carrier.attributes.dribbling, opponent?.attributes.tackling || 40, 0.45, staminaMod)) {
+                newState.ballZone = 3;
+                newEvents.push({ minute: newState.minute, text: `${carrier.name} goes on a surging run into the final third.`, type: 'Highlight' });
+            } else { newEvents.push({ minute: newState.minute, text: `A strong tackle from ${opponent?.name || 'a defender'} stops ${carrier.name}.`, type: 'Tackle' }); turnover(opponent); }
+        }
+    } 
+    else if (newState.ballZone === 3) { // Attacking Zone
+        if (getActionSuccess(carrier.attributes.creativity, opponent?.attributes.positioning || 40, 0.5, staminaMod)) { // Chance for a key pass/shot
+            attackingStats.shots++;
+            carrier.stats.shots++;
+            const keeper = getPlayerByRole(defendingTeam, ['Goleiro', 'Goleiro Líbero']);
+            if (!keeper) { // Automatic goal if no keeper
+                 if (newState.attackingTeamId === newState.homeTeamId) newState.homeScore++; else newState.awayScore++;
+                 carrier.stats.goals++;
+                 newEvents.push({ minute: newState.minute, text: `GOAL! ${carrier.name} scores for ${attackingTeamName}!`, type: 'Goal', primaryPlayerId: carrier.id });
+                 newState.ballCarrierId = null; 
+            } else {
+                if (!getActionSuccess(keeper.attributes.positioning, carrier.attributes.shooting, 0.75, (keeper.stamina - 50) / 1000)) { // GOAL
+                    attackingStats.shotsOnTarget++;
+                    if (newState.attackingTeamId === newState.homeTeamId) newState.homeScore++; else newState.awayScore++;
+                    carrier.stats.goals++;
+                    const lastPasserName = newState.lastPasser?.playerId ? (attackingTeam.find(p=>p.id === newState.lastPasser?.playerId)?.name || 'a teammate') : 'a teammate';
+                    newEvents.push({ minute: newState.minute, text: formatCommentary(commentary.goal[0], {attackerName: carrier.name, assistMaker: lastPasserName}), type: 'Goal', primaryPlayerId: carrier.id, secondaryPlayerId: newState.lastPasser?.playerId });
+                    newState.ballCarrierId = null;
+                } else { // SAVE
+                    attackingStats.shotsOnTarget++;
+                    newEvents.push({ minute: newState.minute, text: `Save! ${keeper.name} denies ${carrier.name}!`, type: 'Info' });
+                    turnover(keeper);
+                }
+            }
+        } else {
+            newEvents.push({ minute: newState.minute, text: `The attack breaks down as ${carrier.name} is closed down.`, type: 'Info' });
+            turnover(opponent);
+        }
+    }
+    
+    // Update possession
+    if (newState.attackingTeamId === newState.homeTeamId) newState.homePossessionMinutes++;
+    else newState.awayPossessionMinutes++;
+
+    return { newState, newEvents };
+};

@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { GameState, Club, Player, PlayerSeasonStats } from '../types';
 import { getSeason } from '../services/playerStatsService';

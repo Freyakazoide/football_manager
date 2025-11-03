@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useReducer, useEffect, useCallback, useRef } from 'react';
 import { GameState, View, Club, Player, Match, PlayerRole, TransferNegotiation, Tactics, MatchDayInfo } from './types';
 import { gameReducer, initialState } from './services/gameReducer';
@@ -16,7 +13,8 @@ import FinancesView from './components/FinancesView';
 import TransfersView from './components/TransfersView';
 import PlayerProfileView from './components/PlayerProfileView';
 import MatchDayModal from './components/MatchDayModal';
-import TransferNegotiationModal from './components/TransferNegotiationModal';
+// FIX: Changed default import to named import for TransferNegotiationModal to resolve the "does not provide an export named 'default'" error.
+import { TransferNegotiationModal } from './components/TransferNegotiationModal';
 import MatchView from './components/MatchView';
 import NewsView from './components/NewsView';
 import MatchResultsModal from './components/MatchResultsModal';

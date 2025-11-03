@@ -1,3 +1,4 @@
+
 // Enums
 export enum View {
     SQUAD = 'Elenco',
@@ -349,7 +350,7 @@ export interface MatchStats {
 export interface MatchEvent {
     minute: number;
     text: string;
-    type: 'Goal' | 'Sub' | 'Info' | 'Chance' | 'Corner' | 'Highlight' | 'Tackle' | 'Foul' | 'YellowCard' | 'RedCard' | 'Injury';
+    type: 'Goal' | 'Sub' | 'Info' | 'Highlight' | 'Tackle' | 'Foul' | 'YellowCard' | 'RedCard' | 'Injury' | 'Chance' | 'Corner';
     primaryPlayerId?: number;
     secondaryPlayerId?: number;
 }

@@ -93,6 +93,7 @@ const rehydratePlayers = (players: Record<number, Player>): Record<number, Playe
         const player = players[pId];
         if (player.contractExpires) player.contractExpires = new Date(player.contractExpires);
         if (player.injury?.returnDate) player.injury.returnDate = new Date(player.injury.returnDate);
+        if (player.injury?.startDate) player.injury.startDate = new Date(player.injury.startDate);
         if (player.suspension?.returnDate) player.suspension.returnDate = new Date(player.suspension.returnDate);
         if (player.promise?.deadline) player.promise.deadline = new Date(player.promise.deadline);
         if (player.lastRenewalDate) player.lastRenewalDate = new Date(player.lastRenewalDate);
@@ -553,7 +554,7 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                                 const newDuration = originalDuration * durationModifier;
                                 const newReturnDate = new Date(new Date(injury.startDate).getTime() + newDuration);
                                 
-                                // FIX: Add missing startDate property
+                                // FIX: Ensure startDate is included in the injury object assignment to match the Player type.
                                 player.injury = { type: injury.type, returnDate: newReturnDate, startDate: new Date(injury.startDate) };
 
                                 if (player.clubId === playerClubId) {
@@ -978,7 +979,6 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 shortlist: state.shortlist.filter(id => id !== playerId),
             };
         }
-        // FIX: Replaced 'UPDATE_TRAINING_SETTINGS' with separate actions for weekly and individual focuses.
         case 'UPDATE_INDIVIDUAL_TRAINING_FOCUSES': {
             if (!state.playerClubId) return state;
             const { individualFocuses } = action.payload;
@@ -1878,9 +1878,9 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             // Generate injuries
             const injuredPlayers = finalState.injuredPlayerIds.map(id => state.players[id]).filter(p => p);
             if(injuredPlayers.length > 0) {
-                 // FIX: Add missing startDate property by spreading the result of generateInjury
+                // FIX: Spread the result from generateInjury to include the required startDate property.
                  playerResult.injuryEvents = injuredPlayers.map(p => {
-                    const injury = generateInjury(state.currentDate, p); // Assuming generateInjury returns { type, returnDate, startDate }
+                    const injury = generateInjury(state.currentDate, p);
                     return { playerId: p.id, ...injury };
                  });
             }
@@ -1919,14 +1919,13 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 playerResult.injuryEvents.forEach(injury => {
                     const injuredPlayer = updatedPlayers[injury.playerId];
                     if (injuredPlayer && injuredPlayer.clubId === newState.playerClubId) {
-                        // FIX: Add missing startDate property
+                        // FIX: Ensure startDate is included when creating the injury object for the player.
                         injuredPlayer.injury = { type: injury.type, returnDate: injury.returnDate, startDate: injury.startDate };
                         
                         const diffTime = Math.abs(injury.returnDate.getTime() - playerResult.date.getTime());
                         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                         const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
                         
-                        // FIX: Replaced undefined 'player' variable with 'injuredPlayer' to resolve reference error.
                         newState = addNewsItem(newState, `Player Injured: ${injuredPlayer.name}`, `${injuredPlayer.name} picked up an injury in the match.\n\nHe is expected to be out for ${durationText}. The diagnosis is: ${injury.type}.`, 'injury_report_player', injuredPlayer.id);
                     }
                 });

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { GameState, TransferNegotiation, TransferOffer, ContractOffer, Player, Club, LoanOffer } from '../types';
 import { Action } from '../services/reducerTypes';
@@ -305,6 +306,79 @@ const AgentNegotiation: React.FC<{
                         <input type="number" step="1000" value={signingBonus} onChange={e => setSigningBonus(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
                     </div>
                      <div>
-                        <label className="block text-sm font-bold text-gray-300 mb-1">Duração (Anos)</label>
-                        <select value={duration} onChange={e => setDuration(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded">
-                            <option value={1}>1</option><option value={2}>2</option><option value={3}>3</option><option value={4}>4</option><option value={5
+                        <label className="block text-sm font-bold text-gray-300 mb-1">Duração do Contrato (Anos)</label>
+                        <input type="number" min="1" max="5" value={duration} onChange={e => setDuration(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
+                    </div>
+                </div>
+                 <div>
+                    <label className="block text-sm font-bold text-gray-300 mb-1">Cláusula de Rescisão (Opcional)</label>
+                    <input type="number" step="100000" value={releaseClause} onChange={e => setReleaseClause(Number(e.target.value))} className="w-full bg-gray-900 p-2 rounded" />
+                </div>
+            </div>
+            <button onClick={handleSubmitOffer} className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded">
+                Oferecer Contrato
+            </button>
+        </div>
+    );
+};
+
+
+export const TransferNegotiationModal: React.FC<TransferNegotiationModalProps> = ({ negotiation, gameState, dispatch, onClose }) => {
+    const player = gameState.players[negotiation.playerId];
+    const sellingClub = gameState.clubs[negotiation.sellingClubId];
+    const buyingClub = gameState.clubs[negotiation.buyingClubId];
+    
+    const isPlayerBuying = negotiation.buyingClubId === gameState.playerClubId;
+    const isPlayerSelling = negotiation.sellingClubId === gameState.playerClubId;
+    const isRenewal = negotiation.type === 'renewal';
+
+    const renderStage = () => {
+        if (negotiation.status === 'ai_turn') {
+            return (
+                <div className="text-center p-8">
+                    <p className="text-lg font-semibold text-yellow-300 animate-pulse">Aguardando resposta de {isPlayerBuying ? sellingClub.name : buyingClub.name}...</p>
+                    <p className="text-sm text-gray-400 mt-2">A negociação irá progredir no próximo dia de jogo simulado.</p>
+                </div>
+            );
+        }
+
+        if (negotiation.stage === 'club') {
+            if (isPlayerBuying) {
+                if (negotiation.type === 'transfer') {
+                    return <BuyingClubNegotiation negotiation={negotiation} player={player} dispatch={dispatch} balance={buyingClub.transferBudget} />;
+                } else if (negotiation.type === 'loan') {
+                    return <BuyingLoanNegotiation negotiation={negotiation} player={player} dispatch={dispatch} balance={buyingClub.transferBudget} />;
+                }
+            } else if (isPlayerSelling) {
+                return <SellingClubNegotiation negotiation={negotiation} player={player} buyingClub={buyingClub} dispatch={dispatch} onCancel={() => dispatch({ type: 'CANCEL_NEGOTIATION', payload: { negotiationId: negotiation.id }})} onClose={onClose} />;
+            }
+        }
+        
+        if (negotiation.stage === 'agent') {
+            return <AgentNegotiation negotiation={negotiation} player={player} dispatch={dispatch} />;
+        }
+        
+        return null;
+    };
+
+    let title = "Negociação de Transferência";
+    if(isRenewal) title = "Renovação de Contrato";
+    else if(negotiation.type === 'loan') title = "Negociação de Empréstimo";
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+                    <div>
+                        <h2 className="text-2xl font-bold">{title}</h2>
+                        <p className="text-gray-400">Negociando por {player.name} com {isPlayerBuying ? sellingClub.name : buyingClub.name}</p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl font-bold">&times;</button>
+                </div>
+                <div className="p-6 overflow-y-auto">
+                    {renderStage()}
+                </div>
+            </div>
+        </div>
+    );
+};

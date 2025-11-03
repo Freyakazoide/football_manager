@@ -1,5 +1,6 @@
+
 // FIX: Added necessary imports for the new processPlayerConcerns function.
-import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes, SponsorshipDeal, NewsItem, Loan, SquadStatus, CoachingAttributes, PlayerConcernType, PromiseType, SecondaryTrainingFocus } from '../types';
+import { Match, Club, Player, GameState, PlayerAttributes, MatchStats, Mentality, LineupPlayer, PlayerRole, MatchEvent, PlayerMatchStats, TeamTrainingFocus, Staff, LeagueEntry, PlayerSeasonStats, DepartmentType, HeadOfPerformanceAttributes, StaffDepartment, HeadOfScoutingAttributes, SponsorshipDeal, NewsItem, Loan, SquadStatus, CoachingAttributes, PlayerConcernType, PromiseType, SecondaryTrainingFocus, HeadOfPhysiotherapyAttributes } from '../types';
 // FIX: Added necessary imports for the new processPlayerConcerns function.
 import { getRoleCategory, ALL_ROLES, CONCERN_DEFINITIONS } from './database';
 import { generateInjury } from './injuryService';
@@ -95,10 +96,13 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
             playerStats[p.playerId] = { shots: 0, goals: 0, assists: 0, passes: 0, keyPasses: 0, tackles: 0, dribbles: 0, rating: 6.0 };
         }
     });
+    
+    const homeCohesionMod = 1 + (clubs[match.homeTeamId].teamCohesion - 50) / 200; // 0.75 to 1.25
+    const awayCohesionMod = 1 + (clubs[match.awayTeamId].teamCohesion - 50) / 200;
 
     // Possession simulation
-    const homeMidfieldStrength = homeRatings.mid * mentalityMod(homeMentality, 'mid');
-    const awayMidfieldStrength = awayRatings.mid * mentalityMod(awayMentality, 'mid');
+    const homeMidfieldStrength = homeRatings.mid * mentalityMod(homeMentality, 'mid') * homeCohesionMod;
+    const awayMidfieldStrength = awayRatings.mid * mentalityMod(awayMentality, 'mid') * awayCohesionMod;
     const totalMidfield = homeMidfieldStrength + awayMidfieldStrength;
     const homePossession = Math.round((homeMidfieldStrength / totalMidfield) * 100);
 
@@ -123,9 +127,10 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
         const attackStats = hasPossession === 'home' ? homeStats : awayStats;
         const defenseStats = hasPossession === 'home' ? awayStats : homeStats;
         const attackingLineup = hasPossession === 'home' ? homeLineup : awayLineup;
+        const cohesionMod = hasPossession === 'home' ? homeCohesionMod : awayCohesionMod;
 
         // Progress from Midfield to Attack
-        const midToFwdChance = (attackRatings.mid * mentalityMod(attackMentality, 'mid')) / (defenseRatings.mid * mentalityMod(defenseMentality, 'mid'));
+        const midToFwdChance = (attackRatings.mid * mentalityMod(attackMentality, 'mid') * cohesionMod) / (defenseRatings.mid * mentalityMod(defenseMentality, 'mid'));
         if (Math.random() < Math.max(0.1, Math.min(0.7, midToFwdChance * 0.4))) {
             // Ball is in attacking third, chance to shoot
             const fwdToShotChance = (attackRatings.fwd * mentalityMod(attackMentality, 'fwd')) / (defenseRatings.def * mentalityMod(defenseMentality, 'def'));
@@ -206,7 +211,8 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
     }
 
     // New Injury Simulation for AI Matches
-    const injuryEvents: { playerId: number, type: string, returnDate: Date }[] = [];
+    // FIX: Corrected the type of injuryEvents to include startDate, matching the Match interface.
+    const injuryEvents: { playerId: number, type: string, returnDate: Date, startDate: Date }[] = [];
     const allStarters = [...homeLineup, ...awayLineup].filter(Boolean);
     const injuredPlayerIds = new Set<number>();
 
@@ -306,6 +312,13 @@ export const processPlayerDevelopment = (players: Record<number, Player>, clubs:
         if (age < 20) developmentChance = 0.35;      // 35% base chance for multiple improvements for teens
         else if (age < 24) developmentChance = 0.25; // 25% for young adults
         else if (age < 29) developmentChance = 0.15; // 15% for peak age players
+
+        // Morale modifier
+        if (player.morale < 30) {
+            developmentChance *= 0.2; // Greatly reduce chance for very unhappy players
+        } else if (player.morale > 80) {
+            developmentChance *= 1.1; // 10% boost for very happy players
+        }
 
         if (Math.random() < developmentChance) {
             const potentialGap = Math.max(0, player.potential - getOverallRating(player));
@@ -560,6 +573,32 @@ const getMonthlyIncome = (club: Club, players: Player[], sponsorshipDeals: Spons
 
     return monthlySponsorIncome + ticketSales;
 };
+
+export const processTeamCohesion = (clubs: Record<number, Club>): Record<number, Club> => {
+    const newClubs: Record<number, Club> = JSON.parse(JSON.stringify(clubs));
+    for (const clubId in newClubs) {
+        const club = newClubs[clubId];
+        const currentLineupIds = club.tactics.lineup.map(lp => lp?.playerId).filter((id): id is number => id !== null && id !== undefined);
+        
+        let cohesionChange = 0;
+        if (club.weeklyTrainingFocus.primary === 'Tático') {
+            cohesionChange += 3;
+        } else {
+            cohesionChange -= 1; // Slow decay
+        }
+
+        if (club.lastLineup && club.lastLineup.length > 0) {
+            const samePlayers = currentLineupIds.filter(id => club.lastLineup.includes(id)).length;
+            const consistency = samePlayers / 11; // 0 to 1
+            cohesionChange += Math.round((consistency - 0.7) * 5); // From ~ -3 to +1.5, encourages high consistency
+        }
+
+        club.teamCohesion = Math.max(0, Math.min(100, club.teamCohesion + cohesionChange));
+        club.lastLineup = currentLineupIds;
+    }
+    return newClubs;
+};
+
 
 export const processMonthlyFinances = (state: GameState): Partial<GameState> => {
     const { clubs, players, staff, sponsorshipDeals, loans, news, nextNewsId } = state;

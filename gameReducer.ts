@@ -977,7 +977,6 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 shortlist: state.shortlist.filter(id => id !== playerId),
             };
         }
-        // FIX: Replaced 'UPDATE_TRAINING_SETTINGS' with separate actions for weekly and individual focuses.
         case 'UPDATE_INDIVIDUAL_TRAINING_FOCUSES': {
             if (!state.playerClubId) return state;
             const { individualFocuses } = action.payload;

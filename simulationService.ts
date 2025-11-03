@@ -239,13 +239,11 @@ const getTrainingFocusAttributes = (focus: TeamTrainingFocus): (keyof PlayerAttr
         case 'Defensivo': return ['tackling', 'heading', 'positioning', 'strength'];
         case 'Físico': return ['pace', 'stamina', 'strength', 'naturalFitness'];
         case 'Tático': return ['positioning', 'teamwork', 'workRate'];
-        // FIX: Added missing 'Bolas Paradas' case.
         case 'Bolas Paradas': return ['heading', 'crossing', 'creativity'];
         default: return [];
     }
 };
 
-// FIX: Added helper function to get attributes for secondary training focus.
 const getSecondaryTrainingFocusAttributes = (focus: SecondaryTrainingFocus): (keyof PlayerAttributes)[] => {
     switch (focus) {
         case 'Bolas Paradas de Ataque': return ['heading', 'creativity'];
@@ -255,6 +253,7 @@ const getSecondaryTrainingFocusAttributes = (focus: SecondaryTrainingFocus): (ke
         default: return [];
     }
 };
+
 
 export const processPlayerDevelopment = (players: Record<number, Player>, clubs: Record<number, Club>, staff: Record<number, Staff>, currentDate: Date): Record<number, Player> => {
     const newPlayersState: Record<number, Player> = {};
@@ -325,7 +324,6 @@ export const processPlayerDevelopment = (players: Record<number, Player>, clubs:
                     weightedAttributes.push(...getAttributesForRole(player.individualTrainingFocus.role));
                 }
 
-                // FIX: Use 'weeklyTrainingFocus' instead of 'trainingFocus' and handle both primary and secondary focuses.
                 // Add attributes from team primary focus (medium weight)
                 weightedAttributes.push(...getTrainingFocusAttributes(club.weeklyTrainingFocus.primary));
                 // Add attributes from team secondary focus (lower weight)

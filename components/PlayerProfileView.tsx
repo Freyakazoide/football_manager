@@ -10,6 +10,7 @@ interface PlayerProfileViewProps {
     onStartNegotiation: (playerId: number) => void;
     onStartLoanNegotiation: (playerId: number) => void;
     onStartRenewalNegotiation: (playerId: number) => void;
+    onOpenInteractionModal: (playerId: number) => void;
 }
 
 const AttributeBar: React.FC<{ label: string, value: number, isScouted: boolean, change: number }> = ({ label, value, isScouted, change }) => {
@@ -124,7 +125,7 @@ const PositionalFamiliarityPitch: React.FC<{ player: Player }> = ({ player }) =>
     );
 };
 
-const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameState, dispatch, onStartNegotiation, onStartLoanNegotiation, onStartRenewalNegotiation }) => {
+const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameState, dispatch, onStartNegotiation, onStartLoanNegotiation, onStartRenewalNegotiation, onOpenInteractionModal }) => {
     const player = gameState.players[playerId];
     if (!player) return <div>Jogador não encontrado.</div>;
     
@@ -136,7 +137,7 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     const isTransferTarget = player.clubId !== gameState.playerClubId;
     const areAttributesFullyScouted = Object.keys(player.scoutedAttributes).length > 0 || !isTransferTarget;
 
-    const getInteractionCooldown = (topic: 'praise' | 'criticize' | 'promise' | 'discipline' | 'set_target'): { onCooldown: boolean, remainingDays: number } => {
+    const getInteractionCooldown = (topic: 'praise' | 'criticize' | 'discipline' | 'set_target'): { onCooldown: boolean, remainingDays: number } => {
         const COOLDOWN_DAYS = 30;
         const lastInteraction = player.interactions
             .filter(i => i.topic === topic)
@@ -157,7 +158,6 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
     
     const praiseCooldown = getInteractionCooldown('praise');
     const criticizeCooldown = getInteractionCooldown('criticize');
-    const promiseCooldown = getInteractionCooldown('promise');
     const disciplineCooldown = getInteractionCooldown('discipline');
     const targetCooldown = getInteractionCooldown('set_target');
 
@@ -232,7 +232,6 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                                 <p className="font-bold">Promessa Ativa:</p>
                                 {player.promise.type === 'season_target' && <p>Marcar {player.promise.targetValue} {player.promise.targetMetric} até {player.promise.deadline.toLocaleDateString()}</p>}
                                 {player.promise.type === 'playing_time' && <p>Mais tempo de jogo até {player.promise.deadline.toLocaleDateString()}</p>}
-                                {player.promise.type === 'discipline_warning' && <p>Melhorar a performance até {player.promise.deadline.toLocaleDateString()}</p>}
                             </div>
                         )}
                     </div>
@@ -342,29 +341,28 @@ const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ playerId, gameSta
                                 </button>
                             </div>
 
-                            <div className="bg-gray-700 p-4 rounded-lg">
+                           <div className="bg-gray-700 p-4 rounded-lg">
                                 <h3 className="text-lg font-semibold text-green-400 mb-3">Interagir com Jogador</h3>
-                                <div className="grid grid-cols-1 gap-2">
-                                    <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'praise' } })} disabled={praiseCooldown.onCooldown} className="bg-gray-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
-                                        {praiseCooldown.onCooldown ? `Elogiar (Aguarde ${praiseCooldown.remainingDays}d)` : 'Elogiar Jogador'}
+                                {player.concern ? (
+                                    <button onClick={() => onOpenInteractionModal(player.id)} className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-2 rounded text-sm">
+                                        Resolver Preocupação do Jogador
                                     </button>
-                                    <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'criticize' } })} disabled={criticizeCooldown.onCooldown} className="bg-gray-600 hover:bg-orange-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
-                                        {criticizeCooldown.onCooldown ? `Criticar (Aguarde ${criticizeCooldown.remainingDays}d)` : 'Criticar Jogador'}
-                                    </button>
-                                    <button 
-                                        onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'promise' } })}
-                                        disabled={!!player.promise || promiseCooldown.onCooldown}
-                                        className="bg-gray-600 hover:bg-yellow-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed"
-                                    >
-                                        {player.promise ? 'Promessa Ativa' : promiseCooldown.onCooldown ? `Prometer (Aguarde ${promiseCooldown.remainingDays}d)` : 'Prometer Tempo de Jogo'}
-                                    </button>
-                                     <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'discipline' } })} disabled={disciplineCooldown.onCooldown} className="bg-gray-600 hover:bg-red-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
-                                        {disciplineCooldown.onCooldown ? `Disciplinar (Aguarde ${disciplineCooldown.remainingDays}d)` : 'Disciplinar Jogador'}
-                                    </button>
-                                    <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'set_target', target: { metric: 'goals', value: 10 } } })} disabled={!!player.promise || targetCooldown.onCooldown} className="bg-gray-600 hover:bg-purple-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
-                                        {player.promise?.type === 'season_target' ? 'Meta Ativa' : targetCooldown.onCooldown ? `Definir Meta (Aguarde ${targetCooldown.remainingDays}d)` : 'Definir Meta (10 Gols)'}
-                                    </button>
-                                </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'praise' } })} disabled={praiseCooldown.onCooldown} className="bg-gray-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                            {praiseCooldown.onCooldown ? `Elogiar (Aguarde ${praiseCooldown.remainingDays}d)` : 'Elogiar Jogador'}
+                                        </button>
+                                        <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'criticize' } })} disabled={criticizeCooldown.onCooldown} className="bg-gray-600 hover:bg-orange-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                            {criticizeCooldown.onCooldown ? `Criticar (Aguarde ${criticizeCooldown.remainingDays}d)` : 'Criticar Jogador'}
+                                        </button>
+                                        <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'discipline' } })} disabled={disciplineCooldown.onCooldown} className="bg-gray-600 hover:bg-red-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                            {disciplineCooldown.onCooldown ? `Disciplinar (Aguarde ${disciplineCooldown.remainingDays}d)` : 'Disciplinar Jogador'}
+                                        </button>
+                                        <button onClick={() => dispatch({ type: 'PLAYER_INTERACTION', payload: { playerId: player.id, interactionType: 'set_target', target: { metric: 'goals', value: 10 } } })} disabled={!!player.promise || targetCooldown.onCooldown} className="bg-gray-600 hover:bg-purple-500 text-white font-bold py-2 rounded text-sm disabled:bg-gray-500 disabled:cursor-not-allowed">
+                                            {player.promise?.type === 'season_target' ? 'Meta Ativa' : targetCooldown.onCooldown ? `Definir Meta (Aguarde ${targetCooldown.remainingDays}d)` : 'Definir Meta (10 Gols)'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </>
                     )}

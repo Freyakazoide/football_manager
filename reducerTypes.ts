@@ -1,4 +1,4 @@
-import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType, BoardRequestType, LoanOffer, SquadStatus } from '../types';
+import { GameState, Player, Tactics, Match, MatchDayInfo, LiveMatchState, Mentality, PlayerRole, PlayerInstructions, TeamTrainingFocus, IndividualTrainingFocus, ScoutingAssignment, TransferOffer, ContractOffer, DepartmentType, BoardRequestType, LoanOffer, SquadStatus, SecondaryTrainingFocus } from '../types';
 
 export type Action =
     // FIX: Removed 'pressConference' from Omit as it's no longer a property of GameState.
@@ -31,7 +31,8 @@ export type Action =
     | { type: 'UPDATE_PLAYER_SQUAD_STATUS'; payload: { playerId: number, squadStatus: SquadStatus } }
     | { type: 'SET_PLAYER_ASKING_PRICE'; payload: { playerId: number; price: number } }
     // Training & Scouting
-    | { type: 'UPDATE_TRAINING_SETTINGS'; payload: { teamFocus: TeamTrainingFocus, individualFocuses: Record<number, IndividualTrainingFocus> } }
+    | { type: 'UPDATE_INDIVIDUAL_TRAINING_FOCUSES'; payload: { individualFocuses: Record<number, IndividualTrainingFocus> } }
+    | { type: 'UPDATE_WEEKLY_TRAINING_FOCUS'; payload: { primary: TeamTrainingFocus, secondary: SecondaryTrainingFocus } }
     | { type: 'CREATE_SCOUTING_ASSIGNMENT'; payload: Omit<ScoutingAssignment, 'id' | 'isComplete' | 'reportPlayerIds'> }
     // Staff & Finances
     | { type: 'HIRE_STAFF'; payload: { staffId: number, department: DepartmentType } }

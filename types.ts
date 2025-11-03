@@ -168,6 +168,37 @@ export type IndividualTrainingFocus = { type: 'attribute', attribute: keyof Play
 
 export type SquadStatus = 'Titular' | 'Rodízio' | 'Rotação' | 'Jovem Promessa' | 'Excedente' | 'Base';
 
+// --- NEW CONCERN/PROMISE SYSTEM ---
+export type PlayerConcernType = 'playing_time' | 'new_contract' | 'squad_status' | 'new_challenge' | 'team_performance' | 'position_reinforcement' | 'unhappy_with_criticism' | 'training_level' | 'broken_promise' | 'wants_to_be_starter';
+
+export interface PlayerConcern {
+    type: PlayerConcernType;
+    startDate: Date;
+}
+
+export type PromiseType =
+    | 'playing_time'
+    | 'discipline_warning'
+    | 'season_target'
+    | 'will_strengthen_position'
+    | 'will_offer_new_contract'
+    | 'will_improve_squad_status'
+    | 'will_win_trophy'
+    | 'will_improve_training'
+    | 'will_let_leave'
+    | 'will_be_patient'
+    | 'will_be_starter';
+
+export interface PlayerPromise {
+    type: PromiseType;
+    deadline: Date;
+    targetMetric?: 'goals' | 'assists' | 'avg_rating';
+    targetValue?: number;
+    positionToStrengthen?: 'GK' | 'DEF' | 'MID' | 'FWD';
+}
+// --- END NEW CONCERN/PROMISE SYSTEM ---
+
+
 export interface Player {
     id: number;
     clubId: number;
@@ -190,12 +221,7 @@ export interface Player {
     injury: { type: string; returnDate: Date } | null;
     suspension: { returnDate: Date } | null;
     seasonYellowCards: number;
-    promise?: { 
-        type: 'playing_time' | 'discipline_warning' | 'season_target';
-        deadline: Date;
-        targetMetric?: 'goals' | 'assists' | 'avg_rating';
-        targetValue?: number;
-    } | null;
+    promise: PlayerPromise | null;
     individualTrainingFocus: IndividualTrainingFocus;
     squadStatus: SquadStatus;
     isTransferListed?: boolean;
@@ -206,6 +232,11 @@ export interface Player {
     interactions: { topic: string, date: Date }[]; // For interaction cooldowns
     attributeChanges: { date: Date, attr: keyof PlayerAttributes, change: number }[]; // For training feedback
     onLoan?: { fromClubId: number; until: Date; wageContribution: number };
+    concern: PlayerConcern | null;
+    
+    // --- NEW MENTORING SYSTEM ---
+    mentorId?: number | null;
+    menteeIds?: number[];
 }
 
 export interface LineupPlayer {
@@ -222,6 +253,8 @@ export interface Tactics {
 }
 
 export type TeamTrainingFocus = 'Equilibrado' | 'Ofensivo' | 'Defensivo' | 'Tático' | 'Físico' | 'Bolas Paradas';
+export type SecondaryTrainingFocus = 'Nenhum' | 'Bolas Paradas de Ataque' | 'Bolas Paradas de Defesa' | 'Contra-Ataque' | 'Pressão Alta';
+
 
 export type ClubPhilosophy =
     | { type: 'sign_young_players'; description: string; parameters: { maxAge: number } }
@@ -272,7 +305,10 @@ export interface Club {
     transferBudget: number;
     wageBudget: number;
     tactics: Tactics;
-    trainingFocus: TeamTrainingFocus;
+    weeklyTrainingFocus: {
+        primary: TeamTrainingFocus;
+        secondary: SecondaryTrainingFocus;
+    };
     departments: Record<DepartmentType, StaffDepartment>;
     managerConfidence: number; // 0-100
     boardObjective: { type: 'league_finish', position: number, description: string } | null;
@@ -337,7 +373,7 @@ export interface NewsItem {
     date: Date;
     headline: string;
     content: string;
-    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed' | 'board_report' | 'loan_update' | 'board_request_response' | 'loan_deal_completed';
+    type: 'round_summary' | 'match_summary_player' | 'transfer_completed' | 'injury_report_player' | 'suspension_report_player' | 'promise_broken' | 'interaction_praise' | 'interaction_criticize' | 'interaction_promise' | 'scouting_report_ready' | 'training_report' | 'youth_player_promoted' | 'transfer_offer_received' | 'transfer_deal_collapsed' | 'board_report' | 'loan_update' | 'board_request_response' | 'loan_deal_completed' | 'player_concern';
     relatedEntityId?: number;
     isRead: boolean;
     matchStatsSummary?: Match;

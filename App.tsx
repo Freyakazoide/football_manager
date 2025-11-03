@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useReducer, useEffect, useCallback, useRef } from 'react';
 import { GameState, View, Club, Player, Match, PlayerRole, TransferNegotiation, Tactics, MatchDayInfo } from './types';
 import { gameReducer, initialState } from './services/gameReducer';
@@ -26,6 +28,7 @@ import StaffView from './components/StaffView';
 import BoardView from './components/BoardView';
 import AcademyView from './components/AcademyView';
 import SeasonReviewModal from './components/SeasonReviewModal';
+import PlayerInteractionModal from './components/PlayerProfileModal';
 
 const roleOrder: Record<PlayerRole, number> = {
     // GK
@@ -117,6 +120,7 @@ const App: React.FC = () => {
     const [isInitialized, setIsInitialized] = useState(false);
     const [activeNegotiationId, setActiveNegotiationId] = useState<number | null>(null);
     const [preMatchTacticChange, setPreMatchTacticChange] = useState(false);
+    const [interactingPlayerId, setInteractingPlayerId] = useState<number | null>(null);
 
     const currentViewInfo = viewHistory[historyIndex];
     const currentView = currentViewInfo.view;
@@ -144,7 +148,7 @@ const App: React.FC = () => {
 
     const handleGoForward = useCallback(() => {
         if (historyIndex < viewHistory.length - 1) {
-            setHistoryIndex(prev => prev + 1);
+            setHistoryIndex(prev => prev - 1);
         }
     }, [historyIndex, viewHistory.length]);
 
@@ -252,7 +256,7 @@ const App: React.FC = () => {
         if (!state.playerClubId) return null;
         switch (currentView) {
             case View.SQUAD:
-                return <SquadView gameState={state} onPlayerClick={handlePlayerClick} />;
+                return <SquadView gameState={state} onPlayerClick={handlePlayerClick} dispatch={dispatch} />;
             case View.TEAM:
                 return <TeamView gameState={state} />;
             case View.TACTICS:
@@ -289,7 +293,7 @@ const App: React.FC = () => {
                 return <ScoutingView gameState={state} dispatch={dispatch} onPlayerClick={handlePlayerClick} />;
             case View.PLAYER_PROFILE:
                 const playerId = currentViewInfo.context?.playerId;
-                if (!playerId) return <SquadView gameState={state} onPlayerClick={handlePlayerClick} />;
+                if (!playerId) return <SquadView gameState={state} onPlayerClick={handlePlayerClick} dispatch={dispatch} />;
                 return <PlayerProfileView 
                     playerId={playerId} 
                     gameState={state} 
@@ -297,6 +301,7 @@ const App: React.FC = () => {
                     onStartNegotiation={handleStartNegotiation}
                     onStartLoanNegotiation={handleStartLoanNegotiation}
                     onStartRenewalNegotiation={handleStartRenewalNegotiation}
+                    onOpenInteractionModal={setInteractingPlayerId}
                 />;
             default:
                 return <TeamView gameState={state} />;
@@ -357,6 +362,7 @@ const App: React.FC = () => {
             {activeNegotiation && <TransferNegotiationModal negotiation={activeNegotiation} gameState={state} dispatch={dispatch} onClose={() => setActiveNegotiationId(null)} />}
             {selectedMatchForReport && <MatchReportModal match={selectedMatchForReport} gameState={state} onClose={closeMatchReportModal} onPlayerClick={handlePlayerClick} />}
             {viewingClub && <ClubSquadModal club={viewingClub} gameState={state} onClose={closeViewClubModal} onPlayerClick={handlePlayerClick} />}
+            {interactingPlayerId && <PlayerInteractionModal playerId={interactingPlayerId} gameState={state} dispatch={dispatch} onClose={() => setInteractingPlayerId(null)} />}
         </div>
     );
 };

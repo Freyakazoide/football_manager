@@ -509,7 +509,6 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             transferBudget: Math.floor(balance * 0.4),
             wageBudget: 150000,
             tactics: initialTactics,
-            // FIX: Replaced 'trainingFocus' with 'weeklyTrainingFocus' to match Club type.
             weeklyTrainingFocus: { primary: 'Equilibrado', secondary: 'Nenhum' },
             departments: {
                 [DepartmentType.Coaching]: { level: 1, chiefId: null, coachIds: [] },

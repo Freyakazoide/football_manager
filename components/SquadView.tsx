@@ -2,11 +2,109 @@ import React, { useState, useMemo } from 'react';
 import { GameState, Player, PlayerRole } from '../types';
 import { getSeason } from '../services/playerStatsService';
 import { ROLE_DEFINITIONS } from '../services/database';
+import { Action } from '../services/reducerTypes';
 
 interface SquadViewProps {
     gameState: GameState;
     onPlayerClick: (player: Player) => void;
+    dispatch: React.Dispatch<Action>;
 }
+
+const MentoringModal: React.FC<{
+    players: Player[];
+    onClose: () => void;
+    dispatch: React.Dispatch<Action>;
+}> = ({ players, onClose, dispatch }) => {
+    const MENTEE_LIMIT = 3;
+
+    const potentialMentors = useMemo(() => 
+        players.filter(p => p.age >= 28 && p.attributes.teamwork >= 75 && p.squadStatus !== 'Base')
+            .sort((a,b) => b.attributes.teamwork - a.attributes.teamwork)
+    , [players]);
+    
+    const potentialMentees = useMemo(() => 
+        players.filter(p => p.age <= 21 && p.squadStatus !== 'Base')
+            .sort((a,b) => b.potential - a.potential)
+    , [players]);
+    
+    const currentMentor = players.find(p => p.menteeIds && p.menteeIds.length > 0);
+    
+    const [selectedMentorId, setSelectedMentorId] = useState<number | null>(currentMentor?.id || null);
+    const [selectedMenteeIds, setSelectedMenteeIds] = useState<number[]>(currentMentor?.menteeIds || []);
+
+    const handleMenteeToggle = (menteeId: number) => {
+        setSelectedMenteeIds(prev => {
+            if (prev.includes(menteeId)) {
+                return prev.filter(id => id !== menteeId);
+            } else if (prev.length < MENTEE_LIMIT) {
+                return [...prev, menteeId];
+            }
+            return prev;
+        });
+    };
+    
+    const handleSetMentor = (mentorId: number | null) => {
+        setSelectedMentorId(mentorId);
+        // Clear mentees when mentor changes
+        setSelectedMenteeIds([]);
+    };
+
+    const handleSave = () => {
+        dispatch({ type: 'SET_MENTORING_RELATIONSHIPS', payload: { mentorId: selectedMentorId, menteeIds: selectedMenteeIds } });
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+                    <h2 className="text-2xl font-bold">Gerenciar Mentoria de Elenco</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl font-bold">&times;</button>
+                </div>
+                <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Mentors Column */}
+                    <div className="bg-gray-900/50 p-4 rounded-lg">
+                        <h3 className="text-lg font-semibold text-green-400 mb-3">1. Escolha um Líder de Equipe (Mentor)</h3>
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                            <label className="flex items-center p-3 rounded-lg bg-gray-700 hover:bg-gray-600 cursor-pointer">
+                                <input type="radio" name="mentor" checked={selectedMentorId === null} onChange={() => handleSetMentor(null)} className="form-radio h-5 w-5 text-green-600 bg-gray-900 border-gray-500 focus:ring-green-500" />
+                                <span className="ml-3 text-gray-400 font-semibold">Nenhum</span>
+                            </label>
+                            {potentialMentors.map(p => (
+                                <label key={p.id} className="flex items-center p-3 rounded-lg bg-gray-700 hover:bg-gray-600 cursor-pointer">
+                                    <input type="radio" name="mentor" value={p.id} checked={selectedMentorId === p.id} onChange={() => handleSetMentor(p.id)} className="form-radio h-5 w-5 text-green-600 bg-gray-900 border-gray-500 focus:ring-green-500" />
+                                    <span className="ml-3 font-semibold">{p.name}</span>
+                                    <span className="ml-auto text-xs text-gray-400">Idade: {p.age} | Trab. Eq.: {p.attributes.teamwork}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                    {/* Mentees Column */}
+                    <div className={`bg-gray-900/50 p-4 rounded-lg transition-opacity ${!selectedMentorId ? 'opacity-50' : ''}`}>
+                        <h3 className="text-lg font-semibold text-green-400 mb-3">2. Atribua Jovens Promessas ({selectedMenteeIds.length}/{MENTEE_LIMIT})</h3>
+                         <div className="space-y-2 max-h-96 overflow-y-auto">
+                            {potentialMentees.map(p => {
+                                const isDisabled = !selectedMentorId || (selectedMenteeIds.length >= MENTEE_LIMIT && !selectedMenteeIds.includes(p.id));
+                                return (
+                                <label key={p.id} className={`flex items-center p-3 rounded-lg bg-gray-700 ${isDisabled ? 'cursor-not-allowed opacity-60' : 'hover:bg-gray-600 cursor-pointer'}`}>
+                                    <input type="checkbox" checked={selectedMenteeIds.includes(p.id)} onChange={() => handleMenteeToggle(p.id)} disabled={isDisabled} className="form-checkbox h-5 w-5 text-green-600 bg-gray-900 border-gray-500 focus:ring-green-500" />
+                                    <span className="ml-3 font-semibold">{p.name}</span>
+                                    <span className="ml-auto text-xs text-gray-400">Idade: {p.age} | Pot.: {p.potential}</span>
+                                </label>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+                 <div className="p-4 border-t border-gray-700">
+                    <button onClick={handleSave} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded">
+                        Salvar Relações de Mentoria
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 type SortKey = keyof (Player & { apps: number; avgRating: number; goals: number; assists: number });
 
@@ -70,9 +168,10 @@ const SkeletonRow = () => (
     </tr>
 );
 
-const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
+const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick, dispatch }) => {
     const [showAlertsOnly, setShowAlertsOnly] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'name', direction: 'ascending' });
+    const [isMentoringModalOpen, setIsMentoringModalOpen] = useState(false);
     
     if (!gameState.playerClubId) return null;
     
@@ -163,12 +262,23 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
+            {isMentoringModalOpen && (
+                <MentoringModal
+                    players={(Object.values(gameState.players) as Player[]).filter(p => p.clubId === gameState.playerClubId)}
+                    onClose={() => setIsMentoringModalOpen(false)}
+                    dispatch={dispatch}
+                />
+            )}
             <h2 className="text-2xl font-bold text-white mb-4">Elenco</h2>
             
             <div className="flex flex-col sm:flex-row gap-4 mb-4 p-3 bg-gray-900/50 rounded-lg">
                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-400">Status:</span>
+                    <span className="text-sm font-semibold text-gray-400">Filtros:</span>
                     <FilterButton label="Mostrar Alertas" onClick={() => setShowAlertsOnly(!showAlertsOnly)} isActive={showAlertsOnly} />
+                </div>
+                 <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-400">Ações:</span>
+                    <FilterButton label="Gerenciar Mentoria" onClick={() => setIsMentoringModalOpen(true)} isActive={isMentoringModalOpen} />
                 </div>
             </div>
 
@@ -189,7 +299,6 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                             <SortableHeader label="Valor" sortKey="marketValue" className="text-right" />
                         </tr>
                     </thead>
-                    {/* FIX: Replaced Object.entries with a type-safe iteration using Object.keys to fix TypeScript errors related to `players` being of type 'unknown'. */}
                     {(Object.keys(processedSquad) as Array<keyof typeof processedSquad>).map((groupKey) => {
                         const players = processedSquad[groupKey];
                         return (
@@ -207,7 +316,13 @@ const SquadView: React.FC<SquadViewProps> = ({ gameState, onPlayerClick }) => {
                                 className={`border-b border-gray-700 hover:bg-gray-700 cursor-pointer ${(player.injury || player.suspension) ? 'opacity-60' : ''}`}
                                 onClick={() => onPlayerClick(player)}
                             >
-                                <td className="p-3 font-semibold">{player.name}</td>
+                                <td className="p-3 font-semibold">
+                                    <div className="flex items-center gap-2">
+                                        <span>{player.name}</span>
+                                        {player.menteeIds && player.menteeIds.length > 0 && <span title="Líder de Equipe / Mentor" className="text-yellow-400">⭐</span>}
+                                        {player.mentorId && <span title={`Mentorado por ${gameState.players[player.mentorId].name}`} className="text-blue-400">🎓</span>}
+                                    </div>
+                                </td>
                                 <td className="p-3 text-center">{player.naturalPosition}</td>
                                 <td className="p-3 text-center">
                                     {player.injury && <span className="text-red-500 font-bold" title={`Lesionado: ${player.injury.type}`}>✚</span>}

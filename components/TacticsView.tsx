@@ -263,27 +263,27 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch, isPreMat
                 <h2 className="text-xl font-bold text-white mb-4">Team Setup</h2>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label className="block text-gray-400 text-xs font-bold mb-1">Mentality</label>
+                        <label className="block text-gray-400 text-xs font-bold mb-1">Mentalidade</label>
                         <select value={tactics.mentality} onChange={e => setTactics(t => ({...t, mentality: e.target.value as Mentality}))} className="w-full bg-gray-700 text-white p-2 rounded text-sm">
                             <option>Defensiva</option> <option>Equilibrada</option> <option>Ofensiva</option>
                         </select>
                     </div>
                      <div>
-                        <label className="block text-gray-400 text-xs font-bold mb-1">Formation</label>
+                        <label className="block text-gray-400 text-xs font-bold mb-1">Formação</label>
                         <select value={selectedFormation} onChange={(e) => handleFormationChange(e.target.value)} className="w-full bg-gray-700 text-white p-2 rounded text-sm">
-                            <option value="">Select...</option>
+                            <option value="">Selecionar...</option>
                             {FORMATION_PRESETS.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
                         </select>
                     </div>
                 </div>
                  <div className="grid grid-cols-2 gap-4 mb-4">
-                     <button onClick={handleAskAssistant} disabled={!assistant} title={!assistant ? "You must hire an Assistant Manager" : "Ask assistant to pick the best XI for this formation"} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded text-sm">Ask Assistant</button>
-                     <button onClick={handleClearPitch} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded text-sm">Clear Squad</button>
+                     <button onClick={handleAskAssistant} disabled={!assistant} title={!assistant ? "Você precisa contratar um Auxiliar Técnico" : "Peça ao assistente para escolher os melhores XI para esta formação"} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded text-sm">Pedir ao Assistente</button>
+                     <button onClick={handleClearPitch} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded text-sm">Limpar Elenco</button>
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0 space-y-3">
                     <div>
-                        <h3 className="text-lg font-bold text-white mb-2">Bench ({benchPlayers.length}/7)</h3>
+                        <h3 className="text-lg font-bold text-white mb-2">Banco ({benchPlayers.length}/7)</h3>
                         <div className="bg-gray-900/50 rounded p-2 space-y-1">
                             {Array.from({ length: 7 }).map((_, index) => {
                                 const playerId = tactics.bench[index];
@@ -315,7 +315,7 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch, isPreMat
                         </div>
                     </div>
                     <div className="flex-1 flex flex-col min-h-0">
-                        <h3 className="text-lg font-bold text-white mb-2">Reserves</h3>
+                        <h3 className="text-lg font-bold text-white mb-2">Reservas</h3>
                         <div className="flex-1 bg-gray-900/50 rounded p-2 overflow-y-auto space-y-1">
                             {reserves.map(player => (
                                 <div 
@@ -333,11 +333,11 @@ const TacticsView: React.FC<TacticsViewProps> = ({ gameState, dispatch, isPreMat
                 </div>
                 {isPreMatchTacticChange && onConfirmLineup ? (
                     <button onClick={() => onConfirmLineup(tactics)} className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-4 rounded mt-4">
-                        Confirm Lineup for Match
+                        Confirmar Escalação para Partida
                     </button>
                 ) : (
                     <button onClick={handleSaveChanges} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded mt-4">
-                        Save Changes
+                        Salvar Alterações
                     </button>
                 )}
             </div>

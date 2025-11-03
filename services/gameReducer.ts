@@ -549,11 +549,12 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                                 const totalMedicalSkill = chiefSkill + levelBonus;
 
                                 const durationModifier = 1 - (totalMedicalSkill / 400); // 120 skill = 30% reduction
-                                const originalDuration = new Date(injury.returnDate).getTime() - result.date.getTime();
+                                const originalDuration = new Date(injury.returnDate).getTime() - new Date(injury.startDate).getTime();
                                 const newDuration = originalDuration * durationModifier;
-                                const newReturnDate = new Date(result.date.getTime() + newDuration);
+                                const newReturnDate = new Date(new Date(injury.startDate).getTime() + newDuration);
                                 
-                                player.injury = { type: injury.type, returnDate: newReturnDate };
+                                // FIX: Add missing startDate property
+                                player.injury = { type: injury.type, returnDate: newReturnDate, startDate: new Date(injury.startDate) };
 
                                 if (player.clubId === playerClubId) {
                                     const diffDays = Math.ceil(newDuration / (1000 * 60 * 60 * 24));
@@ -1877,9 +1878,10 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             // Generate injuries
             const injuredPlayers = finalState.injuredPlayerIds.map(id => state.players[id]).filter(p => p);
             if(injuredPlayers.length > 0) {
+                 // FIX: Add missing startDate property by spreading the result of generateInjury
                  playerResult.injuryEvents = injuredPlayers.map(p => {
-                    const injury = generateInjury(state.currentDate, p); // Assuming generateInjury returns { type, returnDate }
-                    return { playerId: p.id, type: injury.type, returnDate: injury.returnDate };
+                    const injury = generateInjury(state.currentDate, p); // Assuming generateInjury returns { type, returnDate, startDate }
+                    return { playerId: p.id, ...injury };
                  });
             }
             
@@ -1917,7 +1919,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 playerResult.injuryEvents.forEach(injury => {
                     const injuredPlayer = updatedPlayers[injury.playerId];
                     if (injuredPlayer && injuredPlayer.clubId === newState.playerClubId) {
-                        injuredPlayer.injury = { type: injury.type, returnDate: injury.returnDate };
+                        // FIX: Add missing startDate property
+                        injuredPlayer.injury = { type: injury.type, returnDate: injury.returnDate, startDate: injury.startDate };
                         
                         const diffTime = Math.abs(injury.returnDate.getTime() - playerResult.date.getTime());
                         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));

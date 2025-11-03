@@ -51,7 +51,7 @@ const PlayerStatsView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
             }
             // FIX: Explicitly cast 'stat' to a keyof PlayerSeasonStats that is known to be numeric,
             // after handling the special string-only cases ('avgRating', 'yellowCards'), to resolve the arithmetic operation error.
-            const numericStat = stat as Exclude<StatCategory, 'avgRating' | 'yellowCards'>;
+            const numericStat = stat as 'goals' | 'assists' | 'tackles' | 'dribbles' | 'apps' | 'redCards';
             return b.seasonStats[numericStat] - a.seasonStats[numericStat];
         }).slice(0, 20);
     }, [playersWithStats, stat]);

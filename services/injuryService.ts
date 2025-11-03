@@ -94,5 +94,6 @@ export const generateInjury = (currentDate: Date, player: Player) => {
     return {
         type: chosenInjury.type,
         returnDate,
+        startDate: currentDate,
     };
 };

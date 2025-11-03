@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { GameState, Player, TeamTrainingFocus, IndividualTrainingFocus, PlayerAttributes, PlayerRole, DepartmentType, SecondaryTrainingFocus, AssistantManagerAttributes, Staff } from '../types';
+import { GameState, Player, TeamTrainingFocus, IndividualTrainingFocus, PlayerAttributes, PlayerRole, DepartmentType, SecondaryTrainingFocus, AssistantManagerAttributes, Staff, AssistantSuggestion } from '../types';
 import { Action } from '../services/reducerTypes';
 import { ALL_ROLES } from '../services/database';
-import { generateTrainingReport } from '../services/aiTrainingService';
-import TrainingReportModal from './TrainingReportModal';
+import { generateAssistantSuggestions } from '../services/assistantService';
 
 interface TrainingViewProps {
     gameState: GameState;
@@ -15,6 +14,44 @@ const ATTRIBUTE_KEYS = [
     'aggression', 'creativity', 'positioning', 'teamwork', 'workRate',
     'pace', 'stamina', 'strength', 'naturalFitness'
 ] as (keyof PlayerAttributes)[];
+
+
+const AssistantSuggestionsModal: React.FC<{
+    suggestions: AssistantSuggestion[];
+    onClose: () => void;
+}> = ({ suggestions, onClose }) => {
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+                    <h2 className="text-2xl font-bold">Sugestões do Auxiliar Técnico</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl font-bold">&times;</button>
+                </div>
+                <div className="p-6 overflow-y-auto space-y-4">
+                    {suggestions.map((suggestion, index) => (
+                        <div key={index} className="bg-gray-700/50 p-4 rounded-lg border-l-4 border-green-500">
+                            <h3 className="font-bold text-lg text-green-300">{suggestion.title}</h3>
+                            <p className="text-sm text-gray-400 mt-1 italic">"{suggestion.justification}"</p>
+                            <div className="mt-3 pt-3 border-t border-gray-600 text-sm">
+                                <p><span className="font-semibold">Foco Primário Recomendado:</span> {suggestion.recommendedPrimaryFocus}</p>
+                                <p><span className="font-semibold">Foco Secundário Recomendado:</span> {suggestion.recommendedSecondaryFocus}</p>
+                                {suggestion.individualFocus && (
+                                     <p className="mt-2"><span className="font-semibold">Foco Individual:</span> {suggestion.individualFocus.playerName} - {suggestion.individualFocus.focus?.type === 'attribute' ? `Melhorar ${suggestion.individualFocus.focus.attribute}` : `Treinar como ${suggestion.individualFocus.focus?.role}`}</p>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                 <div className="p-4 border-t border-gray-700">
+                    <button onClick={onClose} className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const TrainingView: React.FC<TrainingViewProps> = ({ gameState, dispatch }) => {
     const playerClubId = gameState.playerClubId;
@@ -29,6 +66,7 @@ const TrainingView: React.FC<TrainingViewProps> = ({ gameState, dispatch }) => {
     , [gameState.players, playerClubId]);
     
     const [activeTab, setActiveTab] = useState<'schedule' | 'individual'>('schedule');
+    const [suggestions, setSuggestions] = useState<AssistantSuggestion[] | null>(null);
 
     // State for Weekly Schedule tab
     const [primaryFocus, setPrimaryFocus] = useState<TeamTrainingFocus>(club.weeklyTrainingFocus.primary);
@@ -36,11 +74,6 @@ const TrainingView: React.FC<TrainingViewProps> = ({ gameState, dispatch }) => {
 
     // State for Individual Focuses tab
     const [individualFocuses, setIndividualFocuses] = useState<Record<number, IndividualTrainingFocus>>({});
-
-    // State for AI Report Modal
-    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-    const [reportContent, setReportContent] = useState<any>(null);
-    const [isGenerating, setIsGenerating] = useState(false);
 
     useEffect(() => {
         setPrimaryFocus(club.weeklyTrainingFocus.primary);
@@ -62,29 +95,21 @@ const TrainingView: React.FC<TrainingViewProps> = ({ gameState, dispatch }) => {
         setIndividualFocuses(prev => ({ ...prev, [playerId]: newFocus }));
     };
 
-    // FIX: Replaced the single 'UPDATE_TRAINING_SETTINGS' dispatch with two separate dispatches based on the active tab, to align with the new reducer actions.
     const handleSaveChanges = () => {
         if (activeTab === 'schedule') {
             dispatch({ type: 'UPDATE_WEEKLY_TRAINING_FOCUS', payload: { primary: primaryFocus, secondary: secondaryFocus } });
         } else {
             dispatch({ type: 'UPDATE_INDIVIDUAL_TRAINING_FOCUSES', payload: { individualFocuses } });
         }
+        alert('Configurações de treino salvas!');
     };
     
-    const handleGenerateReport = async (period: 'weekly' | 'monthly') => {
-        setIsGenerating(true);
-        try {
-            const report = await generateTrainingReport(gameState, period);
-            setReportContent(report);
-            setIsReportModalOpen(true);
-        } catch (error) {
-            console.error("Failed to generate report:", error);
-            alert("Could not generate the training report. Please check the console for errors.");
-        } finally {
-            setIsGenerating(false);
-        }
+    const handleAskAssistant = () => {
+        if (!assistant) return;
+        const suggestions = generateAssistantSuggestions(club, clubPlayers, assistant);
+        setSuggestions(suggestions);
     };
-
+    
     const getIndividualFocusValue = (focus: IndividualTrainingFocus): string => {
         if (!focus) return 'none';
         if (focus.type === 'attribute') return `attr_${focus.attribute}`;
@@ -125,18 +150,20 @@ const TrainingView: React.FC<TrainingViewProps> = ({ gameState, dispatch }) => {
                     </select>
                 </div>
             </div>
-             <div className="bg-gray-700/50 p-4 rounded-lg">
-                <h4 className="text-lg font-semibold text-green-400 mb-3">Relatórios da Comissão Técnica</h4>
-                <p className="text-sm text-gray-400 mb-4">Peça ao seu auxiliar técnico para analisar o desempenho recente da equipe e sugerir um plano de treino.</p>
-                <div className="flex gap-4">
-                     <button onClick={() => handleGenerateReport('weekly')} disabled={!assistant || isGenerating} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-600 disabled:cursor-not-allowed">
-                        {isGenerating ? 'Gerando...' : 'Gerar Relatório Semanal'}
-                    </button>
-                    <button onClick={() => handleGenerateReport('monthly')} disabled={!assistant || isGenerating} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-600 disabled:cursor-not-allowed">
-                        {isGenerating ? 'Gerando...' : 'Gerar Relatório Mensal'}
-                    </button>
+            <div className="pt-6 border-t border-gray-700">
+                <div className="flex justify-between items-center mb-1 group relative">
+                    <label className="text-lg font-semibold text-green-400">Coesão da Equipe</label>
+                    <span className="text-xl font-bold">{club.teamCohesion} / 100</span>
+                    <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        A coesão aumenta com o treino 'Tático' e mantendo uma escalação consistente. Uma coesão alta melhora o entrosamento em campo.
+                    </div>
                 </div>
-                 {!assistant && <p className="text-xs text-yellow-400 mt-2 text-center">Você precisa contratar um Auxiliar Técnico para gerar relatórios.</p>}
+                <div className="w-full bg-gray-700 rounded-full h-5">
+                    <div 
+                        className="bg-blue-500 h-5 rounded-full transition-all duration-500"
+                        style={{width: `${club.teamCohesion}%`}}
+                    ></div>
+                </div>
             </div>
         </div>
     );
@@ -186,36 +213,42 @@ const TrainingView: React.FC<TrainingViewProps> = ({ gameState, dispatch }) => {
     );
 
     return (
-        <div className="bg-gray-800 rounded-lg shadow-xl p-6 space-y-6">
-            {isReportModalOpen && reportContent && (
-                <TrainingReportModal 
-                    report={reportContent} 
-                    onClose={() => setIsReportModalOpen(false)} 
-                    assistantName={assistant?.name || 'Auxiliar'}
-                />
-            )}
-            <h2 className="text-2xl font-bold text-white">Centro de Treinamento</h2>
+        <>
+            {suggestions && <AssistantSuggestionsModal suggestions={suggestions} onClose={() => setSuggestions(null)} />}
+            <div className="bg-gray-800 rounded-lg shadow-xl p-6 space-y-6">
+                <div className="flex justify-between items-center">
+                    <h2 className="text-2xl font-bold text-white">Centro de Treinamento</h2>
+                    <button
+                        onClick={handleAskAssistant}
+                        disabled={!assistant}
+                        title={assistant ? "Pedir sugestão de treino ao seu auxiliar" : "Você precisa de um Auxiliar Técnico para usar esta função."}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-600 disabled:cursor-not-allowed"
+                    >
+                        Pedir Sugestão ao Auxiliar
+                    </button>
+                </div>
 
-            <div className="flex border-b border-gray-700">
-                <button onClick={() => setActiveTab('schedule')} className={`py-2 px-4 font-semibold ${activeTab === 'schedule' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>
-                    Planejamento Semanal
-                </button>
-                <button onClick={() => setActiveTab('individual')} className={`py-2 px-4 font-semibold ${activeTab === 'individual' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>
-                    Focos Individuais
+                <div className="flex border-b border-gray-700">
+                    <button onClick={() => setActiveTab('schedule')} className={`py-2 px-4 font-semibold ${activeTab === 'schedule' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>
+                        Planejamento Semanal
+                    </button>
+                    <button onClick={() => setActiveTab('individual')} className={`py-2 px-4 font-semibold ${activeTab === 'individual' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400'}`}>
+                        Focos Individuais
+                    </button>
+                </div>
+                
+                <div className="bg-gray-900/50 p-4 rounded-lg">
+                    {activeTab === 'schedule' ? renderWeeklySchedule() : renderIndividualFocuses()}
+                </div>
+                
+                <button
+                    onClick={handleSaveChanges}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition-transform duration-200 hover:scale-105"
+                >
+                    Confirmar Alterações de Treino
                 </button>
             </div>
-            
-            <div className="bg-gray-900/50 p-4 rounded-lg">
-                {activeTab === 'schedule' ? renderWeeklySchedule() : renderIndividualFocuses()}
-            </div>
-            
-            <button
-                onClick={handleSaveChanges}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition-transform duration-200 hover:scale-105"
-            >
-                Confirmar Alterações de Treino
-            </button>
-        </div>
+        </>
     );
 };
 

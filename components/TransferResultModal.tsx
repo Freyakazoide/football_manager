@@ -1,11 +1,5 @@
 import React from 'react';
-
-// FIX: Removed unused import for a type that does not exist.
-// This component appears to be unused, but removing the import fixes the compilation error.
-interface TransferResult {
-    success: boolean;
-    message: string;
-}
+import { TransferResult } from '../types';
 
 interface TransferResultModalProps {
     result: TransferResult;

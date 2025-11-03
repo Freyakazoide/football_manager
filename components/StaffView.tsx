@@ -1,11 +1,75 @@
 import React, { useState, useMemo } from 'react';
-import { GameState, Staff, StaffRole, DepartmentType, StaffAttributes, Club } from '../types';
+import { GameState, Staff, StaffRole, DepartmentType, StaffAttributes, Club, Player, HeadOfPhysiotherapyAttributes } from '../types';
 import { Action } from '../services/reducerTypes';
 
 interface StaffViewProps {
     gameState: GameState;
     dispatch: React.Dispatch<Action>;
 }
+
+const PhysioRoomModal: React.FC<{ gameState: GameState; onClose: () => void; }> = ({ gameState, onClose }) => {
+    const playerClubId = gameState.playerClubId!;
+    const injuredPlayers = (Object.values(gameState.players) as Player[]).filter(p => p.clubId === playerClubId && p.injury);
+    const headOfPhysioId = gameState.clubs[playerClubId].departments[DepartmentType.Medical].chiefId;
+    const headOfPhysio = headOfPhysioId ? gameState.staff[headOfPhysioId] as Staff & { attributes: HeadOfPhysiotherapyAttributes } : null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-gray-800 text-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+                    <h2 className="text-2xl font-bold">Sala de Fisioterapia</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl font-bold">&times;</button>
+                </div>
+                <div className="p-6 overflow-y-auto">
+                    <p className="text-sm text-gray-400 mb-4">
+                        {headOfPhysio 
+                            ? `Sob os cuidados de ${headOfPhysio.name}, a recuperação dos jogadores está sendo monitorada de perto.`
+                            : "Sem um Chefe de Fisioterapia, os tempos de recuperação podem ser maiores e menos previsíveis."
+                        }
+                    </p>
+                    <table className="w-full text-left">
+                        <thead className="border-b-2 border-gray-700 text-gray-400">
+                            <tr>
+                                <th className="p-3">Jogador</th>
+                                <th className="p-3">Lesão</th>
+                                <th className="p-3">Recuperação</th>
+                                <th className="p-3 text-right">Retorno Previsto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {injuredPlayers.length > 0 ? injuredPlayers.map(player => {
+                                const injury = player.injury!;
+                                const totalDuration = injury.returnDate.getTime() - injury.startDate.getTime();
+                                const timePassed = gameState.currentDate.getTime() - injury.startDate.getTime();
+                                let progress = totalDuration > 0 ? (timePassed / totalDuration) * 100 : 100;
+                                progress = Math.min(100, Math.max(0, progress));
+
+                                return (
+                                <tr key={player.id} className="border-b border-gray-700">
+                                    <td className="p-3 font-semibold">{player.name}</td>
+                                    <td className="p-3 text-sm">{injury.type}</td>
+                                    <td className="p-3">
+                                        <div className="w-full bg-gray-600 rounded-full h-4 relative">
+                                            <div className="bg-green-500 h-4 rounded-full" style={{ width: `${progress}%` }}></div>
+                                            <span className="absolute inset-0 text-xs font-bold text-white flex items-center justify-center">{Math.round(progress)}%</span>
+                                        </div>
+                                    </td>
+                                    <td className="p-3 text-right text-sm">{injury.returnDate.toLocaleDateString()}</td>
+                                </tr>
+                                );
+                            }) : (
+                                <tr>
+                                    <td colSpan={4} className="text-center p-8 text-gray-500">Nenhum jogador lesionado no momento.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const getDepartmentMaintenanceCost = (level: number) => {
     return [0, 1000, 3000, 7500, 15000, 25000][level] || 0;
@@ -162,6 +226,7 @@ const StaffMarketCard: React.FC<{ staff: Staff; onHire: (staffId: number, depart
 
 const StaffView: React.FC<StaffViewProps> = ({ gameState, dispatch }) => {
     const [activeTab, setActiveTab] = useState<'current' | 'search'>('current');
+    const [isPhysioRoomOpen, setIsPhysioRoomOpen] = useState(false);
     const playerClubId = gameState.playerClubId;
     if (!playerClubId) return null;
 
@@ -203,7 +268,16 @@ const StaffView: React.FC<StaffViewProps> = ({ gameState, dispatch }) => {
 
     return (
          <div className="bg-gray-800 rounded-lg shadow-xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-4">Centro de Staff</h2>
+            {isPhysioRoomOpen && <PhysioRoomModal gameState={gameState} onClose={() => setIsPhysioRoomOpen(false)} />}
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-white">Centro de Staff</h2>
+                <button 
+                    onClick={() => setIsPhysioRoomOpen(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                >
+                    Sala de Fisioterapia
+                </button>
+            </div>
             <div className="flex border-b border-gray-700 mb-4">
                 <button onClick={() => setActiveTab('current')} className={`capitalize py-2 px-4 text-sm font-semibold ${activeTab === 'current' ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
                     Seu Staff

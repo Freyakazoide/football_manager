@@ -218,7 +218,7 @@ export interface Player {
     morale: number; // 0-100
     satisfaction: number; // 0-100
     matchFitness: number; // 0-100
-    injury: { type: string; returnDate: Date } | null;
+    injury: { type: string; returnDate: Date; startDate: Date; } | null;
     suspension: { returnDate: Date } | null;
     seasonYellowCards: number;
     promise: PlayerPromise | null;
@@ -319,6 +319,9 @@ export interface Club {
     // --- NEW BOARD REQUESTS ---
     boardRequestCooldowns: Partial<Record<BoardRequestType, Date>>;
     requestsThisMonth: { month: number, year: number, count: number };
+    // --- NEW TEAM COHESION ---
+    teamCohesion: number; // 0-100
+    lastLineup: number[]; // Array of player IDs from last month
 }
 
 
@@ -365,7 +368,7 @@ export interface Match {
     homeLineup?: (LineupPlayer | null)[]; // For match report
     awayLineup?: (LineupPlayer | null)[]; // for match report
     disciplinaryEvents?: { playerId: number, type: 'yellow' | 'red' }[];
-    injuryEvents?: { playerId: number, type: string, returnDate: Date }[];
+    injuryEvents?: { playerId: number, type: string, returnDate: Date, startDate: Date }[];
 }
 
 export interface NewsItem {
@@ -434,6 +437,8 @@ export interface LiveMatchState {
         reason: 'injury' | 'red_card';
     } | null;
     injuredPlayerIds: number[];
+    homeCohesion: number;
+    awayCohesion: number;
 }
 
 export type ScoutingFilters = {
@@ -562,6 +567,18 @@ export interface SponsorshipDeal {
     type: SponsorType;
     annualValue: number;
     expires: Date;
+}
+
+export interface AssistantSuggestion {
+    title: string;
+    justification: string;
+    recommendedPrimaryFocus: TeamTrainingFocus;
+    recommendedSecondaryFocus: SecondaryTrainingFocus;
+    individualFocus?: {
+        playerId: number;
+        playerName: string;
+        focus: IndividualTrainingFocus;
+    };
 }
 
 

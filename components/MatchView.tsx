@@ -176,7 +176,7 @@ const SubstitutionsPanel: React.FC<{
     subsMade: number;
     onDragStart: (e: React.DragEvent, playerInId: number) => void;
 }> = ({ lineup, bench, subsMade, onDragStart }) => (
-    <div className="bg-gray-800 rounded-lg p-3 flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0">
         <h3 className="text-lg font-bold mb-2">Substituições ({5 - subsMade} restantes)</h3>
         <div className="flex-1 overflow-y-auto space-y-2">
             <h4 className="text-xs text-gray-400 font-bold uppercase">Banco</h4>
@@ -197,44 +197,64 @@ const SubstitutionsPanel: React.FC<{
     </div>
 );
 
-const TacticsPanel: React.FC<{ mentality: Mentality, onMentalityChange: (m: Mentality) => void, onShout: (s: any) => void }> = ({ mentality, onMentalityChange, onShout }) => (
-    <div className="bg-gray-800 rounded-lg p-3">
-        <h3 className="text-lg font-bold mb-2">Táticas</h3>
-        <div className="grid grid-cols-3 gap-2 mb-2">
-            {(['Defensiva', 'Equilibrada', 'Ofensiva'] as Mentality[]).map(m => (
-                <button key={m} onClick={() => onMentalityChange(m)} className={`p-2 rounded text-sm ${mentality === m ? 'bg-green-600' : 'bg-gray-700'}`}>{m}</button>
-            ))}
+const TacticsControlPanel: React.FC<{ 
+    mentality: Mentality, 
+    onMentalityChange: (m: Mentality) => void, 
+    onShout: (s: any) => void, 
+    lineup: LivePlayer[], 
+    onPlayerClick: (p: LivePlayer) => void 
+}> = ({ mentality, onMentalityChange, onShout, lineup, onPlayerClick }) => (
+    <div className="flex-1 flex flex-col min-h-0 space-y-4">
+        <div>
+            <h4 className="text-xs text-gray-400 font-bold uppercase mb-2">Mentalidade</h4>
+            <div className="grid grid-cols-3 gap-2">
+                {(['Defensiva', 'Equilibrada', 'Ofensiva'] as Mentality[]).map(m => (
+                    <button key={m} onClick={() => onMentalityChange(m)} className={`p-2 rounded text-sm ${mentality === m ? 'bg-green-600' : 'bg-gray-700'}`}>{m}</button>
+                ))}
+            </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => onShout('press_more')} className="p-2 rounded text-xs bg-gray-700 hover:bg-gray-600">Pressionar Mais</button>
-            <button onClick={() => onShout('hold_position')} className="p-2 rounded text-xs bg-gray-700 hover:bg-gray-600">Manter Posição</button>
-            <button onClick={() => onShout('attack_flanks')} className="p-2 rounded text-xs bg-gray-700 hover:bg-gray-600">Atacar Flancos</button>
-            <button onClick={() => onShout('short_passes')} className="p-2 rounded text-xs bg-gray-700 hover:bg-gray-600">Passes Curtos</button>
+        <div>
+            <h4 className="text-xs text-gray-400 font-bold uppercase mb-2">Instruções Rápidas</h4>
+            <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => onShout('press_more')} className="p-2 rounded text-xs bg-gray-700 hover:bg-gray-600">Pressionar Mais</button>
+                <button onClick={() => onShout('hold_position')} className="p-2 rounded text-xs bg-gray-700 hover:bg-gray-600">Manter Posição</button>
+                <button onClick={() => onShout('attack_flanks')} className="p-2 rounded text-xs bg-gray-700 hover:bg-gray-600">Atacar Flancos</button>
+                <button onClick={() => onShout('short_passes')} className="p-2 rounded text-xs bg-gray-700 hover:bg-gray-600">Passes Curtos</button>
+            </div>
+        </div>
+        <div className="flex-1 flex flex-col min-h-0">
+            <h4 className="text-xs text-gray-400 font-bold uppercase mb-2">Instruções de Jogador</h4>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {lineup.map(p => (
+                    <div key={p.id} onClick={() => onPlayerClick(p)} className="bg-gray-700 p-2 rounded text-sm cursor-pointer flex justify-between hover:bg-gray-600">
+                        <span>{p.name}</span>
+                        <span className="text-gray-400 font-mono">{p.role}</span>
+                    </div>
+                ))}
+            </div>
         </div>
     </div>
 );
 
 const CommentaryPanel: React.FC<{ log: MatchEvent[] }> = ({ log }) => {
-    const commentaryRef = useRef<HTMLDivElement>(null);
+    const commentaryEndRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
-        if (commentaryRef.current) {
-            commentaryRef.current.scrollTop = 0;
-        }
+        commentaryEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [log]);
 
     return (
-        <div ref={commentaryRef} className="bg-gray-800 rounded-lg p-3 flex-1 overflow-y-auto space-y-2 flex flex-col-reverse">
-            {[...log].reverse().map((event, i) => (
+        <div className="bg-gray-800 rounded-lg p-3 flex-1 overflow-y-auto space-y-2">
+            {log.map((event, i) => (
                 <div key={i} className="flex gap-2 text-sm">
                     <span className="font-bold w-8 text-gray-500">{event.minute}'</span>
                     <span className={`flex-1 ${event.type === 'Goal' ? 'text-green-400 font-bold' : event.type === 'RedCard' ? 'text-red-500 font-bold' : event.type === 'YellowCard' ? 'text-yellow-400' : ''}`}>{event.text}</span>
                 </div>
             ))}
+            <div ref={commentaryEndRef} />
         </div>
     );
 };
 
-// FIX: Added missing StatBar component definition.
 const StatBar: React.FC<{ home: number; away: number; label: string; isPercentage?: boolean; isXG?: boolean }> = ({ home, away, label, isPercentage, isXG }) => {
     const total = home + away;
     const homePercent = total > 0 ? (home / total) * 100 : 50;
@@ -257,12 +277,9 @@ const StatBar: React.FC<{ home: number; away: number; label: string; isPercentag
 };
 
 const StatsPanel: React.FC<{ liveMatch: LiveMatchState }> = ({ liveMatch }) => {
-    const totalPossessionMinutes = liveMatch.homePossessionMinutes + liveMatch.awayPossessionMinutes;
-    const homePossession = totalPossessionMinutes > 0 ? Math.round((liveMatch.homePossessionMinutes / totalPossessionMinutes) * 100) : 50;
-    
     return (
         <div className="bg-gray-800 rounded-lg p-3 space-y-3">
-             <StatBar home={homePossession} away={100 - homePossession} label="Posse" isPercentage />
+             <StatBar home={liveMatch.homeStats.possession} away={liveMatch.awayStats.possession} label="Posse" isPercentage />
              <StatBar home={liveMatch.homeStats.shots} away={liveMatch.awayStats.shots} label="Finalizações" />
              <StatBar home={liveMatch.homeStats.xG} away={liveMatch.awayStats.xG} label="xG" isXG />
         </div>
@@ -271,11 +288,16 @@ const StatsPanel: React.FC<{ liveMatch: LiveMatchState }> = ({ liveMatch }) => {
 
 // --- MAIN COMPONENT ---
 
-// FIX: Added missing MatchViewProps interface definition.
 interface MatchViewProps {
     gameState: GameState;
     dispatch: React.Dispatch<Action>;
 }
+
+const TabButton: React.FC<{ active: boolean, onClick: () => void, children: React.ReactNode }> = ({ active, onClick, children }) => (
+    <button onClick={onClick} className={`py-2 px-4 text-sm font-semibold ${active ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-white'}`}>
+        {children}
+    </button>
+);
 
 const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
     const liveMatch = gameState.liveMatch!;
@@ -283,6 +305,7 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
     const [selectedPlayer, setSelectedPlayer] = useState<LivePlayer | null>(null);
     const [isInstructionModalOpen, setIsInstructionModalOpen] = useState(false);
     const [isSimulating, setIsSimulating] = useState(false);
+    const [controlTab, setControlTab] = useState('subs');
 
     const { playerTeamId, homeTeamId } = liveMatch;
     const isPlayerHome = playerTeamId === homeTeamId;
@@ -294,13 +317,13 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
 
     // Game loop
     useEffect(() => {
-        if (liveMatch.isPaused || isSimulating) return;
+        if (liveMatch.isPaused || isSimulating || liveMatch.forcedSubstitution) return;
         const interval = setInterval(() => {
             const { newState, newEvents } = runMinute(gameState.liveMatch!);
             dispatch({ type: 'ADVANCE_MINUTE', payload: { newState, newEvents } });
         }, gameSpeed);
         return () => clearInterval(interval);
-    }, [liveMatch.isPaused, gameState.liveMatch, dispatch, gameSpeed, isSimulating]);
+    }, [liveMatch.isPaused, gameState.liveMatch, dispatch, gameSpeed, isSimulating, liveMatch.forcedSubstitution]);
     
     useEffect(() => {
         if (liveMatch.status === 'full-time') {
@@ -364,6 +387,7 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
     
     const handleSaveInstructions = (updatedLineupPlayer: LineupPlayer) => {
          dispatch({ type: 'UPDATE_LIVE_PLAYER_INSTRUCTIONS', payload: { playerId: updatedLineupPlayer.playerId, instructions: updatedLineupPlayer.instructions }});
+         setSelectedPlayer(null); // Close overlay after saving
     };
     
     const renderOverlay = () => {
@@ -424,14 +448,28 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
             />
             
             <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-4 p-4 min-h-0">
-                <div className="lg:col-span-1 flex flex-col gap-4 min-h-0">
-                    <SubstitutionsPanel
-                        lineup={playerTeam}
-                        bench={playerBench}
-                        subsMade={playerSubsMade}
-                        onDragStart={(e, pId) => e.dataTransfer.setData('playerInId', String(pId))}
-                    />
-                    <TacticsPanel mentality={playerMentality} onMentalityChange={handleMentalityChange} onShout={handleShout} />
+                <div className="lg:col-span-1 bg-gray-800 rounded-lg p-3 flex flex-col gap-2 min-h-0">
+                    <div className="flex border-b border-gray-700">
+                        <TabButton active={controlTab === 'subs'} onClick={() => setControlTab('subs')}>Substituições</TabButton>
+                        <TabButton active={controlTab === 'tactics'} onClick={() => setControlTab('tactics')}>Táticas</TabButton>
+                    </div>
+                    {controlTab === 'subs' && (
+                         <SubstitutionsPanel
+                            lineup={playerTeam}
+                            bench={playerBench}
+                            subsMade={playerSubsMade}
+                            onDragStart={(e, pId) => e.dataTransfer.setData('playerInId', String(pId))}
+                        />
+                    )}
+                     {controlTab === 'tactics' && (
+                        <TacticsControlPanel 
+                            mentality={playerMentality} 
+                            onMentalityChange={handleMentalityChange} 
+                            onShout={handleShout}
+                            lineup={playerTeam}
+                            onPlayerClick={(p) => setSelectedPlayer(p)}
+                        />
+                    )}
                 </div>
 
                 <div className="lg:col-span-2 min-h-0">

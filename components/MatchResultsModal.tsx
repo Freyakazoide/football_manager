@@ -29,7 +29,7 @@ const MatchResultsModal: React.FC<MatchResultsModalProps> = ({ results, gameStat
                     </div>
                      <div className="text-sm text-gray-400 mt-4 pt-4 border-t border-gray-700 grid grid-cols-3 gap-2 text-center">
                         <div>
-                            <div className="font-bold">{playerResult.homeStats?.possession}% - {playerResult.awayStats?.possession}%</div>
+                            <div className="font-bold">{Math.round(playerResult.homeStats?.possession || 0)}% - {Math.round(playerResult.awayStats?.possession || 0)}%</div>
                             <div className="text-xs text-gray-500">Posse</div>
                         </div>
                          <div>

@@ -225,6 +225,7 @@ export const runMatch = (match: Match, clubs: Record<number, Club>, players: Rec
         if (Math.random() < playerInjuryChance) {
             const injury = generateInjury(match.date, player);
             if (injury && !injuredPlayerIds.has(player.id)) {
+                // FIX: Spread the full injury object to include startDate.
                 injuryEvents.push({ playerId: player.id, ...injury });
                 log.push({ minute: randInt(1, 90), type: 'Injury', text: `${player.name} has picked up an injury.` });
                 injuredPlayerIds.add(player.id);

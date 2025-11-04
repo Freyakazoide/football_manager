@@ -524,7 +524,7 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
             loanHistory: [],
             boardRequestCooldowns: {},
             requestsThisMonth: { month: currentDate.getMonth(), year: currentDate.getFullYear(), count: 0 },
-            // FIX: Added missing properties teamCohesion and lastLineup to fix initialization error.
+            // FIX: Added missing teamCohesion and lastLineup properties to Club object.
             teamCohesion: 50,
             lastLineup: [],
         };
@@ -771,6 +771,5 @@ export const generateInitialDatabase = (): Omit<GameState, 'playerClubId' | 'cur
     const startDate = new Date(2024, 7, 10); // Season starts in August
     const schedule = generateScheduleForCompetition(clubsInPremierDivision, startDate);
     
-    // FIX: Added missing 'shortlist' property to conform to the GameState type.
     return { clubs, players, staff, competitions, schedule, leagueTable, scoutingAssignments: [], nextScoutAssignmentId: 1, sponsors, sponsorshipDeals, banks, loans: [], nextLoanId: 1, shortlist: [] };
 };

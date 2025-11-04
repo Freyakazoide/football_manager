@@ -65,4 +65,3 @@ export type Action =
     | { type: 'MAKE_BOARD_REQUEST'; payload: { requestType: BoardRequestType } }
     // --- NEW MENTORING ACTION ---
     | { type: 'SET_MENTORING_RELATIONSHIPS'; payload: { mentorId: number | null, menteeIds: number[] } }
-    ;

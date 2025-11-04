@@ -78,7 +78,6 @@ export const initialState: GameState = {
     sponsors: {},
     sponsorshipDeals: [],
     shortlist: [],
-    // FIX: Add missing properties for banking system to conform to GameState type.
     banks: {},
     loans: [],
     nextLoanId: 1,
@@ -557,8 +556,8 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                                 const newDuration = originalDuration * durationModifier;
                                 const newReturnDate = new Date(result.date.getTime() + newDuration);
                                 
-                                // FIX: Added missing 'startDate' property to the injury object.
-                                player.injury = { type: injury.type, returnDate: newReturnDate, startDate: new Date(result.date) };
+                                // FIX: Added missing startDate property to the injury object to match the Player type.
+                                player.injury = { type: injury.type, returnDate: newReturnDate, startDate: injury.startDate };
 
                                 if (player.clubId === playerClubId) {
                                     const diffDays = Math.ceil(newDuration / (1000 * 60 * 60 * 24));
@@ -1909,7 +1908,6 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
             // Generate injuries
             const injuredPlayers = finalState.injuredPlayerIds.map(id => state.players[id]).filter(p => p);
             if(injuredPlayers.length > 0) {
-                 // FIX: Spread the full injury object to include 'startDate' and match the type definition.
                  playerResult.injuryEvents = injuredPlayers.map(p => {
                     const injury = generateInjury(state.currentDate, p);
                     return { playerId: p.id, ...injury };
@@ -1950,14 +1948,13 @@ export const gameReducer = (state: GameState, action: Action): GameState => {
                 playerResult.injuryEvents.forEach(injury => {
                     const injuredPlayer = updatedPlayers[injury.playerId];
                     if (injuredPlayer && injuredPlayer.clubId === newState.playerClubId) {
-                        // FIX: Added missing 'startDate' property to match the Player['injury'] type.
+                        // FIX: Added missing startDate property to the injury object to match the Player type.
                         injuredPlayer.injury = { type: injury.type, returnDate: injury.returnDate, startDate: injury.startDate };
                         
                         const diffTime = Math.abs(injury.returnDate.getTime() - playerResult.date.getTime());
                         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                         const durationText = diffDays > 10 ? `approx. ${Math.round(diffDays/7)} weeks` : `approx. ${diffDays} days`;
                         
-                        // FIX: Replaced undefined 'player' variable with 'injuredPlayer' to resolve reference error.
                         newState = addNewsItem(newState, `Player Injured: ${injuredPlayer.name}`, `${injuredPlayer.name} picked up an injury in the match.\n\nHe is expected to be out for ${durationText}. The diagnosis is: ${injury.type}.`, 'injury_report_player', injuredPlayer.id);
                     }
                 });

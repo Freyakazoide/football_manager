@@ -421,16 +421,6 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState; ne
                  fouler.yellowCardCount++;
                  if (fouler.yellowCardCount === 2) {
                      fouler.isSentOff = true;
-                     const teamId = attackingTeam.includes(fouler) ? newState.attackingTeamId : (newState.attackingTeamId === newState.homeTeamId ? newState.awayTeamId : newState.homeTeamId);
-                     
-                     if (teamId === newState.playerTeamId) {
-                         newState.forcedSubstitution = {
-                            teamId: teamId,
-                            playerOutId: fouler.id,
-                            reason: 'red_card'
-                         };
-                         newState.isPaused = true;
-                     }
                       newEvents.push({ 
                         minute: newState.minute, 
                         text: `RED CARD! ${fouler.name} gets a second yellow and is off!`, 
@@ -449,8 +439,9 @@ export const runMinute = (state: LiveMatchState): { newState: LiveMatchState; ne
         }
     }
 
-    newState.homeStats.possession = (newState.homePossessionMinutes / newState.minute) * 100;
-    newState.awayStats.possession = (newState.awayPossessionMinutes / newState.minute) * 100;
+    const homePossession = newState.minute > 0 ? (newState.homePossessionMinutes / newState.minute) * 100 : 0;
+    newState.homeStats.possession = homePossession;
+    newState.awayStats.possession = 100 - homePossession;
     newState.log.push(...newEvents);
     return { newState, newEvents };
 };

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { GameState, LivePlayer, Mentality, LiveMatchState, PlayerRole, PlayerInstructions, LineupPlayer, Player, MatchEvent } from '../types';
 import { Action } from '../services/reducerTypes';
@@ -6,6 +5,7 @@ import { runMinute } from '../services/matchEngine';
 import { getUnitRatings } from '../services/simulationService';
 import { ROLE_DEFINITIONS } from '../services/database';
 import PlayerInstructionModal from './PlayerInstructionModal';
+import ForcedSubstitutionModal from './ForcedSubstitutionModal';
 
 const getRoleCategory = (role: PlayerRole): 'GK' | 'DEF' | 'MID' | 'FWD' => {
     return ROLE_DEFINITIONS[role]?.category || 'MID';
@@ -82,7 +82,9 @@ const Scoreboard: React.FC<{
     onResume: () => void;
     gameSpeed: number;
     setGameSpeed: (speed: number) => void;
-}> = ({ liveMatch, onPause, onResume, gameSpeed, setGameSpeed }) => {
+    onSimulateToEnd: () => void;
+    isSimulating: boolean;
+}> = ({ liveMatch, onPause, onResume, gameSpeed, setGameSpeed, onSimulateToEnd, isSimulating }) => {
     const isPlayerHome = liveMatch.playerTeamId === liveMatch.homeTeamId;
     const speeds = [
         { label: 'Lento', value: 2000 },
@@ -97,15 +99,18 @@ const Scoreboard: React.FC<{
             <div className="text-center font-mono w-1/3">
                 <div className="text-4xl">{liveMatch.homeScore} - {liveMatch.awayScore}</div>
                 <div className="text-lg">{liveMatch.minute}'</div>
-                <div className="flex justify-center items-center gap-2 mt-1">
-                    <button onClick={liveMatch.isPaused ? onResume : onPause} className="px-2 py-0.5 text-xs bg-gray-600 rounded">
+                <div className="flex justify-center items-center gap-1 mt-1">
+                    <button onClick={liveMatch.isPaused ? onResume : onPause} disabled={isSimulating} className="px-2 py-0.5 text-xs bg-gray-600 rounded disabled:opacity-50">
                         {liveMatch.isPaused ? '▶️' : '⏸️'}
                     </button>
                      {speeds.map(speed => (
-                        <button key={speed.value} onClick={() => setGameSpeed(speed.value)} className={`px-2 py-0.5 text-xs rounded ${gameSpeed === speed.value ? 'bg-green-600' : 'bg-gray-600'}`}>
+                        <button key={speed.value} onClick={() => setGameSpeed(speed.value)} disabled={isSimulating} className={`px-2 py-0.5 text-xs rounded ${gameSpeed === speed.value ? 'bg-green-600' : 'bg-gray-600'} disabled:opacity-50`}>
                             {speed.label}
                         </button>
                     ))}
+                    <button onClick={onSimulateToEnd} disabled={isSimulating || liveMatch.status === 'full-time'} className="px-2 py-0.5 text-xs bg-yellow-600 text-black rounded font-bold disabled:opacity-50">
+                        {liveMatch.status === 'half-time' ? 'Simular 2º Tempo' : 'Simular até o Fim'}
+                    </button>
                 </div>
             </div>
             <span className={`text-lg font-bold w-1/3 text-left ${isPlayerHome ? 'text-red-400' : 'text-blue-400'}`}>{liveMatch.awayTeamName}</span>
@@ -277,6 +282,7 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
     const [gameSpeed, setGameSpeed] = useState(1000);
     const [selectedPlayer, setSelectedPlayer] = useState<LivePlayer | null>(null);
     const [isInstructionModalOpen, setIsInstructionModalOpen] = useState(false);
+    const [isSimulating, setIsSimulating] = useState(false);
 
     const { playerTeamId, homeTeamId } = liveMatch;
     const isPlayerHome = playerTeamId === homeTeamId;
@@ -288,14 +294,63 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
 
     // Game loop
     useEffect(() => {
-        if (liveMatch.isPaused) return;
+        if (liveMatch.isPaused || isSimulating) return;
         const interval = setInterval(() => {
             const { newState, newEvents } = runMinute(gameState.liveMatch!);
             dispatch({ type: 'ADVANCE_MINUTE', payload: { newState, newEvents } });
         }, gameSpeed);
         return () => clearInterval(interval);
-    }, [liveMatch.isPaused, gameState.liveMatch, dispatch, gameSpeed]);
+    }, [liveMatch.isPaused, gameState.liveMatch, dispatch, gameSpeed, isSimulating]);
     
+    useEffect(() => {
+        if (liveMatch.status === 'full-time') {
+            setIsSimulating(false);
+            setGameSpeed(1000);
+        }
+    }, [liveMatch.status]);
+
+    const handleSimulateToEnd = () => {
+        if (isSimulating) return;
+    
+        setIsSimulating(true);
+        if (liveMatch.isPaused && liveMatch.status !== 'half-time' && liveMatch.status !== 'pre-match') {
+            dispatch({ type: 'RESUME_MATCH' });
+        }
+    
+        let currentMatchState = gameState.liveMatch!;
+        // If at half-time, automatically start the second half for simulation
+        if (currentMatchState.status === 'half-time') {
+            currentMatchState = {
+                ...currentMatchState, 
+                status: 'second-half', 
+                isPaused: false,
+                attackingTeamId: currentMatchState.awayTeamId,
+                ballCarrierId: null,
+                ballZone: 2,
+            };
+        }
+    
+        const simulate = () => {
+            for (let i = 0; i < 15; i++) { // Simulate 15 minutes per frame for speed
+                const { newState } = runMinute(currentMatchState);
+                currentMatchState = newState;
+                if (currentMatchState.status === 'full-time' || currentMatchState.status === 'half-time') {
+                    break;
+                }
+            }
+    
+            dispatch({ type: 'ADVANCE_MINUTE', payload: { newState: currentMatchState, newEvents: [] } });
+    
+            if (currentMatchState.status !== 'full-time' && currentMatchState.status !== 'half-time') {
+                requestAnimationFrame(simulate);
+            } else {
+                setIsSimulating(false);
+            }
+        };
+    
+        requestAnimationFrame(simulate);
+    };
+
     const handleSubDrop = (e: React.DragEvent<HTMLDivElement>, playerOutId: number) => {
         e.preventDefault();
         const playerInId = Number(e.dataTransfer.getData('playerInId'));
@@ -323,7 +378,12 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
                 <div className="bg-gray-800 p-8 rounded-lg text-center shadow-2xl animate-fade-in">
                     <h2 className="text-3xl font-bold mb-4">{title}</h2>
                     <p className="text-5xl font-mono mb-6">{liveMatch.homeScore} - {liveMatch.awayScore}</p>
-                    <button onClick={onButtonClick} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg">{buttonText}</button>
+                    <div className="flex gap-4">
+                        <button onClick={onButtonClick} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg">{buttonText}</button>
+                        {liveMatch.status === 'half-time' && (
+                             <button onClick={handleSimulateToEnd} className="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-3 px-6 rounded-lg">Simular 2º Tempo</button>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -335,6 +395,13 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
 
     return (
         <div className="h-screen bg-gray-900 text-white font-sans flex flex-col overflow-hidden">
+             {isSimulating && (
+                 <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
+                    <div className="text-center">
+                        <p className="text-2xl font-bold animate-pulse">Simulando partida...</p>
+                    </div>
+                </div>
+            )}
              {isInstructionModalOpen && selectedPlayer && (
                  <PlayerInstructionModal 
                     player={gameState.players[selectedPlayer.id]}
@@ -343,7 +410,8 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
                     onClose={() => setIsInstructionModalOpen(false)}
                 />
             )}
-             {(liveMatch.status === 'half-time' || liveMatch.status === 'full-time') && renderOverlay()}
+             {(liveMatch.status === 'half-time' || liveMatch.status === 'full-time') && !isSimulating && renderOverlay()}
+             {liveMatch.forcedSubstitution && <ForcedSubstitutionModal liveMatch={liveMatch} dispatch={dispatch} />}
 
             <Scoreboard 
                 liveMatch={liveMatch}
@@ -351,6 +419,8 @@ const MatchView: React.FC<MatchViewProps> = ({ gameState, dispatch }) => {
                 onResume={() => dispatch({type: 'RESUME_MATCH'})}
                 gameSpeed={gameSpeed}
                 setGameSpeed={setGameSpeed}
+                onSimulateToEnd={handleSimulateToEnd}
+                isSimulating={isSimulating}
             />
             
             <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-4 p-4 min-h-0">
